@@ -11,11 +11,9 @@ export const runtime = "nodejs";
    Config & helpers
 ================================== */
 
-// (Optioneel) eenvoudige shared-secret check om willekeurige hits te voorkomen.
-// Zet MOLLIE_WEBHOOK_SECRET in Vercel en geef 'm mee in je create()-route als query (?s=...).
 function verifySecret(req: NextRequest): boolean {
   const expected = (process.env.MOLLIE_WEBHOOK_SECRET || "").trim();
-  if (!expected) return true; // geen secret geconfigureerd → sla check over
+  if (!expected) return true;
   const got = (req.nextUrl.searchParams.get("s") || "").trim();
   return got === expected;
 }
@@ -66,68 +64,78 @@ function mapPaymentStatus(s?: string): PaymentStatus {
 ================================== */
 export async function POST(req: NextRequest) {
   try {
-    // 0) Secret guard (optioneel)
     if (!verifySecret(req)) {
-      // Antwoord 200 (Mollie verwacht 200), maar log het.
       console.warn("[mollie-webhook] secret mismatch");
       return NextResponse.json({ ok: true }, { status: 200 });
     }
 
-    // 1) Body parsen en payment id ophalen
     const body = await parseBody(req);
     const paymentId = (body?.id ?? body?.paymentId ?? body?.payment_id)?.toString();
     if (!paymentId) {
-      // Geen id? Altijd 200 geven zodat Mollie niet blijft retried, maar wel loggen.
       console.warn("[mollie-webhook] missing payment id in payload:", body);
       return NextResponse.json({ ok: true }, { status: 200 });
     }
 
-    // 2) Payment ophalen bij Mollie
     const mollie = mollieClient();
     const payment = await mollie.payments.get(paymentId);
     const bookingId = (payment.metadata as any)?.bookingId as string | undefined;
 
-    // 3) Payment-status en bedragen
     const mappedStatus = mapPaymentStatus(payment.status);
     const paidAt =
       (payment as any)?.paidAt ? new Date((payment as any).paidAt as string) : undefined;
     const currency = payment.amount?.currency ?? "EUR";
     const amountCents = payment.amount?.value
       ? Math.round(Number(payment.amount.value) * 100)
-      : undefined;
+      : 0;
+
+    // ✅ serialize Mollie object zodat Prisma Json het accepteert
+    let raw: any;
+    try {
+      raw = JSON.parse(JSON.stringify(payment));
+    } catch {
+      raw = {
+        id: payment.id,
+        status: payment.status,
+        amount: payment.amount,
+        description: (payment as any)?.description,
+        method: (payment as any)?.method,
+        metadata: (payment as any)?.metadata,
+        paidAt: (payment as any)?.paidAt,
+        createdAt: (payment as any)?.createdAt,
+        _links: (payment as any)?._links,
+      };
+    }
 
     // 4) Upsert Payment record (idempotent op providerPaymentId)
     await prisma.payment.upsert({
       where: { providerPaymentId: payment.id },
       create: {
-        bookingId: bookingId ?? "", // jouw schema vereist een bookingId; als metadata ontbreekt, zet lege string en we borgen met check hieronder
+        bookingId: bookingId ?? "",
         provider: PaymentProvider.MOLLIE,
         type: PaymentType.DEPOSIT,
         status: mappedStatus,
         providerPaymentId: payment.id,
         method: (payment as any)?.method ?? undefined,
-        rawPayload: payment as any,
+        rawPayload: raw,
         currency,
-        amountCents: amountCents ?? 0,
+        amountCents,
         paidAt,
       },
       update: {
         status: mappedStatus,
         method: (payment as any)?.method ?? undefined,
-        rawPayload: payment as any,
+        rawPayload: raw,
         currency,
-        amountCents: amountCents ?? undefined,
+        amountCents,
         paidAt,
       },
     });
 
-    // 5) Zonder bookingId kunnen we niet verder; wel 200 teruggeven
     if (!bookingId) {
       console.warn("[mollie-webhook] payment without bookingId metadata:", payment.id);
       return NextResponse.json({ ok: true }, { status: 200 });
     }
 
-    // 6) Booking + slot ophalen
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
       include: { partner: true, customer: true, slot: true },
@@ -137,7 +145,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true }, { status: 200 });
     }
 
-    // 7) Op PAID: bevestigen + slot boeken (idempotent; via transaction)
     const isPaid = payment.status === "paid";
     const alreadyConfirmed = !!booking.confirmedAt || !!booking.depositPaidAt;
 
@@ -160,7 +167,6 @@ export async function POST(req: NextRequest) {
         }
       });
 
-      // 8) E-mails versturen (fouten mogen webhook niet laten falen)
       try {
         const slot = booking.slot!;
         const customer = booking.customer!;
@@ -206,10 +212,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Altijd 200 OK teruggeven aan Mollie
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err) {
-    // Webhooks mogen nooit 4xx/5xx blijven geven — Mollie zal anders blijven retried.
     console.error("[mollie-webhook] error:", err);
     return NextResponse.json({ ok: true }, { status: 200 });
   }
