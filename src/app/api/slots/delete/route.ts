@@ -1,0 +1,37 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import prisma from "@/lib/prisma";
+import { currentUser } from "@/lib/authz";
+
+const Body = z.object({
+  slotIds: z.array(z.string().min(1)).min(1),
+});
+
+export async function POST(req: Request) {
+  const parse = Body.safeParse(await req.json());
+  if (!parse.success) return new NextResponse("Bad Request", { status: 400 });
+  const { slotIds } = parse.data;
+
+  const user = await currentUser();
+  if (!user) return new NextResponse("Unauthorized", { status: 401 });
+
+  // haal status + partner
+  const rows = await prisma.slot.findMany({
+    where: { id: { in: slotIds } },
+    select: { id: true, status: true, partner: { select: { slug: true } } },
+  });
+  if (!rows.length) return NextResponse.json({ ok: true });
+
+  const partnerSlug = rows[0].partner.slug;
+  if (user.role !== "ADMIN" && user.partnerSlug !== partnerSlug) {
+    return new NextResponse("Forbidden", { status: 403 });
+  }
+
+  // Alleen DRAFT verwijderen. Voor PUBLISHED kun je kiezen: verwijderen als er géén booking bestaat.
+  const deletable = rows.filter(r => r.status === "DRAFT").map(r => r.id);
+  if (deletable.length) {
+    await prisma.slot.deleteMany({ where: { id: { in: deletable } } });
+  }
+
+  return NextResponse.json({ ok: true, deleted: deletable.length });
+}

@@ -1,0 +1,69 @@
+// PATH: src/components/Hero.tsx
+"use client";
+
+import Image from "next/image";
+import Link from "next/link";
+
+export default function Hero() {
+  return (
+    <section aria-labelledby="hero-title" className="relative isolate">
+      {/* Achtergrondafbeelding */}
+      <div aria-hidden className="absolute inset-0 -z-10">
+        <Image
+          src="/images/header-foto.png"
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover"
+        />
+        {/* Donkere overlay + zachte vignette voor rust */}
+        <div className="absolute inset-0 bg-stone-950/55" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,transparent_50%,rgba(12,10,9,0.6)_100%)]" />
+      </div>
+
+      {/* Content */}
+      <div className="relative mx-auto max-w-3xl px-4 py-28 sm:py-36 text-center">
+        {/* Eyebrow */}
+        <span className="inline-block rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-medium tracking-wide text-stone-100/90 backdrop-blur-sm">
+          ESCAPEROOM • HOND &amp; BAAS
+        </span>
+
+        {/* Titel */}
+        <h1
+          id="hero-title"
+          className="mt-4 text-4xl font-extrabold tracking-tight text-white sm:text-6xl"
+        >
+          The Stolen Snack
+        </h1>
+
+        {/* Subtitel */}
+        <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-stone-200 sm:text-lg">
+          De eerste échte escape-ervaring waarin jij en je hond samen puzzels
+          oplossen. Compact, veilig en bovenal: extreem leuk om samen te doen.
+        </p>
+
+        {/* CTA's */}
+        <div className="mt-10 flex flex-wrap justify-center gap-3">
+          <Link
+            href="#boeken"
+            className="rounded-2xl bg-pink-600 px-6 py-3 text-base font-semibold text-white shadow hover:bg-pink-700 focus:outline-none focus:ring-4 focus:ring-pink-300"
+          >
+            Boek nu
+          </Link>
+          <Link
+            href="#skills"
+            className="rounded-2xl bg-stone-900 px-6 py-3 text-base font-semibold text-white shadow hover:bg-stone-800 focus:outline-none focus:ring-4 focus:ring-stone-400/40"
+          >
+            Voor hondenscholen
+          </Link>
+        </div>
+
+        {/* Microcopy */}
+        <p className="mt-6 text-sm text-stone-300/85">
+          Speelduur ±45 min • 1 boeking per slot • Max. 3 spelers &amp; 1 hond
+        </p>
+      </div>
+    </section>
+  );
+}
