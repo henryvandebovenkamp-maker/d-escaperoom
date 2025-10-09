@@ -1,11 +1,12 @@
 // PATH: src/app/admin/(protected)/revenue/print/page.tsx
 
-export const runtime = "nodejs";         // stabieler voor print
-export const dynamic = "force-dynamic";  // altijd SSR
-export const revalidate = 0;             // geen caching
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 import * as React from "react";
 import { headers } from "next/headers";
+import PrintControls from "@/app/(print)/PrintControls.client";
 
 /* ===== Types (matchen met /api/revenue) ===== */
 type RevenueItem = {
@@ -55,34 +56,37 @@ function qsGet(sp: Record<string, string | string[] | undefined>, k: string) {
   return Array.isArray(v) ? v[0] ?? "" : v ?? "";
 }
 
+// robuuste origin helper (async vanwege headers())
+async function computeOrigin(): Promise<string> {
+  const h = await headers();
+  const host = h.get("host");
+  const proto = h.get("x-forwarded-proto") || "https";
+  if (host) return `${proto}://${host}`;
+  return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+}
+
 export default async function RevenuePrintPage({
   searchParams,
-}: {
-  searchParams: Record<string, string | string[] | undefined>;
-}) {
-  // Query-params overnemen (partnerSlug, status, dateFrom, dateTo, timeField=slot)
-  const partnerSlug = qsGet(searchParams, "partnerSlug"); // optioneel filter
+}: { searchParams: Record<string, string | string[] | undefined> }) {
+  const partnerSlug = qsGet(searchParams, "partnerSlug");
   const status = (qsGet(searchParams, "status") || "CONFIRMED").toUpperCase();
   const dateFrom = qsGet(searchParams, "dateFrom");
-  const dateTo = qsGet(searchParams, "dateTo");
-  const timeField = "slot"; // geforceerd speeldatum
+  const dateTo   = qsGet(searchParams, "dateTo");
+  const timeField = "slot";
 
-  // Origin + cookies (auth) voor server-side fetch — headers() is async
-  const h = await headers();
-  const proto = h.get("x-forwarded-proto") || "https";
-  const host = h.get("host");
-  const origin = `${proto}://${host}`;
+  const h = await headers();                 // ✅ await de Promise
+  const origin = await computeOrigin();      // ✅ async helper
 
   const p = new URLSearchParams();
   if (partnerSlug) p.set("partnerSlug", partnerSlug);
-  if (status) p.set("status", status);
-  if (dateFrom) p.set("dateFrom", dateFrom);
-  if (dateTo) p.set("dateTo", dateTo);
+  if (status)      p.set("status", status);
+  if (dateFrom)    p.set("dateFrom", dateFrom);
+  if (dateTo)      p.set("dateTo", dateTo);
   p.set("timeField", timeField);
 
   const res = await fetch(`${origin}/api/revenue?${p.toString()}`, {
     cache: "no-store",
-    headers: { cookie: h.get("cookie") ?? "" },
+    headers: { cookie: h.get("cookie") ?? "" },  // ✅ h.get(...)
   });
 
   if (!res.ok) {
@@ -91,9 +95,7 @@ export default async function RevenuePrintPage({
       <div className="bg-white text-stone-900 p-6 print:p-0">
         <header className="mb-4 border-b border-stone-200 pb-3 print:mb-2 print:pb-2">
           <h1 className="text-2xl font-bold tracking-tight">Omzet — Overzicht</h1>
-          <p className="text-sm text-stone-600">
-            Status: <b>{status}</b> · Datumtype: <b>Speeldatum</b>
-          </p>
+          <p className="text-sm text-stone-600">Status: <b>{status}</b> · Datumtype: <b>Speeldatum</b></p>
         </header>
         <p className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 print:border-0 print:bg-white">
           Fout bij laden: {txt || `HTTP ${res.status}`}
@@ -111,29 +113,13 @@ export default async function RevenuePrintPage({
 
   return (
     <div className="bg-white text-stone-900 p-6 print:p-0">
-      {/* Kop */}
       <header className="mb-4 border-b border-stone-200 pb-3 print:mb-2 print:pb-2">
         <h1 className="text-2xl font-bold tracking-tight">Omzet — Overzicht</h1>
         <p className="text-sm text-stone-600">
           Status: <b>{status}</b> · Datumtype: <b>Speeldatum</b> · Periode: <b>{periodLabel}</b>
           {partnerSlug ? <> · Partnerfilter: <b>{partnerSlug}</b></> : null}
         </p>
-
-        {/* Alleen zichtbaar op scherm, niet in PDF */}
-        <div className="mt-3 flex gap-2 print:hidden">
-          <button
-            onClick={() => (typeof window !== "undefined" ? window.print() : undefined)}
-            className="h-9 rounded-lg border border-stone-300 bg-white px-3 text-xs font-semibold shadow-sm hover:bg-stone-50"
-          >
-            Print / PDF opslaan
-          </button>
-          <button
-            onClick={() => (typeof window !== "undefined" ? window.close() : undefined)}
-            className="h-9 rounded-lg border border-stone-300 bg-white px-3 text-xs font-semibold shadow-sm hover:bg-stone-50"
-          >
-            Sluiten
-          </button>
-        </div>
+        <PrintControls />
       </header>
 
       {/* KPI's */}
@@ -195,7 +181,6 @@ export default async function RevenuePrintPage({
         </table>
       </section>
 
-      {/* Print styles + auto-print */}
       <style jsx global>{`
         @page { size: A4 portrait; margin: 12mm; }
         @media print {
@@ -214,7 +199,7 @@ export default async function RevenuePrintPage({
   );
 }
 
-/* --- kleine presentational helpers --- */
+/* helpers */
 function KPI({ label, value }: { label: string; value?: string }) {
   return (
     <div className="rounded-lg border border-stone-200 p-3 print:p-2">

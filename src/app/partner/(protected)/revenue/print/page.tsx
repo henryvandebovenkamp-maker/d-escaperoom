@@ -1,11 +1,12 @@
 // PATH: src/app/partner/(protected)/revenue/print/page.tsx
 
-export const runtime = "nodejs";         // stabiel voor print
-export const dynamic = "force-dynamic";  // altijd SSR
-export const revalidate = 0;             // geen caching
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 import * as React from "react";
 import { headers } from "next/headers";
+import PrintControls from "@/app/(print)/PrintControls.client";
 
 /* ===== Types (matchen met /api/revenue) ===== */
 type RevenueItem = {
@@ -55,23 +56,28 @@ function qsGet(sp: Record<string, string | string[] | undefined>, k: string) {
   return Array.isArray(v) ? v[0] ?? "" : v ?? "";
 }
 
+// Async helper voor origin
+async function computeOrigin(): Promise<string> {
+  const h = await headers();
+  const host = h.get("host");
+  const proto = h.get("x-forwarded-proto") || "https";
+  if (host) return `${proto}://${host}`;
+  return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+}
+
 export default async function PartnerRevenuePrintPage({
   searchParams,
 }: {
   searchParams: Record<string, string | string[] | undefined>;
 }) {
-  // Query-params 1-op-1 overnemen (zoals UI het opent)
   const partnerSlug = qsGet(searchParams, "partnerSlug");
   const status = (qsGet(searchParams, "status") || "CONFIRMED").toUpperCase();
   const dateFrom = qsGet(searchParams, "dateFrom");
   const dateTo = qsGet(searchParams, "dateTo");
-  const timeField = "slot"; // geforceerd speeldatum
+  const timeField = "slot";
 
-  // Absolute origin + cookies voor auth (headers() is async)
   const h = await headers();
-  const proto = h.get("x-forwarded-proto") || "https";
-  const host = h.get("host");
-  const origin = `${proto}://${host}`;
+  const origin = await computeOrigin();
 
   const p = new URLSearchParams();
   if (partnerSlug) p.set("partnerSlug", partnerSlug);
@@ -80,11 +86,9 @@ export default async function PartnerRevenuePrintPage({
   if (dateTo) p.set("dateTo", dateTo);
   p.set("timeField", timeField);
 
-  // Server-side fetch met sessie-cookies; geen caching
   const res = await fetch(`${origin}/api/revenue?${p.toString()}`, {
     cache: "no-store",
     headers: { cookie: h.get("cookie") ?? "" },
-    // (optioneel) next: { revalidate: 0 } is redundant bij cache:"no-store"
   });
 
   if (!res.ok) {
@@ -117,30 +121,15 @@ export default async function PartnerRevenuePrintPage({
         <p className="text-sm text-stone-600">
           Status: <b>{status}</b> · Datumtype: <b>Speeldatum</b> · Periode: <b>{periodLabel}</b>
         </p>
-
-        {/* Alleen zichtbaar op scherm, niet in PDF */}
-        <div className="mt-3 flex gap-2 print:hidden">
-          <button
-            onClick={() => (typeof window !== "undefined" ? window.print() : undefined)}
-            className="h-9 rounded-lg border border-stone-300 bg-white px-3 text-xs font-semibold shadow-sm hover:bg-stone-50"
-          >
-            Print / PDF opslaan
-          </button>
-          <button
-            onClick={() => (typeof window !== "undefined" ? window.close() : undefined)}
-            className="h-9 rounded-lg border border-stone-300 bg-white px-3 text-xs font-semibold shadow-sm hover:bg-stone-50"
-          >
-            Sluiten
-          </button>
-        </div>
+        <PrintControls />
       </header>
 
       {/* KPI's */}
       <section className="mb-4 grid grid-cols-2 gap-2 text-sm print:mb-3 print:gap-1 md:grid-cols-4">
         <KPI label="TOTAAL" value={euro(data.summary.totalTurnoverCents, data.summary.currency)} />
-        <KPI label=" € FEE" value={euro(data.summary.totalPlatformFeeCents, data.summary.currency)} />
-        <KPI label=" JULLIE OMZET" value={euro(data.summary.totalPartnerFeeCents, data.summary.currency)} />
-        <KPI label=" € GEGEVEN KORTING" value={euro(data.summary.totalDiscountsCents, data.summary.currency)} />
+        <KPI label="€ FEE (aanbetaling)" value={euro(data.summary.totalPlatformFeeCents, data.summary.currency)} />
+        <KPI label="JULLIE OMZET" value={euro(data.summary.totalPartnerFeeCents, data.summary.currency)} />
+        <KPI label="GEGEVEN KORTING" value={euro(data.summary.totalDiscountsCents, data.summary.currency)} />
       </section>
 
       {/* Tabel */}
@@ -153,7 +142,7 @@ export default async function PartnerRevenuePrintPage({
               <Th>Naam klant</Th>
               <Th className="text-right">Totaal</Th>
               <Th className="text-right">€ fee</Th>
-              <Th className="text-right">jouw omzet</Th>
+              <Th className="text-right">Jouw omzet</Th>
               <Th className="text-right">Korting</Th>
               <Th>Status</Th>
               <Th className="text-right">Teruggestort</Th>
@@ -213,7 +202,7 @@ export default async function PartnerRevenuePrintPage({
   );
 }
 
-/* --- kleine presentational helpers --- */
+/* --- Kleine helpers --- */
 function KPI({ label, value }: { label: string; value?: string }) {
   return (
     <div className="rounded-lg border border-stone-200 p-3 print:p-2">
