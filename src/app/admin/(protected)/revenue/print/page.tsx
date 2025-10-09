@@ -1,8 +1,8 @@
 // PATH: src/app/admin/(protected)/revenue/print/page.tsx
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-export const runtime = "nodejs";
+export const runtime = "nodejs";         // stabieler voor print
+export const dynamic = "force-dynamic";  // altijd SSR
+export const revalidate = 0;             // geen caching
 
 import * as React from "react";
 import { headers } from "next/headers";
@@ -67,10 +67,10 @@ export default async function RevenuePrintPage({
   const dateTo = qsGet(searchParams, "dateTo");
   const timeField = "slot"; // geforceerd speeldatum
 
-  // Origin + cookies (auth) voor server-side fetch
-  const h = headers();
-  const proto = (await h).get("x-forwarded-proto") || "https";
-  const host = (await h).get("host");
+  // Origin + cookies (auth) voor server-side fetch — headers() is async
+  const h = await headers();
+  const proto = h.get("x-forwarded-proto") || "https";
+  const host = h.get("host");
   const origin = `${proto}://${host}`;
 
   const p = new URLSearchParams();
@@ -82,8 +82,7 @@ export default async function RevenuePrintPage({
 
   const res = await fetch(`${origin}/api/revenue?${p.toString()}`, {
     cache: "no-store",
-    headers: { cookie: (await h).get("cookie") ?? "" },
-    next: { revalidate: 0 },
+    headers: { cookie: h.get("cookie") ?? "" },
   });
 
   if (!res.ok) {
