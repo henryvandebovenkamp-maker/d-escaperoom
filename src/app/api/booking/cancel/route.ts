@@ -1,226 +1,229 @@
 // PATH: src/app/api/booking/cancel/route.ts
-import { NextResponse } from "next/server";
-import { z } from "zod";
+import { NextResponse, type NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
-import { mollie } from "@/lib/mollie";
-import { BookingStatus, PaymentStatus, PaymentType, SlotStatus } from "@prisma/client";
+import { BookingStatus, PaymentStatus, PaymentType, PaymentProvider } from "@prisma/client";
+import jwt from "jsonwebtoken";
+import { z } from "zod";
 
-/* ========== Helpers ========== */
+export const runtime = "nodejs";
+
+/* ================================
+   Config
+================================== */
+// Automatisch refunden bij annuleren (idempotent via Mollie)
+const REFUND_ON_CANCEL = true;
+
+const COOKIE_PRIMARY = process.env.SESSION_COOKIE_NAME || "session";
+const COOKIE_LEGACY = "de_session";
+const SECRET = process.env.SESSION_SECRET || "";
+
+/* ================================
+   Auth helpers
+================================== */
+type Role = "ADMIN" | "PARTNER";
+type JWTPayload = { sub: string; role: Role; [k: string]: unknown };
+
+function readCookieFromHeader(req: Request, name: string): string | null {
+  const cookie = req.headers.get("cookie") || "";
+  const match = cookie.split(/;\s*/).find((c) => c.startsWith(name + "="));
+  return match ? decodeURIComponent(match.split("=").slice(1).join("=")) : null;
+}
+function readSession(req: Request): JWTPayload | null {
+  const token =
+    readCookieFromHeader(req, COOKIE_PRIMARY) ||
+    readCookieFromHeader(req, COOKIE_LEGACY);
+  if (!token) return null;
+  try {
+    const payload = jwt.verify(token, SECRET) as JWTPayload;
+    if (!payload?.sub || !payload?.role) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+/* ================================
+   Helpers
+================================== */
 const BodySchema = z.object({
   bookingId: z.string().min(1),
-  // Client hint; server beslist definitief:
-  refundEligible: z.boolean().optional(),
+  refundEligible: z.boolean().optional(), // client hint; server beslist
+  reason: z.string().max(500).optional(),
 });
 
-function hoursUntil(iso: string) {
-  const now = Date.now();
-  const start = new Date(iso).getTime();
-  return (start - now) / (1000 * 60 * 60);
-}
-// Policy: restitutie bij annuleren ≥ 24 uur vóór start
-function isRefundWindow(iso: string) {
-  const h = hoursUntil(iso);
-  return h >= 24;
-}
-function centsToValue(cents: number) {
-  return (Math.max(0, cents) / 100).toFixed(2);
+function isRefundWindow(slotStartISO: string): boolean {
+  // Beleid: tot aan starttijd mag aanbetaling terug.
+  const now = new Date();
+  const start = new Date(slotStartISO);
+  return now <= start;
 }
 
-/**
- * Probeer een refund aan te maken via Mollie, compatibel met verschillende client-wrappers.
- * Retourneert een object met { ok, id? }.
- */
-async function createMollieRefund(opts: {
-  providerPaymentId: string;
-  currency: string;
-  value: string; // "12.34"
-  description: string;
-}): Promise<{ ok: boolean; id?: string }> {
-  const { providerPaymentId, currency, value, description } = opts;
+const toCents = (n: number) => Math.round(n * 100);
+const centsToEUR = (c: number) => +(c / 100).toFixed(2);
 
-  // @mollie/api-client varianten die we vaak tegenkomen:
-  // - mollie.payments_refunds.create({ paymentId, amount, description })
-  // - mollie.paymentRefunds.create({ paymentId, amount, description })
-  // - mollie.payments.refunds.create(paymentId, { amount, description })  (oudere stijl)
+// Lazy Mollie client (officiële client of je wrapper)
+async function getMollie(): Promise<any> {
   try {
-    if ((mollie as any)?.payments_refunds?.create) {
-      const r = await (mollie as any).payments_refunds.create({
-        paymentId: providerPaymentId,
-        amount: { currency, value },
-        description,
-      });
-      return { ok: true, id: r?.id };
-    }
-  } catch (e) {
-    console.error("Refund via payments_refunds.create faalde:", e);
+    const { createMollieClient } = await import("@mollie/api-client");
+    if (!process.env.MOLLIE_API_KEY) throw new Error("Missing MOLLIE_API_KEY");
+    return createMollieClient({ apiKey: process.env.MOLLIE_API_KEY });
+  } catch {
+    const maybeLocal = await import("@/lib/mollie").catch(() => null);
+    if (!maybeLocal) throw new Error("Geen Mollie client beschikbaar.");
+    return (maybeLocal as any).default || maybeLocal;
   }
-
-  try {
-    if ((mollie as any)?.paymentRefunds?.create) {
-      const r = await (mollie as any).paymentRefunds.create({
-        paymentId: providerPaymentId,
-        amount: { currency, value },
-        description,
-      });
-      return { ok: true, id: r?.id };
-    }
-  } catch (e) {
-    console.error("Refund via paymentRefunds.create faalde:", e);
-  }
-
-  try {
-    if ((mollie as any)?.payments?.refunds?.create) {
-      const r = await (mollie as any).payments.refunds.create(providerPaymentId, {
-        amount: { currency, value },
-        description,
-      });
-      return { ok: true, id: r?.id };
-    }
-  } catch (e) {
-    console.error("Refund via payments.refunds.create faalde:", e);
-  }
-
-  return { ok: false };
 }
 
-/* ========== POST /api/booking/cancel ========== */
-export async function POST(req: Request) {
+/* ================================
+   POST /api/booking/cancel
+================================== */
+export async function POST(req: NextRequest) {
   try {
-    const { bookingId } = BodySchema.parse(await req.json());
+    // AUTH
+    const session = readSession(req);
+    if (!session) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    const role: Role = session.role;
+    const subject = String(session.sub); // partner id of slug
 
-    // 1) Haal booking + slot + partner + payments + bestaande refunds op
+    // INPUT
+    const body = await req.json().catch(() => ({}));
+    const parsed = BodySchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ ok: false, error: "Invalid body", issues: parsed.error.flatten() }, { status: 400 });
+    }
+    const { bookingId, refundEligible: clientHint } = parsed.data;
+
+    // BOOKING + context
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
       include: {
-        slot: true,
-        partner: true,
-        payments: true,
-        refunds: true, // audit records
+        slot: { include: { partner: { select: { id: true, slug: true, name: true } } } },
+        partner: { select: { id: true, slug: true, name: true } }, // legacy fallback
+        payments: {
+          where: { type: PaymentType.DEPOSIT, status: PaymentStatus.PAID },
+        },
+        refunds: true, // audit (lokale som)
       },
     });
-
-    if (!booking || !booking.slot) {
-      return NextResponse.json({ ok: false, error: "Boeking niet gevonden" }, { status: 404 });
+    if (!booking?.slot?.startTime) {
+      return NextResponse.json({ ok: false, error: "Booking not found" }, { status: 404 });
     }
 
-    // Blokkeer annuleren wanneer het event al is gestart/voorbij is (UI doet dit ook)
-    const startISO = booking.slot.startTime.toISOString?.() ?? String(booking.slot.startTime);
-    if (hoursUntil(startISO) <= 0) {
-      return NextResponse.json(
-        { ok: false, error: "De starttijd is verstreken; annuleren is niet meer mogelijk." },
-        { status: 400 }
-      );
+    // PARTNER scope
+    if (role === "PARTNER") {
+      const bPartnerId = booking.slot.partner?.id ?? booking.partner?.id ?? null;
+      const bPartnerSlug = booking.slot.partner?.slug ?? booking.partner?.slug ?? null;
+      if (![bPartnerId, bPartnerSlug].includes(subject)) {
+        return NextResponse.json({ ok: false, error: "Forbidden: partner scope mismatch" }, { status: 403 });
+      }
     }
 
-    const alreadyCancelled = booking.status === BookingStatus.CANCELLED;
+    // Policy
+    const startISO = booking.slot.startTime.toISOString();
+    const policyEligible = isRefundWindow(startISO);
+    const refundEligible = clientHint ?? policyEligible;
 
-    // 2) Bepaal refund window definitief op server
-    const refundEligible = isRefundWindow(startISO);
-
-    // 3) Bepaal maximaal terug te betalen bedrag (aanbetaling) en reeds gerefund deel
-    const depositCents = Math.max(0, booking.depositAmountCents ?? 0);
-    const currency = booking.currency ?? "EUR";
-
-    const alreadyRefundedForBooking =
-      (booking.refunds ?? []).reduce((sum, r) => sum + Math.max(0, r.amountCents || 0), 0) || 0;
-
-    let remainingToRefund = Math.max(0, depositCents - alreadyRefundedForBooking);
-
-    // 4) Selecteer betaalde DEPOSIT payments
-    const paidDepositPayments = (booking.payments ?? []).filter(
-      (p) => p.type === PaymentType.DEPOSIT && p.status === PaymentStatus.PAID
-    );
-
-    // 5) In transactie: Booking -> CANCELLED (idempotent), Slot vrijmaken indien BOOKED
-    const updates = await prisma.$transaction(async (tx) => {
-      let slotUpdate = null;
-      if (booking.slot.status === SlotStatus.BOOKED) {
-        slotUpdate = await tx.slot.update({
-          where: { id: booking.slotId },
-          data: { status: SlotStatus.DRAFT, bookedAt: null },
-        });
-      }
-
-      let bookingUpdate = null;
-      if (!alreadyCancelled) {
-        bookingUpdate = await tx.booking.update({
-          where: { id: booking.id },
-          data: {
-            status: BookingStatus.CANCELLED,
-            cancelledAt: new Date(),
-          },
-        });
-      }
-
-      return { slotUpdate, bookingUpdate };
+    // Annuleer ALTIJD
+    await prisma.booking.update({
+      where: { id: booking.id },
+      data: { status: BookingStatus.CANCELLED, cancelledAt: new Date() },
     });
+    // (Optioneel): slot vrijgeven; 1:1 relatie, dus terug naar PUBLISHED
+    // await prisma.slot.update({ where: { id: booking.slotId }, data: { status: "PUBLISHED" as any } });
 
-    // 6) Refunds (buiten transactie) — verdeel over payments, cap op remainingToRefund
+    // ===== AUTO-REFUND (idempotent via Mollie) =====
+    const depositCents = booking.depositAmountCents; // boeking bepaalt aanbetaling
+    const alreadyRefundedLocal =
+      (booking.refunds || []).reduce((s, r) => s + Math.max(0, r.amountCents || 0), 0);
+
+    let remainingToRefund = Math.max(0, depositCents - alreadyRefundedLocal);
     let refundedTotalCents = 0;
     const refundsOut: Array<{ paymentId: string; amountCents: number; providerRefundId?: string }> = [];
 
-    if (refundEligible && remainingToRefund > 0 && paidDepositPayments.length > 0) {
-      for (const p of paidDepositPayments) {
-        if (!p.providerPaymentId || remainingToRefund <= 0) continue;
+    if (REFUND_ON_CANCEL && refundEligible && remainingToRefund > 0 && booking.payments.length > 0) {
+      const mollie = await getMollie();
 
-        // Hoeveel van dit payment is al gerefund?
-        const existingRefundsForPayment =
-          (await prisma.refund.findMany({ where: { paymentId: p.id } })) ?? [];
-        const alreadyRefundedForPayment = existingRefundsForPayment.reduce(
-          (sum, r) => sum + Math.max(0, r.amountCents || 0),
-          0
-        );
-
-        const paymentAmountCents = Math.max(0, p.amountCents ?? 0);
-        const paymentAvailableCents = Math.max(0, paymentAmountCents - alreadyRefundedForPayment);
-        if (paymentAvailableCents <= 0) continue;
-
-        const thisRefundCents = Math.min(paymentAvailableCents, remainingToRefund);
-        if (thisRefundCents <= 0) continue;
-
-        // Probeer refund bij Mollie
-        const res = await createMollieRefund({
-          providerPaymentId: p.providerPaymentId!,
-          currency,
-          value: centsToValue(thisRefundCents),
-          description: `D-EscapeRoom — annulering booking ${booking.id}`,
-        });
-
-        if (!res.ok) {
-          // Log en ga door; route blijft slagen zodat je slot vrij is, maar zonder refund.
-          console.error("Mollie refund failed", { bookingId: booking.id, paymentId: p.id });
+      for (const p of booking.payments) {
+        // Robust veldnaam-detectie
+        const providerPaymentId =
+          (p as any).providerPaymentId ||
+          (p as any).molliePaymentId ||
+          (p as any).providerId ||
+          (p as any).mollieId ||
+          null;
+        if (!providerPaymentId) {
+          console.warn("Geen providerPaymentId op Payment", { paymentId: p.id });
           continue;
         }
 
-        // Log expliciet in onze DB
-        await prisma.refund.create({
-          data: {
-            bookingId: booking.id,
-            paymentId: p.id,
-            amountCents: thisRefundCents,
-            currency,
-            provider: "MOLLIE",
-            providerRefundId: res.id,
-            reason: "Cancellation ≥ 24h",
-          },
-        });
-
-        // Als het payment nu volledig is terugbetaald, markeer als REFUNDED (anders laten we 'm op PAID)
-        const nowRefundedForPayment = alreadyRefundedForPayment + thisRefundCents;
-        if (nowRefundedForPayment >= paymentAmountCents) {
-          await prisma.payment.update({
-            where: { id: p.id },
-            data: { status: PaymentStatus.REFUNDED },
-          });
+        // 1) Lees Mollie: hoeveel is daar al terugbetaald?
+        let molliePayment: any = null;
+        try {
+          molliePayment = await (mollie as any).payments.get(providerPaymentId);
+        } catch (e) {
+          console.error("Mollie get payment failed", { paymentId: p.id, providerPaymentId });
+          continue; // sla dit payment over; booking is al geannuleerd
         }
 
-        refundedTotalCents += thisRefundCents;
-        remainingToRefund -= thisRefundCents;
-        refundsOut.push({
-          paymentId: p.providerPaymentId!,
-          amountCents: thisRefundCents,
-          providerRefundId: res.id,
-        });
+        const mpRefundedCents = toCents(Number(molliePayment?.amountRefunded?.value || "0"));
+        const alreadyLocalForPayment =
+          (booking.refunds || []).filter(r => r.paymentId === p.id).reduce((s, r) => s + Math.max(0, r.amountCents || 0), 0);
+
+        // Beschikbaar op dit payment = betaald bedrag - max(lokaal, mollie)
+        const accounted = Math.max(mpRefundedCents, alreadyLocalForPayment);
+        const availableOnPayment = Math.max(0, (p.amountCents ?? 0) - accounted);
+        const toRefundCents = Math.min(availableOnPayment, remainingToRefund);
+        if (toRefundCents <= 0) continue;
+
+        // 2) Start refund met Idempotency-Key
+        const idempotencyKey = `cancel:${booking.id}:${p.id}:${toRefundCents}`;
+        let mr: any = null;
+        try {
+          if ((mollie as any)?.payments_refunds?.create) {
+            mr = await (mollie as any).payments_refunds.create(
+              {
+                paymentId: providerPaymentId,
+                amount: { currency: "EUR", value: (toRefundCents / 100).toFixed(2) },
+                description: `Refund booking ${booking.id} (cancel)`,
+              },
+              { headers: { "Idempotency-Key": idempotencyKey } } as any
+            );
+          } else if ((mollie as any)?.payments?.refunds?.create) {
+            mr = await (mollie as any).payments.refunds.create(
+              providerPaymentId,
+              {
+                amount: { currency: "EUR", value: (toRefundCents / 100).toFixed(2) },
+                description: `Refund booking ${booking.id} (cancel)`,
+              },
+              { headers: { "Idempotency-Key": idempotencyKey } } as any
+            );
+          } else {
+            throw new Error("No compatible Mollie refund client exposed");
+          }
+        } catch (e) {
+          console.error("Mollie refund failed", { bookingId: booking.id, paymentId: p.id, toRefundCents });
+          continue;
+        }
+
+        // 3) Log lokaal één Refund record (audit)
+        try {
+          await prisma.refund.create({
+            data: {
+              bookingId: booking.id,
+              paymentId: p.id,
+              amountCents: toRefundCents,
+              currency: "EUR",
+              provider: PaymentProvider.MOLLIE,
+              providerRefundId: mr?.id ?? null,
+            },
+          });
+        } catch (e) {
+          // Geen unique constraint op providerRefundId → niets te doen, audit is best-effort
+        }
+
+        refundedTotalCents += toRefundCents;
+        remainingToRefund = Math.max(0, remainingToRefund - toRefundCents);
+        refundsOut.push({ paymentId: p.id, amountCents: toRefundCents, providerRefundId: mr?.id ?? undefined });
 
         if (remainingToRefund <= 0) break;
       }
@@ -229,24 +232,17 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       bookingId: booking.id,
-      status: BookingStatus.CANCELLED,
-      slotFreed: updates.slotUpdate ? true : booking.slot.status !== SlotStatus.BOOKED,
+      status: "CANCELLED",
       refund: {
         policyEligible: refundEligible,
         refunded: refundedTotalCents > 0,
         refundAmountCents: refundedTotalCents,
-        currency,
         refunds: refundsOut,
-        // Handig voor UI: hoeveel van de aanbetaling staat nog open om eventueel te refunden
-        remainingEligibleCents: Math.max(0, depositCents - (alreadyRefundedForBooking + refundedTotalCents)),
-        depositCents,
+        remainingEligibleCents: Math.max(0, depositCents - (alreadyRefundedLocal + refundedTotalCents)),
       },
     });
-  } catch (err: any) {
-    console.error("Cancel booking error:", err);
-    return NextResponse.json(
-      { ok: false, error: err?.message ?? "Annuleren mislukt" },
-      { status: 400 }
-    );
+  } catch (e: any) {
+    console.error("POST /api/booking/cancel error:", e);
+    return NextResponse.json({ ok: false, error: e?.message ?? "Server error" }, { status: 500 });
   }
 }
