@@ -49,7 +49,7 @@ export async function POST(
   try {
     // Auth
     const user = await getSessionUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!user) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 });
 
     // Next.js 15: params awaiten
     const { partnerSlug } = await ctx.params;
@@ -60,12 +60,12 @@ export async function POST(
     try {
       raw = await req.json();
     } catch {
-      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "INVALID_JSON" }, { status: 400 });
     }
     const parsed = BodySchema.safeParse(raw);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "Invalid body", details: parsed.error.flatten() },
+        { ok: false, error: "INVALID_BODY", details: parsed.error.flatten() },
         { status: 400 }
       );
     }
@@ -80,17 +80,19 @@ export async function POST(
     const from = makeLocalDate(y1, m1, d1, 0, 0);
     const to = makeLocalDate(y2, m2, d2, 23, 59);
     if (from > to) {
-      return NextResponse.json({ error: "startDate moet ≤ endDate zijn" }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "INVALID_RANGE", message: "startDate moet ≤ endDate zijn" }, { status: 400 });
     }
 
     // Genereer gewenste slots (lokale tijd)
     const wanted: Array<{ startTime: Date; endTime: Date }> = [];
+    // (kleine optimalisatie: dubbele tijden uit 'times' halen)
+    const uniqueTimes = Array.from(new Set(times));
     for (const day of eachDate(from, to)) {
       if (!weekdays.includes(day.getDay())) continue; // 0=zo..6=za
       const y = day.getFullYear();
       const m = day.getMonth() + 1;
       const d = day.getDate();
-      for (const t of times) {
+      for (const t of uniqueTimes) {
         const [hh, mm] = t.split(":").map(Number);
         const startTime = makeLocalDate(y, m, d, hh, mm);
         const endTime = new Date(startTime.getTime() + durationMinutes * 60_000);
@@ -99,7 +101,7 @@ export async function POST(
     }
 
     if (wanted.length === 0) {
-      return NextResponse.json({ error: "Geen datums/tijden in de gekozen range" }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "EMPTY_SELECTION", message: "Geen datums/tijden in de gekozen range" }, { status: 400 });
     }
 
     const data = wanted.map(({ startTime, endTime }) => ({
@@ -114,34 +116,14 @@ export async function POST(
     // ===== Schrijven met deduplicatie =====
     // Vereist in Prisma schema:
     //   @@unique([partnerId, startTime])
-    // Hierdoor kunnen we skipDuplicates gebruiken.
-    let createdCount = 0;
-    try {
-      const result = await prisma.slot.createMany({
-        data,
-      });
-      createdCount = result.count;
-    } catch (err: any) {
-      // Prisma/DB duplicate errors → nette melding
-      // Prisma: err.code === "P2002"
-      // SQLite (via libsql/sqlite): err.message kan "UNIQUE constraint failed" bevatten
-      const msg = String(err?.message ?? "");
-      if (err?.code === "P2002" || msg.includes("UNIQUE constraint failed") || msg.includes("unique constraint")) {
-        return NextResponse.json(
-          {
-            error: "Dubbele tijdsloten",
-            message:
-              "Een of meerdere gekozen tijdsloten bestaan al en zijn overgeslagen. Controleer de geselecteerde dagen/tijden.",
-          },
-          { status: 400 }
-        );
-      }
-      // Anders: onbekende fout
-      console.error("[bulk] createMany error:", err);
-      return NextResponse.json({ error: "Onbekende fout bij aanmaken slots" }, { status: 500 });
-    }
+    // Dan kunnen we skipDuplicates gebruiken (stille overslag van bestaande).
+    const result = await prisma.slot.createMany({
+      data,
+      skipDuplicates: true, // <- belangrijkste wijziging
+    });
 
     const attempted = data.length;
+    const createdCount = result.count;
     const skipped = attempted - createdCount;
 
     // Actuele stand in range ophalen (DB = bron van waarheid)
@@ -164,11 +146,11 @@ export async function POST(
       range: { startDate, endDate },
       slots: fresh,
       note: skipped > 0
-        ? "Sommige tijden bestonden al en zijn niet opnieuw aangemaakt."
-        : undefined,
+        ? "Bestaande tijden zijn overgeslagen; nieuwe tijden zijn toegevoegd."
+        : "Alle gekozen tijden zijn aangemaakt.",
     });
   } catch (err: any) {
     console.error("[/api/slots/[partnerSlug]/bulk] Error:", err);
-    return NextResponse.json({ error: err?.message ?? "Internal error" }, { status: 500 });
+    return NextResponse.json({ ok: false, error: err?.message ?? "Internal error" }, { status: 500 });
   }
 }
