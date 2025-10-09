@@ -56,7 +56,6 @@ function qsGet(sp: Record<string, string | string[] | undefined>, k: string) {
   return Array.isArray(v) ? v[0] ?? "" : v ?? "";
 }
 
-// Async helper voor origin
 async function computeOrigin(): Promise<string> {
   const h = await headers();
   const host = h.get("host");
@@ -67,9 +66,7 @@ async function computeOrigin(): Promise<string> {
 
 export default async function PartnerRevenuePrintPage({
   searchParams,
-}: {
-  searchParams: Record<string, string | string[] | undefined>;
-}) {
+}: { searchParams: Record<string, string | string[] | undefined> }) {
   const partnerSlug = qsGet(searchParams, "partnerSlug");
   const status = (qsGet(searchParams, "status") || "CONFIRMED").toUpperCase();
   const dateFrom = qsGet(searchParams, "dateFrom");
@@ -183,16 +180,20 @@ export default async function PartnerRevenuePrintPage({
         </table>
       </section>
 
-      {/* Print styles + auto-print */}
-      <style jsx global>{`
-        @page { size: A4 portrait; margin: 12mm; }
-        @media print {
-          body { background: #fff; }
-          table { page-break-inside: avoid; }
-          thead { display: table-header-group; }
-          tfoot { display: table-footer-group; }
-        }
-      `}</style>
+      {/* Print styles (GEEN styled-jsx) */}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+            @page { size: A4 portrait; margin: 12mm; }
+            @media print {
+              body { background: #fff; }
+              table { page-break-inside: avoid; }
+              thead { display: table-header-group; }
+              tfoot { display: table-footer-group; }
+            }
+          `,
+        }}
+      />
       <script
         dangerouslySetInnerHTML={{
           __html: `window.addEventListener('load',()=>setTimeout(()=>window.print(),200));`,
@@ -202,7 +203,7 @@ export default async function PartnerRevenuePrintPage({
   );
 }
 
-/* --- Kleine helpers --- */
+/* helpers */
 function KPI({ label, value }: { label: string; value?: string }) {
   return (
     <div className="rounded-lg border border-stone-200 p-3 print:p-2">

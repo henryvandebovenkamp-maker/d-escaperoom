@@ -74,8 +74,8 @@ export default async function RevenuePrintPage({
   const dateTo   = qsGet(searchParams, "dateTo");
   const timeField = "slot";
 
-  const h = await headers();                 // ✅ await de Promise
-  const origin = await computeOrigin();      // ✅ async helper
+  const h = await headers();                 // await de Promise
+  const origin = await computeOrigin();
 
   const p = new URLSearchParams();
   if (partnerSlug) p.set("partnerSlug", partnerSlug);
@@ -86,7 +86,7 @@ export default async function RevenuePrintPage({
 
   const res = await fetch(`${origin}/api/revenue?${p.toString()}`, {
     cache: "no-store",
-    headers: { cookie: h.get("cookie") ?? "" },  // ✅ h.get(...)
+    headers: { cookie: h.get("cookie") ?? "" },
   });
 
   if (!res.ok) {
@@ -113,6 +113,7 @@ export default async function RevenuePrintPage({
 
   return (
     <div className="bg-white text-stone-900 p-6 print:p-0">
+      {/* Kop */}
       <header className="mb-4 border-b border-stone-200 pb-3 print:mb-2 print:pb-2">
         <h1 className="text-2xl font-bold tracking-tight">Omzet — Overzicht</h1>
         <p className="text-sm text-stone-600">
@@ -181,15 +182,21 @@ export default async function RevenuePrintPage({
         </table>
       </section>
 
-      <style jsx global>{`
-        @page { size: A4 portrait; margin: 12mm; }
-        @media print {
-          body { background: #fff; }
-          table { page-break-inside: avoid; }
-          thead { display: table-header-group; }
-          tfoot { display: table-footer-group; }
-        }
-      `}</style>
+      {/* Print styles (GEEN styled-jsx) */}
+      <style
+        // gewone <style>, zodat Turbopack geen client-only/styled-jsx injecteert
+        dangerouslySetInnerHTML={{
+          __html: `
+            @page { size: A4 portrait; margin: 12mm; }
+            @media print {
+              body { background: #fff; }
+              table { page-break-inside: avoid; }
+              thead { display: table-header-group; }
+              tfoot { display: table-footer-group; }
+            }
+          `,
+        }}
+      />
       <script
         dangerouslySetInnerHTML={{
           __html: `window.addEventListener('load',()=>setTimeout(()=>window.print(),200));`,
