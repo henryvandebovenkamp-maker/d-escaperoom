@@ -18,6 +18,28 @@ const NL_MONTHS = [
   "juli","augustus","september","oktober","november","december",
 ] as const;
 
+/* ===== Tijdzone-veilige helpers (toegevoegd) ===== */
+const TZ = "Europe/Amsterdam";
+
+/** Converteer een ISO/string naar een Date in Amsterdam-tijd (DST-proof). */
+function toLocalDateTZ(inputISO: string | Date) {
+  const iso = typeof inputISO === "string" ? inputISO : inputISO.toISOString();
+  return new Date(new Date(iso).toLocaleString("en-US", { timeZone: TZ }));
+}
+
+/** Maak een Date vanuit Y-M-D + HH:mm, geïnterpreteerd in Amsterdam-tijd. */
+function fromLocalYMDHM(day: string, time: string) {
+  // voorbeeld: day="2025-10-17", time="09:00"
+  const base = `${day}T${time}:00`;
+  return new Date(new Date(base).toLocaleString("en-US", { timeZone: TZ }));
+}
+
+/** Formatteer tijd (HH:mm) in NL maar op basis van Amsterdam-tijd. */
+function fmtTimeNL_TZ(iso: string | Date) {
+  const d = toLocalDateTZ(iso);
+  return d.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
 function nowMonthISO() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -231,6 +253,7 @@ export default function SlotsPage() {
     </div>
   );
 }
+
 
 /* ========================================================================
    CalendarMonth — TZ-safe + stacked indicators, blokkeert verleden

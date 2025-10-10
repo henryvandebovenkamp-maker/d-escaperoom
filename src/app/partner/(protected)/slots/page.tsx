@@ -18,6 +18,28 @@ const NL_MONTHS = [
   "juli","augustus","september","oktober","november","december",
 ] as const;
 
+/* ===== Tijdzone-veilige helpers (toegevoegd) ===== */
+const TZ = "Europe/Amsterdam";
+
+/** Converteer een ISO/string naar een Date in Amsterdam-tijd (DST-proof). */
+function toLocalDateTZ(inputISO: string | Date) {
+  const iso = typeof inputISO === "string" ? inputISO : inputISO.toISOString();
+  return new Date(new Date(iso).toLocaleString("en-US", { timeZone: TZ }));
+}
+
+/** Maak een Date vanuit Y-M-D + HH:mm, geïnterpreteerd in Amsterdam-tijd. */
+function fromLocalYMDHM(day: string, time: string) {
+  // voorbeeld: day="2025-10-17", time="09:00"
+  const base = `${day}T${time}:00`;
+  return new Date(new Date(base).toLocaleString("en-US", { timeZone: TZ }));
+}
+
+/** Formatteer tijd (HH:mm) in NL maar op basis van Amsterdam-tijd. */
+function fmtTimeNL_TZ(iso: string | Date) {
+  const d = toLocalDateTZ(iso);
+  return d.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
 function nowMonthISO() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -126,12 +148,36 @@ export default function SlotsPage() {
             </h1>
 
             <div className="flex flex-wrap items-center gap-2">
-              {/* ▼▼▼ ENIGE WIJZIGING: dropdown (partner/hondenschool) niet zichtbaar ▼▼▼ */}
-              {/* Voor functionaliteit laten we partnerSlug state/logic intact, maar tonen geen selector. */}
-              {/* ▲▲▲ ENIGE WIJZIGING ▲▲▲ */}
+              {partners.length > 0 ? (
+                <select
+                  className="sr-only" /* was: rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pink-500 */
+                  value={partnerSlug}
+                  onChange={(e) => { setPartnerSlug(e.target.value); setSelectedDay(todayISO()); setRefreshKey(k=>k+1); }}
+                  aria-label="Kies partner"
+                >
+                  {partners.map(p => (
+                    <option key={p.id} value={p.slug}>{p.name}{p.city ? ` — ${p.city}` : ""}</option>
+                  ))}
+                </select>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <input
+                    placeholder="partner-slug"
+                    value={partnerSlug}
+                    onChange={(e) => setPartnerSlug(e.target.value)}
+                    className="w-48 rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-pink-500"
+                  />
+                  <button
+                    onClick={() => setRefreshKey(k=>k+1)}
+                    className="hidden sm:inline-flex rounded-xl border border-pink-500 bg-white px-3 py-1.5 text-sm font-medium text-stone-900 shadow-sm transition hover:bg-pink-50 hover:text-pink-700"
+                  >
+                    Laden
+                  </button>
+                </div>
+              )}
 
               <a
-                href="/partner/dashboard"
+                href="/admin"
                 className="hidden sm:inline-flex rounded-xl border border-pink-500 bg-white px-3 py-1.5 text-sm font-medium text-stone-900 shadow-sm transition hover:bg-pink-50 hover:text-pink-700"
               >
                 Dashboard
@@ -148,7 +194,7 @@ export default function SlotsPage() {
           {/* Agenda */}
           <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-stone-200">
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-xl font-extrabold">📅 {monthTitle}</h2>
+              <h2 className="text-xl font-extrabold">📅 Jouw — {monthTitle}</h2>
               <div className="flex items-center gap-2">
                 <button
                   onClick={gotoPrevMonth}
@@ -208,11 +254,6 @@ export default function SlotsPage() {
   );
 }
 
-/* ================================
-   NOTE:
-   De componenten CalendarMonth, SeriesForm, DayLists en BulkPublished
-   worden verondersteld elders in je codebase aanwezig te zijn — ongewijzigd.
-================================ */
 
 
 /* ========================================================================
@@ -924,14 +965,15 @@ function MiniGhost({ onClick, label }: { onClick: () => void; label: string }) {
 
 
 
+
+
 import { useRouter } from "next/navigation";
 
 /* ========================================================================
    DayLists — Links: DRAFT (oranje), Rechts: PUBLISHED/BOOKED
    - Tijden netjes uitgelijnd (tabular nums) + responsive grids
-   - Verberg DRAFT-slots met starttijd in het verleden
+   - Extra: verberg DRAFT-slots in het verleden en ververs 'nu' elke 30s
    - Nieuw: bij BOOKED een klok-emoji en klik op tijd → naar agenda
-   - Extra: 'nu' ververst periodiek zodat verlopen tijden direct verdwijnen
 ========================================================================= */
 function DayLists({
   partnerSlug, dayISO, onChanged,
@@ -941,10 +983,10 @@ function DayLists({
   const [loading, setLoading] = React.useState(false);
   const [msg, setMsg] = React.useState<string | null>(null);
 
-  // 👇 Nieuw: 'nu' bijhouden zodat 14:00 verdwijnt wanneer het 14:01+ is
+  // 'nu' bijhouden zodat verlopen tijden automatisch verdwijnen
   const [nowMs, setNowMs] = React.useState<number>(Date.now());
   React.useEffect(() => {
-    const id = setInterval(() => setNowMs(Date.now()), 30_000); // elke 30s
+    const id = setInterval(() => setNowMs(Date.now()), 30_000);
     return () => clearInterval(id);
   }, []);
 
@@ -957,7 +999,6 @@ function DayLists({
       const base = p.includes("/admin") ? "/admin/agenda" : "/partner/agenda";
       return `${base}?scope=day&date=${encodeURIComponent(day)}#day`;
     }
-    // Fallback (SSR-situatie—zal in client direct overschreven worden)
     return `/partner/(protected)/agenda?scope=day&date=${encodeURIComponent(day)}#day`;
   }
 
@@ -1027,7 +1068,7 @@ function DayLists({
   React.useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [partnerSlug, dayISO]);
 
   // ===== Filter collecties =====
-  // DRAFT-slots in verleden verbergen; herberekent door nowMs state
+  // Verberg DRAFT-slots waarvan de starttijd in het verleden ligt
   const drafts = items
     .filter((i) => i.status === "DRAFT")
     .filter((i) => {
@@ -1084,10 +1125,10 @@ function DayLists({
       {/* Links: DRAFTS (oranje) */}
       <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-stone-200">
         <h3 className="text-lg font-extrabold leading-tight">
-          ✅  {fmtDayLongNL(dayISO)}
+          ✅ Beschikbare tijdsloten — {fmtDayLongNL(dayISO)}
         </h3>
         <p className="mb-3 mt-0.5 text-xs text-stone-600">
-          <span className="font-medium">Voek met 1 klik het tijdslot toe aan je agenda</span>. 
+          <span className="font-medium">Eén klik = toevoegen</span> (publiceren). Oranje = nog beschikbaar.
         </p>
 
         {msg && <p className="mb-2 text-sm text-stone-600">{msg}</p>}
@@ -1133,10 +1174,10 @@ function DayLists({
       {/* Rechts: PUBLISHED + BOOKED */}
       <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-stone-200">
         <h3 className="text-lg font-extrabold leading-tight">
-          📌{fmtDayLongNL(dayISO)}
+          📌 Boekbare &amp; Geboekte tijdsloten — {fmtDayLongNL(dayISO)}
         </h3>
         <p className="mb-3 mt-0.5 text-xs text-stone-600">
-          <span className="font-medium">Bekijk hier jouw boekbare tijdsloten en boekingen.</span>
+          <span className="font-medium">Eén klik = verwijderen</span> (depublish). Groen = boekbaar. Paars = geboekt.
         </p>
 
         {loading && <p className="text-sm text-stone-500">Laden…</p>}
