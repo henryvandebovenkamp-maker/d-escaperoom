@@ -24,45 +24,63 @@ const BodyByStartISO = z.object({
 const BodySchema = z.union([BodyByDayTime, BodyByStartISO]);
 
 /* ============================
-   Helpers (Europe/Amsterdam)
+   Helpers (Europe/Amsterdam, DST-proof)
 ============================ */
 const TZ = "Europe/Amsterdam";
 
-/** Interpreteer "YYYY-MM-DDTHH:mm" als Amsterdam-wandkloktijd en geef juiste UTC-instant terug. */
-function fromAmsterdamLocal(ymd: string, hm: string) {
-  const base = `${ymd}T${hm}:00`;
-  // Trick: parse als Date en herinterpreteer die als TZ=Amsterdam
-  // Dit levert een Date op die exact de Amsterdam-tijd representeert als UTC-instant.
-  return new Date(new Date(base).toLocaleString("en-US", { timeZone: TZ }));
-}
-
-/** Interpreteer "YYYY-MM-DD" + "HH:mm" in Amsterdam-tijd. */
-function toUtcFromDayTime(dayISO: string, hhmm: string) {
-  return fromAmsterdamLocal(dayISO, hhmm);
-}
-
-/** Normaliseer startTime string:
- * - Als "YYYY-MM-DDTHH:mm" (zonder Z/offset): interpreteer als Amsterdam-tijd
- * - Anders: laat Date zelf parsen (ISO met offset/Z blijft werken)
+/**
+ * Construeer een UTC instant zó dat hij in TZ als de gewenste wandkloktijd verschijnt.
+ * Dit is server-safe en werkt op Vercel/Node zonder moment/temporal.
  */
-function normalizeStartTime(input: string) {
-  const looksLikeShort = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(input);
-  if (looksLikeShort) {
+function zonedDateFromLocal(dayISO: string, hhmm: string, tz = TZ): Date {
+  const [y, m, d] = dayISO.split("-").map(Number);
+  const [hh, mm] = hhmm.split(":").map(Number);
+
+  // Start met een UTC-guess op dezelfde "klok"tijd
+  const utcGuess = Date.UTC(y, (m - 1), d, hh, mm, 0, 0);
+
+  // Wat is de tijd van deze UTC-guess in de beoogde timezone?
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+
+  const parts = dtf.formatToParts(new Date(utcGuess));
+  const map = Object.fromEntries(parts.map(p => [p.type, p.value]));
+  const actualHH = parseInt(map.hour, 10);
+  const actualMM = parseInt(map.minute, 10);
+
+  // Verschil tussen gewenste kloktijd en huidige kloktijd in TZ → correctie in minuten
+  const intendedMin = hh * 60 + mm;
+  const actualMin = actualHH * 60 + actualMM;
+  const diffMin = intendedMin - actualMin;
+
+  return new Date(utcGuess + diffMin * 60_000);
+}
+
+/** "YYYY-MM-DDTHH:mm" zonder offset → behandel als lokale Amsterdam-tijd. */
+function normalizeStartTime(input: string): Date {
+  const short = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(input);
+  if (short) {
     const [date, hm] = input.split("T");
-    return fromAmsterdamLocal(date, hm);
+    return zonedDateFromLocal(date, hm, TZ);
   }
+  // ISO met offset/Z blijft ondersteund
   return new Date(input);
 }
 
-/** Randen van de dag in Amsterdam-tijd voor een gegeven datum (UTC instant). */
+/** Dag-randen (00:00–23:59) in Amsterdam voor de datum van 'd'. */
 function tzDayRangeAmsterdam(d: Date) {
-  // Pak Y-M-D in Amsterdam via formatter (DST-proof).
-  const fmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit",
-  });
-  const [y, m, day] = fmt.format(d).split("-"); // "YYYY-MM-DD"
-  const start = fromAmsterdamLocal(`${y}-${m}-${day}`, "00:00");
-  const end = fromAmsterdamLocal(`${y}-${m}-${day}`, "23:59");
+  const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" });
+  const [y, m, day] = fmt.format(d).split("-");           // "YYYY-MM-DD"
+  const start = zonedDateFromLocal(`${y}-${m}-${day}`, "00:00");
+  const end   = zonedDateFromLocal(`${y}-${m}-${day}`, "23:59");
   return { start, end };
 }
 
@@ -108,8 +126,8 @@ export async function POST(
 
     const startTime =
       "day" in parsed.data
-        ? toUtcFromDayTime(parsed.data.day, parsed.data.time)            // ✅ Amsterdam → juiste UTC instant
-        : normalizeStartTime(parsed.data.startTime);                     // ✅ korte vorm = Amsterdam
+        ? zonedDateFromLocal(parsed.data.day, parsed.data.time, TZ) // ✅ echte Amsterdam-lokaliteit → correcte UTC instant
+        : normalizeStartTime(parsed.data.startTime);                 // ✅ korte vorm → Amsterdam
 
     if (isNaN(startTime.getTime())) {
       return NextResponse.json({ ok: false, error: "INVALID_STARTTIME" }, { status: 400 });
@@ -130,8 +148,7 @@ export async function POST(
     const respond = async (payload: any, status = 200) => {
       if (!includeDay) return NextResponse.json(payload, { status });
 
-      // ✅ Gebruik Amsterdam-dagrand, niet pure UTC
-      const { start, end } = tzDayRangeAmsterdam(startTime);
+      const { start, end } = tzDayRangeAmsterdam(startTime); // ✅ dag in Amsterdam
 
       const daySlots = await prisma.slot.findMany({
         where: {
