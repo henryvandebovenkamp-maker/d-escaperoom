@@ -3,108 +3,114 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 
-type Props = { bookingId: string };
-
-const NL_PAYMENT: Record<string, string> = {
-  CREATED: "Aangemaakt",
-  PENDING: "In behandeling",
-  PAID: "Betaald",
-  FAILED: "Mislukt",
-  CANCELED: "Geannuleerd",
-  REFUNDED: "Terugbetaald",
+const NL_STATUS: Record<string, string> = {
+  PENDING: "IN AFWACHTING",
+  CONFIRMED: "BEVESTIGD",
+  CANCELLED: "GEANNULEERD",
+  REFUNDED: "TERUGGEBOEKT",
+  CREATED: "AANGEMAAKT",
+  PAID: "BETAALD",
+  FAILED: "MISLUKT",
+  CANCELED: "GEANNULEERD",
 };
 
-const NL_BOOKING: Record<string, string> = {
-  PENDING: "In afwachting",
-  CONFIRMED: "Bevestigd",
-  CANCELLED: "Geannuleerd",
-  REFUNDED: "Terugbetaald",
-};
+function t(s?: string) {
+  if (!s) return "onbekend";
+  return NL_STATUS[s] ?? s;
+}
 
-export default function ReturnClient({ bookingId }: Props) {
+export default function ReturnClient({ bookingId }: { bookingId: string }) {
   const router = useRouter();
-  const [tries, setTries] = React.useState(0);
+  const [tryCount, setTryCount] = React.useState(0);
+  const [bookingStatus, setBookingStatus] = React.useState<string>("…");
+  const [paymentStatus, setPaymentStatus] = React.useState<string>("…");
   const [loading, setLoading] = React.useState(false);
-  const [status, setStatus] = React.useState<{ bookingStatus?: string; paymentStatus?: string }>({});
+  const [terminal, setTerminal] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
-    let active = true;
-    const ctrl = new AbortController();
+  const refresh = React.useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/payments/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-no-cache": "1" },
+        body: JSON.stringify({ bookingId }),
+        cache: "no-store",
+      });
+      const json = await res.json();
 
-    async function tick() {
-      try {
-        setLoading(true);
-        const res = await fetch(`/api/booking/${bookingId}/status`, {
-          cache: "no-store",
-          headers: { "cache-control": "no-store" },
-          next: { revalidate: 0 },
-          signal: ctrl.signal,
-        });
-
-        if (!res.ok) throw new Error("status fetch failed");
-        const data = await res.json();
-        if (!active) return;
-
-        const booking = data.bookingStatus ?? "PENDING";
-        const payment = data.paymentStatus ?? "PENDING";
-
-        setStatus({
-          bookingStatus: NL_BOOKING[booking] ?? booking,
-          paymentStatus: NL_PAYMENT[payment] ?? payment,
-        });
-
-        if (data.confirmed === true || booking === "CONFIRMED") {
-          router.replace(`/checkout/${bookingId}/bedankt`);
-          return;
-        }
-
-        // als payment mislukt/geannuleerd, kun je evt. hier een redirect tonen
-        // if (payment === "FAILED" || payment === "CANCELED") { ... }
-      } catch {
-        // stilletjes opnieuw proberen
-      } finally {
-        if (active) {
-          setTries((t) => t + 1);
-          setLoading(false);
-        }
+      if (!json.ok) {
+        setError(json.error || "Onbekende fout");
+        setTryCount((c) => c + 1);
+        return;
       }
+
+      const b = json.booking?.status as string | undefined;
+      const p = json.payment?.status as string | undefined;
+
+      setBookingStatus(t(b));
+      setPaymentStatus(t(p));
+      const isTerminal = Boolean(json.terminal);
+      setTerminal(isTerminal);
+
+      if (isTerminal) {
+        if (p === "PAID") router.replace(`/checkout/${bookingId}/success`);
+        else if (p === "REFUNDED") router.replace(`/checkout/${bookingId}/refunded`);
+        else router.replace(`/checkout/${bookingId}/failed`);
+        return;
+      }
+
+      setTryCount((c) => c + 1);
+    } catch (e: any) {
+      setError("Netwerkfout");
+      setTryCount((c) => c + 1);
+    } finally {
+      setLoading(false);
     }
-
-    // eerste call meteen
-    tick();
-    // daarna elke 4s automatisch
-    const id = setInterval(tick, 4000);
-
-    return () => {
-      active = false;
-      ctrl.abort();
-      clearInterval(id);
-    };
   }, [bookingId, router]);
 
-  const waitingMsg =
-    status.paymentStatus === "Betaald"
-      ? "Betaling ontvangen — we bevestigen je boeking…"
-      : "We verwerken je betaling…";
+  // Auto-poll: start direct, backoff tot max 15 keer
+  React.useEffect(() => {
+    if (terminal) return;
+    if (tryCount === 0) {
+      refresh();
+      return;
+    }
+    if (tryCount >= 15) return;
+    const delay = Math.min(1000 + tryCount * 600, 6000);
+    const tmr = setTimeout(() => refresh(), delay);
+    return () => clearTimeout(tmr);
+  }, [tryCount, terminal, refresh]);
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center bg-stone-950 text-stone-100 px-6 py-10 text-center">
-      <h1 className="text-2xl sm:text-3xl font-bold text-amber-400 mb-2">Even geduld…</h1>
-      <p className="text-stone-400 mb-8">{waitingMsg}</p>
+    <div className="mx-auto max-w-md rounded-2xl border border-white/10 bg-black/30 p-6 text-center text-stone-100">
+      <h1 className="mb-2 text-2xl font-semibold">Even geduld…</h1>
+      <p className="mb-6 text-stone-400">We verwerken je betaling…</p>
 
-      <div className="animate-pulse border border-amber-500/40 rounded-2xl px-8 py-6 w-full max-w-sm text-sm bg-stone-900/40 shadow-inner">
-        <p>Status boeking: <strong>{status.bookingStatus ?? "…"}</strong></p>
-        <p>Status betaling: <strong>{status.paymentStatus ?? "…"}</strong></p>
-        <p className="mt-2 text-xs text-stone-500">Poging #{tries}</p>
+      <div className="mb-6 rounded-xl border border-white/10 p-4 text-sm">
+        <div className="mb-1">Status boeking: <span className="font-medium">{bookingStatus}</span></div>
+        <div>Status betaling: <span className="font-medium">{paymentStatus}</span></div>
+        {!terminal && <div className="mt-3 text-xs text-stone-500">poging #{tryCount}</div>}
+        {error && <div className="mt-3 text-xs text-rose-300">Fout: {error}</div>}
       </div>
 
-      <button
-        onClick={() => router.refresh()}
-        disabled={loading}
-        className="mt-8 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-70 text-stone-950 font-semibold px-6 py-2 transition-colors"
-      >
-        {loading ? "Verversen…" : "Ververs nu"}
-      </button>
-    </main>
+      {!terminal && (
+        <button
+          onClick={refresh}
+          disabled={loading}
+          className="rounded-xl bg-stone-800 px-4 py-2 text-sm font-medium text-stone-100 ring-rose-400/60 transition hover:bg-stone-700 focus:outline-none focus:ring-2"
+          aria-busy={loading}
+        >
+          {loading ? "Verversen…" : "Ververs nu"}
+        </button>
+      )}
+
+      {tryCount >= 15 && !terminal && (
+        <p className="mt-4 text-xs text-stone-400">
+          Het duurt langer dan verwacht. Je kunt opnieuw proberen of later je e-mail checken.
+        </p>
+      )}
+    </div>
   );
 }

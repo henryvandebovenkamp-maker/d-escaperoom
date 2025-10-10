@@ -108,14 +108,19 @@ export default async function PartnerDashboardPage() {
       where: { status: "CONFIRMED", partnerId },
       select: {
         id: true,
-        depositAmountCents: true,
+        restAmountCents: true, // tonen we als "op locatie"
         playersCount: true,
         dogName: true,
-        customer: { select: { name: true} },
+        customer: { select: { name: true } },
         slot: { select: { startTime: true } },
       },
-      orderBy: [{ confirmedAt: "desc" }, { createdAt: "desc" }],
-      take: 6,
+      // Laatste 4 geboekte tijdsloten
+      orderBy: [
+        { slot: { startTime: "desc" } },
+        { confirmedAt: "desc" },
+        { createdAt: "desc" },
+      ],
+      take: 4,
     }),
   ]);
 
@@ -131,9 +136,9 @@ export default async function PartnerDashboardPage() {
       <header className="rounded-xl border border-stone-200 bg-stone-50 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-extrabold tracking-tight">Partner Dashboard</h1>
+            <h1 className="text-2xl font-extrabold tracking-tight">Dashboard</h1>
             <p className="mt-0.5 text-sm text-stone-700">
-              Overzicht van <b className="font-semibold">{partner.name}</b>: boekingen, slots, omzet & korting.
+             
             </p>
           </div>
           <span className="inline-flex items-center gap-2 rounded-lg bg-white px-2.5 py-1 text-xs text-stone-700 border border-stone-200">
@@ -144,13 +149,14 @@ export default async function PartnerDashboardPage() {
 
       {/* Stat grid — 2 rijen, max 3 naast elkaar */}
       <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <StatCard title="Totaal aantal boekingen" value={bookingsTotalConfirmed} hint={`Vandaag: ${bookingsTodayConfirmed}`} icon="🧾" href="/partner/agenda" />
-        <StatCard title="Boekbare tijdsloten" value={bookableSlots} hint="Gepland & gepubliceerd" icon="🎯" href="/partner/slots" />
-        <StatCard title="Jouw totale omzet" value={euro(partnerRevenueTotal)} hint={`Deze maand: ${euro(partnerRevenueMonth)}`} icon="🐾" accent="from-emerald-500/10 to-emerald-600/10" href="/partner/revenue" />
+        <StatCard title="AANTAL BOEKINGEN" value={bookingsTotalConfirmed} hint={`Vandaag: ${bookingsTodayConfirmed}`} icon="🧾" href="/partner/agenda" />
+        <StatCard title="AANTAL GEBUBLICEERD" value={bookableSlots} hint="Gepland & gepubliceerd" icon="🎯" href="/partner/slots" />
+        <StatCard title="OMZET €" value={euro(partnerRevenueTotal)} hint={`Deze maand: ${euro(partnerRevenueMonth)}`} icon="🐾" accent="from-emerald-500/10 to-emerald-600/10" href="/partner/revenue" />
 
-        <StatCard title="Teamleden" value={teamCount} hint="Gebruikers gekoppeld aan jouw school" icon="👥" accent="from-stone-400/10 to-stone-600/10" href="/partner/profile" />
-        <StatCard title="Totaal gegeven korting " value={euro(discountTotal)} hint="Op bevestigde boekingen" icon="🏷️" href="/partner/revenue" />
-        <StatCard title="Betaalde fee €" value={euro(feeTotal)} hint={`Deze maand: ${euro(feeMonth)}`} icon="💶" href="/partner/revenue" />
+        {/* NIET-KLIKBAAR: Teamleden (href verwijderd) */}
+        <StatCard title="TEAMLEDEN" value={teamCount} hint="Gebruikers gekoppeld aan jouw school" icon="👥" accent="from-stone-400/10 to-stone-600/10" />
+        <StatCard title="GEGEVEN KORTING" value={euro(discountTotal)} hint="Op bevestigde boekingen" icon="🏷️" href="/partner/revenue" />
+        <StatCard title="FEE €" value={euro(feeTotal)} hint={`Deze maand: ${euro(feeMonth)}`} icon="💶" href="/partner/revenue" />
       </section>
 
       {/* Acties + recente boekingen */}
@@ -159,9 +165,9 @@ export default async function PartnerDashboardPage() {
         <div className="md:col-span-2 rounded-xl border border-stone-200 bg-white p-4">
           <h2 className="text-sm font-bold tracking-tight">Snelle acties</h2>
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <Link href="/partner/slots" className="rounded-lg border bg-stone-50 px-3 py-2 text-xs font-medium text-stone-800 hover:bg-stone-100 transition">📅 Slots</Link>
+            <Link href="/partner/slots" className="rounded-lg border bg-stone-50 px-3 py-2 text-xs font-medium text-stone-800 hover:bg-stone-100 transition">📅 Tijdsloten</Link>
             <Link href="/partner/agenda" className="rounded-lg border bg-stone-50 px-3 py-2 text-xs font-medium text-stone-800 hover:bg-stone-100 transition">🗓️ Agenda</Link>
-            <Link href="/partner/revenue" className="rounded-lg border bg-stone-50 px-3 py-2 text-xs font-medium text-stone-800 hover:bg-stone-100 transition">📈 Omzet & fees</Link>
+            <Link href="/partner/revenue" className="rounded-lg border bg-stone-50 px-3 py-2 text-xs font-medium text-stone-800 hover:bg-stone-100 transition">📈 Omzet cijfers</Link>
             <Link href="/partner/profile" className="rounded-lg border bg-stone-50 px-3 py-2 text-xs font-medium text-stone-800 hover:bg-stone-100 transition">🧭 Profiel</Link>
           </div>
         </div>
@@ -194,8 +200,11 @@ export default async function PartnerDashboardPage() {
                         : "—"}
                     </p>
                   </div>
-                  <div className="text-xs font-semibold whitespace-nowrap">
-                    {euro(b.depositAmountCents)}
+                  <div className="text-right">
+                    <div className="text-xs font-semibold whitespace-nowrap">
+                      {euro(b.restAmountCents)}
+                    </div>
+                    <div className="text-[10px] text-stone-500 leading-tight">op locatie</div>
                   </div>
                 </li>
               ))

@@ -10,7 +10,7 @@ const schema = z.object({
   slug: z.string().min(2).regex(/^[a-z0-9-]+$/),
   email: z.string().email().optional(),
   phone: z.string().optional(),
-  province: z.string(),
+  province: z.string(), // enum/string; casten we bij write
   city: z.string().optional(),
   isActive: z.boolean().default(true),
   feePercent: z.number().int().min(0).max(90),
@@ -18,9 +18,10 @@ const schema = z.object({
   price2PlusCents: z.number().int().min(0),
   heroImageUrl: z.string().url().optional(),
   addressLine1: z.string().optional(),
-  addressLine2: z.string().optional(),
+  // addressLine2: verwijderd
   postalCode: z.string().optional(),
   country: z.string().optional(),
+  googleMapsUrl: z.string().url().optional(), // ✅ nieuw veld
   timezone: z.string().default("Europe/Amsterdam"),
 });
 
@@ -41,32 +42,37 @@ export async function POST(req: Request) {
   try {
     const raw = await req.json();
 
-    // Slug + e-mail normaliseren vóór validatie
+    // Normalisatie vóór validatie
     raw.slug = slugify(raw.slug || raw.name || "");
     if (raw.email) raw.email = String(raw.email).toLowerCase().trim();
+    if (typeof raw.googleMapsUrl === "string") {
+      const trimmed = raw.googleMapsUrl.trim();
+      raw.googleMapsUrl = trimmed.length ? trimmed : undefined; // lege string -> undefined
+    }
 
     const input = schema.parse(raw);
 
     const result = await prisma.$transaction(async (tx) => {
-      // 1) Partner updaten
+      // 1) Partner bijwerken
       const updated = await tx.partner.update({
         where: { id: input.id },
         data: {
           name: input.name,
           slug: input.slug,
-          email: input.email,
-          phone: input.phone,
-          province: input.province as any, // enum/string afhankelijk van je schema
-          city: input.city,
+          email: input.email ?? null,
+          phone: input.phone ?? null,
+          province: input.province as any,
+          city: input.city ?? null,
           isActive: input.isActive,
           feePercent: input.feePercent,
           price1PaxCents: input.price1PaxCents,
           price2PlusCents: input.price2PlusCents,
-          heroImageUrl: input.heroImageUrl,
-          addressLine1: input.addressLine1,
-          addressLine2: input.addressLine2,
-          postalCode: input.postalCode,
+          heroImageUrl: input.heroImageUrl ?? null,
+          addressLine1: input.addressLine1 ?? null,
+          // addressLine2: verwijderd
+          postalCode: input.postalCode ?? null,
           country: input.country ?? "NL",
+          googleMapsUrl: input.googleMapsUrl ?? null, // ✅ opslaan
           timezone: input.timezone ?? "Europe/Amsterdam",
         },
         select: { id: true, slug: true, email: true },
@@ -86,18 +92,21 @@ export async function POST(req: Request) {
       return { updated, userLinked };
     });
 
-    return NextResponse.json({
-      ok: true,
-      id: result.updated.id,
-      slug: result.updated.slug,
-      userLinked: result.userLinked,
-    });
+    return NextResponse.json(
+      {
+        ok: true,
+        id: result.updated.id,
+        slug: result.updated.slug,
+        userLinked: result.userLinked,
+      },
+      { status: 200 }
+    );
   } catch (e: any) {
-    // Unieke index op slug
+    // Prisma unieke index fout op slug
     if (e?.code === "P2002" && Array.isArray(e?.meta?.target) && e.meta.target.includes("slug")) {
       return NextResponse.json({ error: "Slug bestaat al" }, { status: 409 });
     }
-    // Unieke index op AppUser.email
+    // Prisma unieke index fout op AppUser.email
     if (e?.code === "P2002" && Array.isArray(e?.meta?.target) && e.meta.target.includes("email")) {
       return NextResponse.json({ error: "Er bestaat al een gebruiker met dit e-mailadres" }, { status: 409 });
     }

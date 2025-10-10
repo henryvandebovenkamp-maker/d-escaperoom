@@ -210,7 +210,13 @@ export default function AdminRevenuePage() {
     if (typeof window === "undefined") return;
     const usp = new URLSearchParams(window.location.search);
 
-    if (partnerSlug && partnerSlug !== ALL) usp.set("partner", partnerSlug); else usp.delete("partner");
+    // ✅ “Alle hondenscholen” => verwijder param (geen partner filter)
+    if (partnerSlug && partnerSlug !== ALL) {
+      usp.set("partner", partnerSlug);
+    } else {
+      usp.delete("partner");
+    }
+
     usp.set("mode", mode);
     if (mode === "MONTH") { usp.set("pivot", pivotMonthISO); usp.delete("dateFrom"); usp.delete("dateTo"); }
     else if (mode === "QUARTER") { usp.delete("pivot"); usp.delete("dateFrom"); usp.delete("dateTo"); }
@@ -231,7 +237,10 @@ export default function AdminRevenuePage() {
     setLoading(true); setError(null);
     try {
       const p = new URLSearchParams();
+
+      // ✅ Alleen partnerSlug meesturen als NIET “Alle hondenscholen”
       if (partnerSlug && partnerSlug !== ALL) p.set("partnerSlug", partnerSlug);
+
       p.set("status", status || "CONFIRMED"); // ✅ default confirmed
       const range = effectiveRange;
       if (range.dateFrom) p.set("dateFrom", range.dateFrom);
@@ -345,7 +354,7 @@ export default function AdminRevenuePage() {
   function exportMainCSV() {
     const items = (viewedItems ?? []);
     const rows = [
-      ["Datum","Partner","Naam klant","Status","Totaal","€ fee"," € hondenschool","Korting","Teruggestort","Valuta"].join(";"),
+      ["Datum","Partner","Naam klant","Status","Totaal","€ fee"," € hondenschool","Korting","Teruggestort","Valuta"].join(";"),
       ...items.map(it => [
         it.date ? new Date(it.date).toLocaleDateString("nl-NL") : "-",
         (it.partnerName ?? "-").replaceAll(";", ","),

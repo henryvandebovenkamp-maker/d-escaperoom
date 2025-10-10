@@ -365,7 +365,7 @@ export default function AdminRevenuePage() {
   function exportMainCSV() {
     const items = (viewedItems ?? []);
     const rows = [
-      ["Datum","Partner","Naam klant","Status","Totaal","€ fee","jouw omzet","Korting","Teruggestort","Valuta"].join(";"),
+      ["Datum","Partner","Naam klant","Status","Totaal","€ fee","Omzet","Korting","Teruggestort","Valuta"].join(";"),
       ...items.map(it => [
         it.date ? new Date(it.date).toLocaleDateString("nl-NL") : "-",
         (it.partnerName ?? "-").replaceAll(";", ","),
@@ -498,7 +498,7 @@ export default function AdminRevenuePage() {
                   <Th sortable onSort={() => setSort("customerName")}   active={sortKey==="customerName"}  dir={sortDir}>Naam klant</Th>
                   <Th className="text-right" sortable onSort={() => setSort("total")}     active={sortKey==="total"}     dir={sortDir}>Totaal</Th>
                   <Th className="text-right" sortable onSort={() => setSort("platform")}  active={sortKey==="platform"}  dir={sortDir}>€ fee</Th>
-                  <Th className="text-right" sortable onSort={() => setSort("partner")}   active={sortKey==="partner"}   dir={sortDir}>jouw omzet</Th>
+                  <Th className="text-right" sortable onSort={() => setSort("partner")}   active={sortKey==="partner"}   dir={sortDir}>€ hondenschool</Th>
                   <Th className="text-right" sortable onSort={() => setSort("discount")}  active={sortKey==="discount"}  dir={sortDir}>Korting</Th>
                   <Th sortable onSort={() => setSort("status")}         active={sortKey==="status"}        dir={sortDir}>Status</Th>
                   <Th className="text-right" sortable onSort={() => setSort("refund")}    active={sortKey==="refund"}     dir={sortDir}>Terugboekt</Th>

@@ -24,8 +24,9 @@ type PartnerRow = {
   id: string; name: string; slug: string; email: string | null; phone: string | null;
   city: string | null; province: Province; isActive: boolean; feePercent: number;
   price1PaxCents: number; price2PlusCents: number; heroImageUrl: string | null;
-  addressLine1: string | null; addressLine2: string | null; postalCode: string | null;
+  addressLine1: string | null; postalCode: string | null;
   country: string | null; timezone: string; createdAt: string; updatedAt: string;
+  googleMapsUrl: string | null;
 };
 
 const PartnerSchema = z.object({
@@ -42,9 +43,9 @@ const PartnerSchema = z.object({
   price2PlusEuro: z.string().min(1, "Prijs ≥2p is verplicht"),
   heroImageUrl: z.string().url().optional(),
   addressLine1: z.string().optional(),
-  addressLine2: z.string().optional(),
   postalCode: z.string().optional(),
   country: z.string().optional(),
+  googleMapsUrl: z.string().url("Voer een geldige URL in").optional(),
   timezone: z.string().default("Europe/Amsterdam"),
 });
 type PartnerForm = z.infer<typeof PartnerSchema>;
@@ -62,8 +63,9 @@ export default function PartnersClient({ initialPartners }: { initialPartners: P
     name: "", slug: "", email: undefined, phone: "",
     province: "UTRECHT", city: "", isActive: true,
     feePercent: 20, price1PaxEuro: "49,95", price2PlusEuro: "39,95",
-    heroImageUrl: undefined, addressLine1: "", addressLine2: "",
+    heroImageUrl: undefined, addressLine1: "",
     postalCode: "", country: "NL", timezone: "Europe/Amsterdam",
+    googleMapsUrl: undefined,
   };
 
   const fetchList = async (q?: string) => {
@@ -88,9 +90,10 @@ export default function PartnersClient({ initialPartners }: { initialPartners: P
       price1PaxEuro: (p.price1PaxCents / 100).toFixed(2).replace(".", ","),
       price2PlusEuro: (p.price2PlusCents / 100).toFixed(2).replace(".", ","),
       heroImageUrl: p.heroImageUrl ?? undefined,
-      addressLine1: p.addressLine1 ?? "", addressLine2: p.addressLine2 ?? "",
+      addressLine1: p.addressLine1 ?? "",
       postalCode: p.postalCode ?? "", country: p.country ?? "NL",
       timezone: p.timezone ?? "Europe/Amsterdam",
+      googleMapsUrl: p.googleMapsUrl ?? undefined,
     });
     setOkMsg(null); setError(null);
   };
@@ -104,9 +107,9 @@ export default function PartnersClient({ initialPartners }: { initialPartners: P
     if (!norm.heroImageUrl) delete (norm as any).heroImageUrl;
     if (!norm.city) delete (norm as any).city;
     if (!norm.addressLine1) delete (norm as any).addressLine1;
-    if (!norm.addressLine2) delete (norm as any).addressLine2;
     if (!norm.postalCode) delete (norm as any).postalCode;
     if (!norm.country) delete (norm as any).country;
+    if (!norm.googleMapsUrl) delete (norm as any).googleMapsUrl;
     return norm;
   };
 
@@ -350,20 +353,6 @@ export default function PartnersClient({ initialPartners }: { initialPartners: P
                 />
               </div>
               <div>
-                <label className="block text-[11px] text-stone-600">Adresregel 2</label>
-                <input
-                  className="mt-1 w-full rounded-xl border border-stone-300 bg-stone-50 px-3 py-2 text-sm"
-                  value={editing?.addressLine2 ?? ""}
-                  onChange={(e) =>
-                    setEditing((p) => (p ? { ...p, addressLine2: e.target.value } : p))
-                  }
-                  placeholder="(optioneel)"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3">
-              <div>
                 <label className="block text-[11px] text-stone-600">Postcode</label>
                 <input
                   className="mt-1 w-full rounded-xl border border-stone-300 bg-stone-50 px-3 py-2 text-sm"
@@ -374,6 +363,21 @@ export default function PartnersClient({ initialPartners }: { initialPartners: P
                   placeholder="1234 AB"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] text-stone-600">Google Maps URL</label>
+              <input
+                className="mt-1 w-full rounded-xl border border-stone-300 bg-stone-50 px-3 py-2 text-sm"
+                value={editing?.googleMapsUrl ?? ""}
+                onChange={(e) =>
+                  setEditing((p) => (p ? { ...p, googleMapsUrl: e.target.value || undefined } : p))
+                }
+                placeholder="https://maps.google.com/?q=Stationsstraat+1,+1234+AB"
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className="block text-[11px] text-stone-600">Land</label>
                 <input
@@ -428,7 +432,7 @@ export default function PartnersClient({ initialPartners }: { initialPartners: P
                   className="mt-1 w-full rounded-xl border border-stone-300 bg-stone-50 px-3 py-2 text-sm"
                   value={editing?.feePercent ?? 20}
                   onChange={(e) =>
-                    setEditing((p) => (p ? ({ ...p, feePercent: e.target.value } as any) : p))
+                    setEditing((p) => (p ? ({ ...p, feePercent: Number(e.target.value) }) : p))
                   }
                   placeholder="20"
                 />

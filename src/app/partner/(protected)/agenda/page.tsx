@@ -2,6 +2,7 @@
 "use client";
 
 import * as React from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 
 /* =============================================================
    Admin/Partner Agenda — v3
@@ -30,7 +31,6 @@ type AgendaItem = {
 };
 
 type AgendaScope = "day" | "week" | "month";
-
 type PartnerRow = { id: string; name: string; slug: string; city: string | null };
 
 /* ================================
@@ -57,6 +57,17 @@ const startOfWeekISO = (d: Date) => {
   start.setDate(d.getDate() + diff);
   return toYMD(start);
 };
+// ISO-weeknummer (maandag = weekstart)
+const isoWeek = (d: Date) => {
+  const dt = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = (dt.getUTCDay() + 6) % 7;      // ma=0..zo=6
+  dt.setUTCDate(dt.getUTCDate() - day + 3);  // donderdag van deze week
+  const firstThu = new Date(Date.UTC(dt.getUTCFullYear(), 0, 4));
+  const firstThuDay = (firstThu.getUTCDay() + 6) % 7;
+  firstThu.setUTCDate(firstThu.getUTCDate() - firstThuDay + 3);
+  return 1 + Math.round((dt.getTime() - firstThu.getTime()) / (7 * 24 * 3600 * 1000));
+};
+
 const monthTitle = (iso: string) => {
   const d = new Date(iso);
   return `${nlMonths[d.getMonth()]} ${d.getFullYear()}`;
@@ -127,8 +138,15 @@ async function cancelBooking(bookingId: string, refundEligible: boolean) {
    Page — Admin/Partner agenda (GEBOEKTE slots only)
    ================================ */
 export default function AgendaPage() {
-  const sp = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
-  const urlPartner = sp?.get("partner") ?? "";
+  // ✅ SSR-veilig: pad & query via Next hooks (geen window-takken)
+  const pathname = usePathname();
+  const search = useSearchParams();
+
+  const urlPartner = search?.get("partner") ?? "";
+  const isAdmin = React.useMemo(
+    () => (pathname?.startsWith("/admin/") ?? false),
+    [pathname]
+  );
 
   const [partners, setPartners] = React.useState<PartnerRow[]>([]);
   const [partnerSlug, setPartnerSlug] = React.useState<string>(urlPartner);
@@ -140,14 +158,11 @@ export default function AgendaPage() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  // Admin vs Partner autodetect (dropdown verbergen buiten /admin/)
-  const isAdmin = typeof window !== "undefined" ? window.location.pathname.startsWith("/admin/") : true;
-
-  // partners ophalen
+  // partners ophalen (alleen admin)
   React.useEffect(() => {
     (async () => {
       try {
-        if (!isAdmin) return; // partner: geen lijst nodig
+        if (!isAdmin) return;
         const rows = await fetchJSON<PartnerRow[]>("/api/partners/list");
         setPartners(rows ?? []);
         if (!partnerSlug && rows[0]?.slug) setPartnerSlug(rows[0].slug);
@@ -156,14 +171,17 @@ export default function AgendaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
 
-  // querystring sync
+  // querystring sync (client-only; na mount → geen SSR mismatch)
   React.useEffect(() => {
-    if (typeof window === "undefined") return;
-    const sp = new URLSearchParams(window.location.search);
+    const sp = new URLSearchParams(search?.toString());
     if (partnerSlug) sp.set("partner", partnerSlug); else sp.delete("partner");
-    const newUrl = `${window.location.pathname}?${sp.toString()}`;
-    window.history.replaceState(null, "", newUrl.endsWith("?") ? newUrl.slice(0, -1) : newUrl);
-  }, [partnerSlug]);
+    const newQs = sp.toString();
+    const newUrl = `${pathname ?? ""}${newQs ? `?${newQs}` : ""}`;
+    // history push zonder volledige navigatie
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", newUrl);
+    }
+  }, [partnerSlug, pathname, search]);
 
   const load = React.useCallback(async () => {
     setLoading(true); setError(null);
@@ -194,16 +212,18 @@ export default function AgendaPage() {
       if (e.key === "ArrowLeft") { e.preventDefault(); goPrev(); }
       if (e.key === "ArrowRight"){ e.preventDefault(); goNext(); }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [scope, pivotISO]);
+    if (typeof window !== "undefined") {
+      window.addEventListener("keydown", onKey);
+      return () => window.removeEventListener("keydown", onKey);
+    }
+  }, [scope, pivotISO]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Titel (week → ISO-weeknummer)
   const title = React.useMemo(() => {
     if (scope === "day") return `Agenda — ${fmtDateNL(pivotISO)}`;
     if (scope === "week") {
-      const start = startOfWeekISO(new Date(pivotISO));
-      const end = addDaysISO(start, 6);
-      return `Agenda — Week ${start} t/m ${end}`;
+      const weekNr = isoWeek(new Date(pivotISO));
+      return `Agenda — Week ${String(weekNr).padStart(2, "0")}`;
     }
     return `Agenda — ${monthTitle(pivotISO)}`;
   }, [scope, pivotISO]);

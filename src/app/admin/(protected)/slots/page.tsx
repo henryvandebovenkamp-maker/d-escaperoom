@@ -941,9 +941,15 @@ function MiniGhost({ onClick, label }: { onClick: () => void; label: string }) {
 
 
 
+
+
+import { useRouter } from "next/navigation";
+
 /* ========================================================================
    DayLists — Links: DRAFT (oranje), Rechts: PUBLISHED/BOOKED
    - Tijden netjes uitgelijnd (tabular nums) + responsive grids
+   - Extra: verberg DRAFT-slots in het verleden en ververs 'nu' elke 30s
+   - Nieuw: bij BOOKED een klok-emoji en klik op tijd → naar agenda
 ========================================================================= */
 function DayLists({
   partnerSlug, dayISO, onChanged,
@@ -952,6 +958,25 @@ function DayLists({
   const [counts, setCounts] = React.useState<{ DRAFT: number; PUBLISHED: number; BOOKED: number }>({ DRAFT: 0, PUBLISHED: 0, BOOKED: 0 });
   const [loading, setLoading] = React.useState(false);
   const [msg, setMsg] = React.useState<string | null>(null);
+
+  // 'nu' bijhouden zodat verlopen tijden automatisch verdwijnen
+  const [nowMs, setNowMs] = React.useState<number>(Date.now());
+  React.useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const router = useRouter();
+
+  // Bepaal agenda-URL op basis van huidige route (admin vs partner)
+  function agendaHrefForDay(day: string) {
+    if (typeof window !== "undefined") {
+      const p = window.location.pathname || "";
+      const base = p.includes("/admin") ? "/admin/agenda" : "/partner/agenda";
+      return `${base}?scope=day&date=${encodeURIComponent(day)}#day`;
+    }
+    return `/partner/(protected)/agenda?scope=day&date=${encodeURIComponent(day)}#day`;
+  }
 
   async function load() {
     if (!partnerSlug) {
@@ -1018,7 +1043,15 @@ function DayLists({
 
   React.useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [partnerSlug, dayISO]);
 
-  const drafts    = items.filter((i) => i.status === "DRAFT");
+  // ===== Filter collecties =====
+  // Verberg DRAFT-slots waarvan de starttijd in het verleden ligt
+  const drafts = items
+    .filter((i) => i.status === "DRAFT")
+    .filter((i) => {
+      const t = i.startTime ? new Date(i.startTime).getTime() : 0;
+      return t > nowMs;
+    });
+
   const published = items.filter((i) => i.status === "PUBLISHED");
   const booked    = items.filter((i) => i.status === "BOOKED");
 
@@ -1077,7 +1110,7 @@ function DayLists({
         {msg && <p className="mb-2 text-sm text-stone-600">{msg}</p>}
         {loading ? (
           <p className="text-sm text-stone-500">Laden…</p>
-        ) : counts.DRAFT === 0 ? (
+        ) : drafts.length === 0 ? (
           <p className="text-sm text-stone-500">Gefeliciteerd, alles is gepubliceerd.</p>
         ) : (
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
@@ -1175,7 +1208,22 @@ function DayLists({
               title="Geboekt"
               aria-label={`Geboekt: ${fmtTimeNL(s.startTime)}`}
             >
-              <span className={timeTextCls}>{fmtTimeNL(s.startTime)}</span>
+              {/* 🕒 + klikbare tijd → agenda */}
+              <button
+                type="button"
+                onClick={() => router.push(agendaHrefForDay(dayISO))}
+                className={[
+                  timeTextCls,
+                  "flex items-center gap-1 underline-offset-2 hover:underline focus-visible:outline-none",
+                  "focus-visible:ring-2 focus-visible:ring-purple-300 rounded-sm"
+                ].join(" ")}
+                title="Open deze dag in de agenda"
+                aria-label={`Open agenda voor ${fmtDayLongNL(dayISO)} om ${fmtTimeNL(s.startTime)}`}
+              >
+                <span aria-hidden>🕒</span>
+                <span>{fmtTimeNL(s.startTime)}</span>
+              </button>
+
               <span aria-hidden className="sr-only">Geboekt</span>
             </div>
           ))}
@@ -1187,6 +1235,7 @@ function DayLists({
     </>
   );
 }
+
 
 
 /* ========================================================================

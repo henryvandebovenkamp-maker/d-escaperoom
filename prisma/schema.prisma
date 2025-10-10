@@ -127,6 +127,7 @@ model Partner {
   city           String?
   country        String?  @default("NL")
   timezone       String   @default("Europe/Amsterdam")
+  googleMapsUrl  String?  @db.Text
 
   users           AppUser[]
   slots           Slot[]

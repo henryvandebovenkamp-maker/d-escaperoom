@@ -20,6 +20,11 @@ const ContactSchema = z.object({
   city: z.string().max(80).optional().or(z.literal("")),
   country: z.string().max(2).optional().or(z.literal("")),
   timezone: z.string().max(64).optional().or(z.literal("")),
+  googleMapsUrl: z
+    .string()
+    .url("Voer een geldige Maps-URL in (https://...)")
+    .optional()
+    .or(z.literal("")),
 });
 
 const BrandingSchema = z.object({
@@ -33,11 +38,36 @@ async function requirePartner() {
   const user = await getSessionUser();
   if (!user || user.role !== "PARTNER" || !user.partnerId) redirect("/partner/login");
 
-  // Volledige partner nodig (pagina toont veel velden)
   const partner = await prisma.partner.findUnique({ where: { id: user.partnerId } });
   if (!partner) redirect("/partner/login");
 
   return { user, partner };
+}
+
+/* ================================
+   Utils
+================================ */
+function safeDecode(s: string) {
+  try { return decodeURIComponent(s); } catch { return s; }
+}
+
+function mapsSuggestFromPartner(p: {
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  postalCode?: string | null;
+  city?: string | null;
+  country?: string | null;
+}) {
+  const parts = [
+    p.addressLine1?.trim(),
+    p.addressLine2?.trim(),
+    p.postalCode?.trim(),
+    p.city?.trim(),
+    p.country?.trim() || "NL",
+  ].filter(Boolean);
+  if (parts.length === 0) return null;
+  const q = encodeURIComponent(parts.join(", "));
+  return `https://www.google.com/maps/search/?api=1&query=${q}`;
 }
 
 /* ================================
@@ -57,6 +87,7 @@ export async function updateContact(formData: FormData): Promise<void> {
     city: formData.get("city"),
     country: formData.get("country"),
     timezone: formData.get("timezone"),
+    googleMapsUrl: formData.get("googleMapsUrl"),
   });
 
   if (!parsed.success) {
@@ -77,6 +108,8 @@ export async function updateContact(formData: FormData): Promise<void> {
       city: d.city || null,
       country: d.country || "NL",
       timezone: d.timezone || "Europe/Amsterdam",
+      // ⬇️ Nieuw veld
+      googleMapsUrl: d.googleMapsUrl || null,
     },
   });
 
@@ -88,9 +121,7 @@ export async function updateBranding(formData: FormData): Promise<void> {
   "use server";
   const { partner } = await requirePartner();
 
-  const parsed = BrandingSchema.safeParse({
-    heroImageUrl: formData.get("heroImageUrl"),
-  });
+  const parsed = BrandingSchema.safeParse({ heroImageUrl: formData.get("heroImageUrl") });
 
   if (!parsed.success) {
     const msg = encodeURIComponent(parsed.error.issues[0]?.message ?? "Ongeldige invoer");
@@ -114,17 +145,21 @@ export async function updateBranding(formData: FormData): Promise<void> {
 export default async function PartnerProfilePage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  // In Next.js 15 is searchParams in server components een Promise
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { user, partner } = await requirePartner();
-  const msg = typeof searchParams?.m === "string" ? decodeURIComponent(searchParams.m) : null;
 
-  // kleine helpers
+  const sp = await searchParams;
+  const mRaw = Array.isArray(sp?.m) ? sp.m[0] : sp?.m;
+  const msg = typeof mRaw === "string" ? safeDecode(mRaw) : null;
+
   const euro = (cents: number) => `€ ${(cents / 100).toFixed(2)}`;
+  const mapsSuggest = mapsSuggestFromPartner(partner);
 
   return (
     <div className="space-y-6">
-      {/* Header — zelfde look & feel als dashboard */}
+      {/* Header */}
       <header className="rounded-xl border border-stone-200 bg-stone-50 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -147,7 +182,7 @@ export default async function PartnerProfilePage({
       ) : null}
 
       <div className="mx-auto w-full max-w-6xl px-4">
-        {/* KPI-style cards */}
+        {/* KPI-cards */}
         <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-2xl border border-stone-200 bg-white p-4">
             <div className="text-2xl">👤</div>
@@ -230,7 +265,38 @@ export default async function PartnerProfilePage({
                 </div>
               </div>
 
-              <button type="submit" className="inline-flex items-center justify-center rounded-2xl bg-black px-4 py-2 text-stone-50 text-sm font-medium shadow hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-black/30">
+              {/* Nieuw: Google Maps link */}
+              <div className="grid gap-2">
+                <label htmlFor="googleMapsUrl" className="block text-sm font-medium text-stone-700">Google Maps link</label>
+                <input
+                  id="googleMapsUrl"
+                  name="googleMapsUrl"
+                  type="url"
+                  placeholder="https://www.google.com/maps/place/..."
+                  defaultValue={(partner as any).googleMapsUrl ?? ""}
+                  className="mt-1 w-full rounded-xl border border-stone-300 bg-white px-3 py-2"
+                />
+                <p className="text-xs text-stone-500">
+                  Tip: geen link? Gebruik een suggestie:&nbsp;
+                  {mapsSuggest ? (
+                    <a
+                      href={mapsSuggest}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline underline-offset-2 hover:no-underline"
+                    >
+                      Open voorstel in Google Maps
+                    </a>
+                  ) : (
+                    <span className="italic">vul eerst (adres, postcode, plaats) in en sla op</span>
+                  )}
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                className="inline-flex items-center justify-center rounded-2xl bg-black px-4 py-2 text-stone-50 text-sm font-medium shadow hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-black/30"
+              >
                 Opslaan
               </button>
             </form>

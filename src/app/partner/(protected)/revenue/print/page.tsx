@@ -139,7 +139,7 @@ export default async function PartnerRevenuePrintPage({
               <Th>Naam klant</Th>
               <Th className="text-right">Totaal</Th>
               <Th className="text-right">€ fee</Th>
-              <Th className="text-right">Jouw omzet</Th>
+              <Th className="text-right">@ hondenschool</Th>
               <Th className="text-right">Korting</Th>
               <Th>Status</Th>
               <Th className="text-right">Teruggestort</Th>

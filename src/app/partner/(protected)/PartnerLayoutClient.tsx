@@ -76,14 +76,10 @@ export default function PartnerLayoutClient({ children, email, partnerSlug }: Pr
 
   const [mobileOpen, setMobileOpen] = React.useState(false);
 
-  // Redirect legacy paden → /partner/discounts
+  // Redirect legacy paden (kortingen/acties verwijderd)
   React.useEffect(() => {
     if (!pathname) return;
-    const legacyRedirects: Record<string, string> = {
-      "/partner/acties": "/partner/discounts",
-      "/partner/actions": "/partner/discounts",
-      "/partner/coupons": "/partner/discounts",
-    };
+    const legacyRedirects: Record<string, string> = {};
     const dest = legacyRedirects[pathname];
     if (dest) router.replace(dest);
   }, [pathname, router]);
@@ -95,7 +91,6 @@ export default function PartnerLayoutClient({ children, email, partnerSlug }: Pr
 
   return (
     <div className="min-h-dvh bg-stone-50 text-stone-900">
-      {/* dunne gradient strip */}
       <div className="h-1 w-full bg-gradient-to-r from-pink-500 via-rose-500 to-pink-500" />
 
       {/* ======= MOBILE HEADER (<= md) ======= */}
@@ -151,7 +146,6 @@ export default function PartnerLayoutClient({ children, email, partnerSlug }: Pr
                 <NavLink href="/partner/agenda" size="lg">📅 Agenda</NavLink>
                 <NavLink href="/partner/profile" size="lg">🏷️ Profiel</NavLink>
                 <NavLink href="/partner/revenue" size="lg">💶 Omzet</NavLink>
-                <NavLink href="/partner/discounts" size="lg">％ Kortingen/Acties</NavLink>
               </nav>
 
               <div className="mt-4 rounded-xl bg-stone-50 p-3 text-xs text-stone-600">
@@ -182,25 +176,23 @@ export default function PartnerLayoutClient({ children, email, partnerSlug }: Pr
       <header className="sticky top-0 z-30 hidden border-b border-stone-200 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 md:block">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <div className="flex items-center justify-between gap-4 py-4">
-            {/* Links: titel + sub */}
             <div className="flex-1 min-w-[320px]">
               <div className="flex items-center gap-2">
                 <span className="text-3xl font-extrabold tracking-tight">Partner</span>
                 <span role="img" aria-label="paw" className="text-2xl">🐾</span>
               </div>
               <p className="mt-1 text-sm text-stone-600">
-                Welkom in het Partnerportaal, je bent ingelogd als{" "}
-                <span className="font-medium text-stone-900">{email}</span>
+               
+                <span className="font-medium text-stone-900">Welkom op jouw beheer pagina</span>
                 {partnerSlug ? (
                   <>
-                    {" "}· partner:{" "}
-                    <span className="font-medium text-stone-900">{partnerSlug}</span>
+                    
+                    <span className="font-medium text-stone-900"></span>
                   </>
                 ) : null}
               </p>
             </div>
 
-            {/* Rechts: nav + uitlog */}
             <div className="shrink-0">
               <div className="flex items-center gap-3">
                 <nav className="flex flex-wrap items-center gap-2">
@@ -209,7 +201,6 @@ export default function PartnerLayoutClient({ children, email, partnerSlug }: Pr
                   <NavLink href="/partner/agenda">📅 Agenda</NavLink>
                   <NavLink href="/partner/profile">🏷️ Profiel</NavLink>
                   <NavLink href="/partner/revenue">💶 Omzet</NavLink>
-                  <NavLink href="/partner/discounts">％ Kortingen/Acties</NavLink>
                 </nav>
                 <form action="/api/auth/logout" method="post">
                   <button
