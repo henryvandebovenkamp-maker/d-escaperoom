@@ -970,13 +970,52 @@ import { useRouter } from "next/navigation";
 
 /* ========================================================================
    DayLists — Links: DRAFT (oranje), Rechts: PUBLISHED/BOOKED
+   - Altijd 12 timeslots van 09:00 t/m 20:00 (Europe/Amsterdam)
    - Tijden netjes uitgelijnd (tabular nums) + responsive grids
-   - Extra: verberg DRAFT-slots in het verleden en ververs 'nu' elke 30s
-   - Nieuw: bij BOOKED een klok-emoji en klik op tijd → naar agenda
+   - Verberg DRAFT in verleden; 'nu' refresht elke 30s
+   - BOOKED: klok-emoji + klik → agenda
 ========================================================================= */
 function DayLists({
   partnerSlug, dayISO, onChanged,
 }: { partnerSlug: string; dayISO: string; onChanged: () => void }) {
+  // ==== TZ-helpers (Europe/Amsterdam, DST-proof) ====
+  const TZ = "Europe/Amsterdam";
+
+  /** Maak UTC-instant die in TZ exact hh:mm op dayISO is (robust, DST-proof). */
+  function zonedDateFromLocal(day: string, hm: string): Date {
+    const [y, m, d] = day.split("-").map(Number);
+    const [hh, mm] = hm.split(":").map(Number);
+    const guess = Date.UTC(y, (m - 1), d, hh, mm, 0, 0);
+    const dtf = new Intl.DateTimeFormat("en-US", {
+      timeZone: TZ, hour12: false, year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+    });
+    const parts = dtf.formatToParts(new Date(guess));
+    const map: Record<string, string> = Object.fromEntries(parts.map(p => [p.type, p.value]));
+    const intended = hh * 60 + mm;
+    const actual = parseInt(map.hour, 10) * 60 + parseInt(map.minute, 10);
+    const diffMin = intended - actual;
+    return new Date(guess + diffMin * 60_000);
+  }
+
+  /** Format HH:mm in Amsterdam (weergave). */
+  function fmtTimeNL_TZ(iso: string) {
+    const d = new Date(iso);
+    return new Intl.DateTimeFormat("nl-NL", {
+      timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false,
+    }).format(d);
+  }
+
+  /** Genereer 12 ISO’s: 09:00 t/m 20:00 (in TZ). */
+  function generateSchedule(day: string): string[] {
+    const out: string[] = [];
+    for (let h = 9; h <= 20; h++) {
+      const dt = zonedDateFromLocal(day, `${String(h).padStart(2, "0")}:00`);
+      out.push(dt.toISOString());
+    }
+    return out;
+  }
+
   const [items, setItems] = React.useState<DayItem[]>([]);
   const [counts, setCounts] = React.useState<{ DRAFT: number; PUBLISHED: number; BOOKED: number }>({ DRAFT: 0, PUBLISHED: 0, BOOKED: 0 });
   const [loading, setLoading] = React.useState(false);
@@ -1016,41 +1055,50 @@ function DayLists({
       if (!r.ok) throw new Error(await r.text());
       const j = await r.json();
 
-      const fromSlots: DayItem[] = Array.isArray(j.slots)
-        ? j.slots.filter(Boolean).map((s: any) => ({
-            id: s?.id ?? null,
-            startTime: typeof s?.startTime === "string" ? s.startTime : s?.startTime ? new Date(s.startTime).toISOString() : "",
-            endTime:   typeof s?.endTime   === "string" ? s.endTime   : s?.endTime   ? new Date(s.endTime).toISOString()   : undefined,
-            status: (s?.status as DayItem["status"]) ?? "DRAFT",
-            virtual: Boolean(s?.virtual) || s?.id == null,
-            capacity: s?.capacity,
-            maxPlayers: s?.maxPlayers,
-          }))
+      // 1) Normaliseer bestaande DB-slots → map op startTime ISO
+      const existing = new Map<string, DayItem>();
+      const dbSlots: DayItem[] = Array.isArray(j.slots)
+        ? j.slots.filter(Boolean).map((s: any) => {
+            const startISO = s?.startTime
+              ? (typeof s.startTime === "string" ? new Date(s.startTime) : new Date(s.startTime)).toISOString()
+              : "";
+            const endISO = s?.endTime
+              ? (typeof s.endTime === "string" ? new Date(s.endTime) : new Date(s.endTime)).toISOString()
+              : undefined;
+            const it: DayItem = {
+              id: s?.id ?? null,
+              startTime: startISO,
+              endTime: endISO,
+              status: (s?.status as DayItem["status"]) ?? "DRAFT",
+              virtual: Boolean(s?.virtual) || s?.id == null,
+              capacity: s?.capacity,
+              maxPlayers: s?.maxPlayers,
+            };
+            if (startISO) existing.set(startISO, it);
+            return it;
+          })
         : [];
 
-      const fromItems: DayItem[] = Array.isArray(j.items)
-        ? j.items.filter(Boolean).map((s: any) => ({
-            id: s?.id ?? null,
-            startTime: typeof s?.startTime === "string" ? s.startTime : s?.startTime ? new Date(s.startTime).toISOString() : "",
-            status: (s?.status as DayItem["status"]) ?? "DRAFT",
-            virtual: false,
-          }))
-        : [];
+      // 2) Bouw vaste dagindeling 09:00..20:00 (12 slots) en merge met bestaande
+      const schedule = generateSchedule(dayISO); // 12 ISO strings
+      const merged: DayItem[] = schedule.map((iso) => {
+        return existing.get(iso) ?? {
+          id: null,
+          startTime: iso,
+          status: "DRAFT",
+          virtual: true,
+        };
+      });
 
-      const byKey = new Map<string, DayItem>();
-      for (const it of fromSlots) if (it.startTime) byKey.set(it.startTime, it);
-      for (const it of fromItems) if (it.startTime) byKey.set(it.startTime, { ...byKey.get(it.startTime), ...it, virtual: false });
-
-      const merged = Array.from(byKey.values()).filter(it => !!it.startTime);
+      // 3) Sorteren op tijd
       merged.sort((a, b) => (a.startTime || "").localeCompare(b.startTime || ""));
 
-      const computed = j?.counts
-        ? j.counts
-        : {
-            DRAFT: merged.filter(x => x.status === "DRAFT").length,
-            PUBLISHED: merged.filter(x => x.status === "PUBLISHED").length,
-            BOOKED: merged.filter(x => x.status === "BOOKED").length,
-          };
+      // 4) Counts op basis van merged
+      const computed = {
+        DRAFT: merged.filter(x => x.status === "DRAFT").length,
+        PUBLISHED: merged.filter(x => x.status === "PUBLISHED").length,
+        BOOKED: merged.filter(x => x.status === "BOOKED").length,
+      };
 
       setItems(merged);
       setCounts(computed);
@@ -1144,7 +1192,7 @@ function DayLists({
                 onClick={() => publishSingle(s)}
                 disabled={loading}
                 title="Publiceer dit tijdslot"
-                aria-label={`Publiceer tijdslot ${fmtTimeNL(s.startTime)}`}
+                aria-label={`Publiceer tijdslot ${fmtTimeNL_TZ(s.startTime)}`}
                 aria-disabled={loading}
                 className={[
                   pillBase,
@@ -1153,7 +1201,7 @@ function DayLists({
                   loading ? "opacity-60 cursor-not-allowed" : "cursor-pointer",
                 ].join(" ")}
               >
-                <span className={timeTextCls}>{fmtTimeNL(s.startTime)}</span>
+                <span className={timeTextCls}>{fmtTimeNL_TZ(s.startTime)}</span>
                 <svg
                   viewBox="0 0 20 20"
                   className="h-4 w-4 shrink-0 text-emerald-600"
@@ -1191,7 +1239,7 @@ function DayLists({
                 onClick={() => unpublishSingle(s.id!)}
                 disabled={loading}
                 title="Verwijder dit tijdslot (depublish)"
-                aria-label={`Verwijder tijdslot ${fmtTimeNL(s.startTime)}`}
+                aria-label={`Verwijder tijdslot ${fmtTimeNL_TZ(s.startTime)}`}
                 aria-disabled={loading}
                 className={[
                   pillBase,
@@ -1200,7 +1248,7 @@ function DayLists({
                   loading ? "opacity-60 cursor-not-allowed" : "cursor-pointer",
                 ].join(" ")}
               >
-                <span className={timeTextCls}>{fmtTimeNL(s.startTime)}</span>
+                <span className={timeTextCls}>{fmtTimeNL_TZ(s.startTime)}</span>
                 <svg
                   viewBox="0 0 20 20"
                   className="h-4 w-4 shrink-0 text-rose-600"
@@ -1229,7 +1277,7 @@ function DayLists({
                 "opacity-90 select-none min-h-9",
               ].join(" ")}
               title="Geboekt"
-              aria-label={`Geboekt: ${fmtTimeNL(s.startTime)}`}
+              aria-label={`Geboekt: ${fmtTimeNL_TZ(s.startTime)}`}
             >
               {/* 🕒 + klikbare tijd → agenda */}
               <button
@@ -1241,10 +1289,10 @@ function DayLists({
                   "focus-visible:ring-2 focus-visible:ring-purple-300 rounded-sm"
                 ].join(" ")}
                 title="Open deze dag in de agenda"
-                aria-label={`Open agenda voor ${fmtDayLongNL(dayISO)} om ${fmtTimeNL(s.startTime)}`}
+                aria-label={`Open agenda voor ${fmtDayLongNL(dayISO)} om ${fmtTimeNL_TZ(s.startTime)}`}
               >
                 <span aria-hidden>🕒</span>
-                <span>{fmtTimeNL(s.startTime)}</span>
+                <span>{fmtTimeNL_TZ(s.startTime)}</span>
               </button>
 
               <span aria-hidden className="sr-only">Geboekt</span>
@@ -1258,6 +1306,7 @@ function DayLists({
     </>
   );
 }
+
 
 
 
