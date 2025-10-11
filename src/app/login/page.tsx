@@ -278,10 +278,10 @@ export default function LoginPage(): React.ReactElement {
           {/* Compacte bulletlijst — zonder Partnerprofiel & Kortingscodes */}
           <ul className="mt-6 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
             {[
-              { icon: "📊", title: "Dashboard", text: "Overzicht van jouw gegevens" },
-              { icon: "🗓️", title: "Tijdsloten", text: "Beheer jouw tijdsloten" },
-              { icon: "📅", title: "Agenda", text: "Overzicht van jouw boekingen" },
-              { icon: "💶", title: "Omzet", text: "Bekijk jouw omzet cijfsrs" },
+              { icon: "📊", title: "Dashboard", text: "Overzicht" },
+              { icon: "🗓️", title: "Tijdsloten", text: "Beheer tijdsloten" },
+              { icon: "📅", title: "Agenda", text: "Boekingen/planning" },
+              { icon: "💶", title: "Omzet", text: "Omzet cijfers" },
             ].map((item) => (
               <li
                 key={item.title}
