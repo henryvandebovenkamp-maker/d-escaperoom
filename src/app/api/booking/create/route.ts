@@ -167,10 +167,12 @@ export async function POST(req: NextRequest) {
     if (!slot) return json({ ok: false, error: "Tijdslot niet gevonden" }, 404);
     if (slot.status === "BOOKED") return json({ ok: false, error: "Tijdslot is al geboekt" }, 409);
 
-    // 3) Customer (meerdere per email toegestaan)
+    // 3) Customer (meerdere per email toegestaan)  ⬅️ ENIGE INHOUDELIJKE WIJZIGING
+    const normalizedEmail = data.customer.email.trim().toLowerCase();
+
     let customer = await prisma.customer.findFirst({
       where: {
-        email: data.customer.email,
+        email: normalizedEmail,
         ...(data.customer.name ? { name: data.customer.name } : {}),
       },
       select: { id: true },
@@ -179,7 +181,7 @@ export async function POST(req: NextRequest) {
     if (!customer) {
       customer = await prisma.customer.create({
         data: {
-          email: data.customer.email,
+          email: normalizedEmail,
           name: data.customer.name ?? null,
           phone: data.customer.phone ?? null,
           locale: data.customer.locale ?? "nl",

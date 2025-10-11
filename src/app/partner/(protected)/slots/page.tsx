@@ -1056,29 +1056,42 @@ function DayLists({
       if (!r.ok) throw new Error(await r.text());
       const j = await r.json();
 
-      // 1) Normaliseer bestaande DB-slots → map op startTime ISO
+      // 1) Normaliseer bestaande DB-slots → map op startTime ISO (shape-tolerant + BOOKED-forcering)
       const existing = new Map<string, DayItem>();
-      const dbSlots: DayItem[] = Array.isArray(j.slots)
-        ? j.slots.filter(Boolean).map((s: any) => {
-            const startISO = s?.startTime
-              ? (typeof s.startTime === "string" ? new Date(s.startTime) : new Date(s.startTime)).toISOString()
-              : "";
-            const endISO = s?.endTime
-              ? (typeof s.endTime === "string" ? new Date(s.endTime) : new Date(s.endTime)).toISOString()
-              : undefined;
-            const it: DayItem = {
-              id: s?.id ?? null,
-              startTime: startISO,
-              endTime: endISO,
-              status: (s?.status as DayItem["status"]) ?? "DRAFT",
-              virtual: Boolean(s?.virtual) || s?.id == null,
-              capacity: s?.capacity,
-              maxPlayers: s?.maxPlayers,
-            };
-            if (startISO) existing.set(startISO, it);
-            return it;
-          })
-        : [];
+      const rows: any[] = Array.isArray(j?.items) ? j.items : Array.isArray(j?.slots) ? j.slots : [];
+
+      const toMinuteISO = (x: any) => {
+        const d = new Date(typeof x === "string" ? x : x);
+        d.setSeconds(0, 0);
+        return d.toISOString();
+      };
+
+      for (const s of rows) {
+        const rawStart = s?.startTime ?? s?.startsAt ?? s?.start ?? s?.time ?? null;
+        if (!rawStart) continue;
+
+        const startISO = toMinuteISO(rawStart);
+        const endISO = s?.endTime ? toMinuteISO(s.endTime) : undefined;
+
+        const hasConfirmed =
+          Boolean(s?.hasConfirmedBooking) ||
+          (Array.isArray(s?.bookings) && s.bookings.length > 0);
+
+        const status: DayItem["status"] =
+          hasConfirmed ? "BOOKED" : ((s?.status as DayItem["status"]) ?? "DRAFT");
+
+        const it: DayItem = {
+          id: s?.id ?? null,
+          startTime: startISO,
+          endTime: endISO,
+          status,
+          virtual: Boolean(s?.virtual) || s?.id == null,
+          capacity: s?.capacity,
+          maxPlayers: s?.maxPlayers,
+        };
+
+        existing.set(startISO, it);
+      }
 
       // 2) Bouw vaste dagindeling 09:00..20:00 (12 slots) en merge met bestaande
       const schedule = generateSchedule(dayISO); // 12 ISO strings

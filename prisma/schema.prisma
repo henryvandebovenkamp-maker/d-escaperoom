@@ -188,7 +188,7 @@ model Slot {
  */
 model Customer {
   id         String    @id @default(cuid())
-  email      String    @unique
+  email      String    @db.Text
   name       String?
   phone      String?
   locale     String?   // "nl", "en", "de", "es" — voor e-mails

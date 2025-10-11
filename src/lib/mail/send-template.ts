@@ -1,22 +1,41 @@
-// PATH: src/lib/mail/send-template.ts
-import { sendMail } from "@/lib/mail";
-import { renderLoginCodeHtml } from "./templates/login-code";
+import { transporter, MAIL_FROM, MAIL_BCC, MAIL_DEV_ECHO, DISABLE_EMAIL } from "./transporter";
+import { getTemplate, type TemplateId, type TemplateVars } from "./templates/base";
+// Zorg dat templates geregistreerd zijn:
+import "./templates/register";
 
-export async function sendTemplateMail(args: {
+type SendArgs<T extends TemplateId> = {
   to: string;
-  templateId: "login_code";
-  params: { code: string; expiresMinutes: number };
-}) {
-  const { to, templateId, params } = args;
-  if (templateId !== "login_code") throw new Error(`Unknown templateId: ${templateId}`);
+  template: T;
+  vars: TemplateVars[T];
+  from?: string;
+  bcc?: string;
+  replyTo?: string;
+};
 
-  const html = renderLoginCodeHtml({
-    code: params.code,
-    expiresMinutes: params.expiresMinutes,
-    // Optioneel: zet MAIL_LOGO_URL in .env en geef ’m mee
-    logoUrl: process.env.MAIL_LOGO_URL,
+export async function sendTemplateMail<T extends TemplateId>(args: SendArgs<T>) {
+  const { to, template, vars, from, bcc, replyTo } = args;
+  const t = getTemplate(template);
+  const subject = t.subject(vars as any);
+  const html = t.html(vars as any);
+  const text = t.text?.(vars as any);
+
+  // DEV: echo naar console i.p.v. mailen
+  if (DISABLE_EMAIL || MAIL_DEV_ECHO) {
+    console.info("[mail:echo]", { to, template, subject });
+    if (DISABLE_EMAIL) {
+      return { messageId: "disabled", accepted: [], rejected: [to], preview: { subject, html, text } };
+    }
+  }
+
+  const info = await transporter.sendMail({
+    from: from ?? MAIL_FROM,
+    to,
+    bcc: (bcc ?? MAIL_BCC) || undefined,
+    subject,
+    html,
+    text,
+    replyTo,
   });
 
-  await sendMail({ to, subject: "Je login-code (D-EscapeRoom)", html });
-  return { sent: true };
+  return info;
 }

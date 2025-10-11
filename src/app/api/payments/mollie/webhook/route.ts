@@ -1,9 +1,12 @@
+// PATH: src/app/api/payments/mollie/webhook/route.ts
 import { NextResponse, type NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
 import createMollieClient from "@mollie/api-client";
-import { sendMail, bookingCustomerTemplate, bookingPartnerTemplate } from "@/lib/mail";
 import { PaymentStatus, PaymentProvider, PaymentType, SlotStatus } from "@prisma/client";
 import { releaseSlotIfUnpaid } from "@/lib/slots";
+
+// ⬇️ Nieuw: gebruik de nieuwe mail-API (NL-only templates)
+import { sendTemplateMail, APP_ORIGIN } from "@/lib/mail";
 
 export const runtime = "nodejs";
 
@@ -178,45 +181,65 @@ export async function POST(req: NextRequest) {
           }
         });
 
-        // E-mails (best effort)
+        // E-mails (best effort) — ⬇️ AANGEPAST NAAR sendTemplateMail
         try {
           const slot = booking.slot!;
           const customer = booking.customer!;
           const partner = booking.partner!;
 
-          const vars = {
-            bookingId: booking.id,
-            customerName: customer.name ?? null,
-            customerEmail: customer.email,
-            partnerName: partner.name,
-            partnerEmail: partner.email ?? null,
-            slotStartISO: slot.startTime.toISOString(),
-            slotEndISO: slot.endTime.toISOString(),
-            totalAmountCents: booking.totalAmountCents,
-            depositAmountCents: booking.depositAmountCents,
-            restAmountCents: booking.restAmountCents,
-            locale: (customer.locale as string | null) ?? "nl",
-            partnerAddressLine1: partner.addressLine1 ?? null,
-            partnerCity: partner.city ?? null,
-            partnerPostalCode: partner.postalCode ?? null,
-            partnerPhone: partner.phone ?? null,
-          };
+          // Vereiste velden voor de NL-templates (conversies + fallbacks)
+          const slotISO = slot.startTime.toISOString();
+          const totalCents = Number(booking.totalAmountCents || 0);
+          const depositCents = Number(booking.depositAmountCents || 0);
+          const restCents = Number(booking.restAmountCents || Math.max(totalCents - depositCents, 0));
+          const players = Number((booking as any).players ?? 1);
 
-          const custTmpl = bookingCustomerTemplate(vars as any);
-          await sendMail({
+          const address =
+            [
+              partner.addressLine1,
+              partner.postalCode,
+              partner.city,
+            ]
+              .filter(Boolean)
+              .join(", ") || undefined;
+
+          // ---- Mail naar klant -------------------------------------------------------
+          await sendTemplateMail({
             to: customer.email,
-            subject: custTmpl.subject,
-            html: custTmpl.html,
-            text: custTmpl.text,
+            template: "booking_customer",
+            vars: {
+              bookingId: booking.id,
+              firstName: (customer as any)?.firstName ?? customer.name ?? null,
+              partnerName: partner.name,
+              partnerEmail: partner.email ?? undefined,
+              slotISO,
+              players,
+              totalCents,
+              depositCents,
+              restCents,
+              address,
+              manageUrl: `${APP_ORIGIN}/booking/${booking.id}`,
+            },
           });
 
+          // ---- Mail naar hondenschool -----------------------------------------------
           if (partner.email) {
-            const partnerTmpl = bookingPartnerTemplate(vars as any);
-            await sendMail({
+            await sendTemplateMail({
               to: partner.email,
-              subject: partnerTmpl.subject,
-              html: partnerTmpl.html,
-              text: partnerTmpl.text,
+              template: "booking_partner",
+              vars: {
+                bookingId: booking.id,
+                customerName: [ (customer as any)?.firstName, (customer as any)?.lastName ]
+                  .filter(Boolean)
+                  .join(" ") || customer.name || null,
+                customerEmail: customer.email,
+                slotISO,
+                players,
+                totalCents,
+                depositCents,
+                restCents,
+                partnerDashboardUrl: `${APP_ORIGIN}/partner/dashboard`,
+              },
             });
           }
         } catch (e) {

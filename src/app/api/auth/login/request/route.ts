@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import crypto from "node:crypto";
+import { sendTemplateMail, APP_ORIGIN } from "@/lib/mail"; // ⬅️ NIEUW
 
 export const runtime = "nodejs";        // Prisma/Nodemailer -> Node runtime
 export const dynamic = "force-dynamic"; // geen caching
@@ -67,27 +68,14 @@ export async function POST(req: Request) {
     }
 
     // === Nieuwe mail-flow via lib ===
-    // Lazy import zodat de route niet faalt als mail subsystem ontbreekt;
-    // in dev zonder SMTP logt onze transporteur het mailtje (dev-log) i.p.v. te crashen.
     try {
-      const mod = (await import("@/lib/mail")) as any;
-      const sendTemplateMail = mod?.sendTemplateMail as
-        | ((args: {
-            to: string;
-            templateId: "login_code";
-            params: { code: string; expiresMinutes: number };
-            locale?: "nl" | "en" | "de" | "es";
-          }) => Promise<{ sent: boolean }>)
-        | undefined;
-
-      // Stuur alleen een mail als we een mailer hebben.
-      // Wil je óók mailen als user (nog) niet bestaat? Haal "&& user" weg.
-      if (sendTemplateMail && user) {
+      // Tip: wil je óók mailen als user (nog) niet bestaat? Verwijder de && user check.
+      if (user) {
+        const loginUrl = `${APP_ORIGIN}/login?email=${encodeURIComponent(cleanEmail)}`;
         await sendTemplateMail({
           to: cleanEmail,
-          templateId: "login_code",
-          params: { code, expiresMinutes: 10 },
-          locale,
+          template: "login_code",
+          vars: { code, loginUrl }, // NL-only template verwacht deze keys
         });
       }
     } catch (mailErr) {
@@ -99,6 +87,8 @@ export async function POST(req: Request) {
       ok: true,
       // Alleen in dev of met DEV_LOGIN_ECHO=1 sturen we de code terug
       devCode: !isProd || echoInProd ? code : undefined,
+      // optioneel: locale teruggeven als je dat gebruikt in de UI
+      locale,
     });
   } catch (err) {
     console.error("[/api/auth/login/request] error:", err);
