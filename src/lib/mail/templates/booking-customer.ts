@@ -1,11 +1,12 @@
-import { register, TemplateDef, layout, formatEUR, formatNLDateTime } from "./base";
+// PATH: src/lib/mail/templates/booking-customer.ts
+import { register, type TemplateDef, layout, formatEUR, formatNLDateTime, type TemplateVars } from "./base";
 
-const T: TemplateDef<"booking_customer"> = {
-  id: "booking_customer",
-  subject(v) {
+const T: TemplateDef<"booking-customer"> = {
+  id: "booking-customer",
+  subject(v: TemplateVars["booking-customer"]) {
     return `Bevestiging: jouw boeking ${v.bookingId} bij ${v.partnerName}`;
   },
-  html(v) {
+  html(v: TemplateVars["booking-customer"]) {
     const when = formatNLDateTime(v.slotISO);
     const body = `
       <h1 style="margin:0 0 12px 0;">Bedankt voor je boeking!</h1>
@@ -34,9 +35,11 @@ const T: TemplateDef<"booking_customer"> = {
       title: "Boekingsbevestiging",
       preheader: `Je boeking bij ${v.partnerName} is bevestigd`,
       bodyHtml: body,
+      // optioneel: brandHeader: "D-EscapeRoom • The Missing Snack",
+      // closingHtml: null,
     });
   },
-  text(v) {
+  text(v: TemplateVars["booking-customer"]) {
     return `Boekingsbevestiging
 
 Boekingsnummer: ${v.bookingId}

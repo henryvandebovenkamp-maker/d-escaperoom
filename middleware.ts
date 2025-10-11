@@ -31,56 +31,12 @@ async function readSession(
   }
 }
 
-function isAny(pathname: string, patterns: RegExp[]) {
-  return patterns.some((re) => re.test(pathname));
-}
-
-/* ========= Route sets ========= */
-/** Altijd publiek: geen auth */
-const PUBLIC_PATHS: RegExp[] = [
-  /^\/$/,                         // home
-  /^\/_next\//,                   // Next assets
-  /^\/images\//,                  // public images
-  /^\/public\//,                  // extra public
-  /^\/favicon\.ico$/,
-
-  // expliciet public API's (booking widget + auth + mollie)
-  /^\/api\/public\//,
-  /^\/api\/auth\/login\/request$/,
-  /^\/api\/auth\/login\/verify$/,
-  /^\/api\/auth\/redirect$/,      // ✅ toegevoegd
-  /^\/api\/booking\/price$/,
-  /^\/api\/booking\/create$/,
-  /^\/api\/payments\/mollie\/create$/,
-  /^\/api\/payments\/mollie\/webhook$/,
-
-  // login pagina's
-  /^\/partner\/login$/,
-  /^\/admin\/login$/,
-];
-
-/** Beschermde API's (cookie vereist) */
-const PROTECTED_API: RegExp[] = [
-  /^\/api\/partner\//,            // partner-only API
-  /^\/api\/admin\//,              // admin-only API
-  /^\/api\/slots\//,              // intern slotsbeheer
-];
-
 /* ========= Middleware ========= */
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const method = req.method;
 
-  /* --- 0) Fix oude route-groepen zoals /(protected)/ --- */
-  const cleanedPath = pathname.replace(/\/\(([^)]+)\)(?=\/|$)/g, "");
-  if (cleanedPath !== pathname) {
-    const redirectUrl = req.nextUrl.clone();
-    redirectUrl.pathname = cleanedPath;
-    console.log(`[middleware] redirecting ${pathname} → ${cleanedPath}`);
-    return NextResponse.redirect(redirectUrl);
-  }
-
-  /* --- 1) CORS preflight & statics --- */
+  /* --- 0) OPTIONS & statics altijd doorlaten --- */
   if (
     method === "OPTIONS" ||
     pathname.startsWith("/_next/") ||
@@ -91,34 +47,43 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  /* --- 2) Public whitelist --- */
-  if (isAny(pathname, PUBLIC_PATHS)) {
-    return NextResponse.next();
+  /* --- 1) Fix route-groepen zoals /(protected)/ in URL --- */
+  // (werkt alleen op paths die door matcher gaan; assets worden al geskipt)
+  const cleanedPath = pathname.replace(/\/\(([^)]+)\)(?=\/|$)/g, "");
+  if (cleanedPath !== pathname) {
+    const redirectUrl = req.nextUrl.clone();
+    redirectUrl.pathname = cleanedPath;
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`[middleware] redirect ${pathname} → ${cleanedPath}`);
+    }
+    return NextResponse.redirect(redirectUrl);
   }
 
-  /* --- 3) API-protectie (zonder redirect) --- */
+  /* --- 2) Beschermde API's: alleen voor de gematchte prefixes --- */
   if (pathname.startsWith("/api/")) {
-    if (isAny(pathname, PROTECTED_API)) {
-      const sess = await readSession(req);
-      if (!sess) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
-      if (pathname.startsWith("/api/admin/") && sess.role !== "ADMIN") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-      if (pathname.startsWith("/api/partner/") && sess.role !== "PARTNER") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
+    // Let op: door de matcher komt middleware alleen binnen op:
+    // /api/partner/*, /api/admin/*, (optioneel) /api/slots/*
+    const sess = await readSession(req);
+    if (!sess) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (pathname.startsWith("/api/admin/") && sess.role !== "ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (pathname.startsWith("/api/partner/") && sess.role !== "PARTNER") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     return NextResponse.next();
   }
 
-  /* --- 4) Partner-sectie --- */
+  /* --- 3) Partner-sectie (pages) --- */
   if (pathname === "/partner" || pathname.startsWith("/partner/")) {
     const sess = await readSession(req);
     if (!sess || sess.role !== "PARTNER") {
       if (method === "GET" || method === "HEAD") {
-        console.log("[middleware] redirect → /partner/login");
+        if (process.env.NODE_ENV !== "production") {
+          console.log("[middleware] redirect → /partner/login");
+        }
         return NextResponse.redirect(new URL("/partner/login", req.url));
       }
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -126,12 +91,14 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  /* --- 5) Admin-sectie --- */
+  /* --- 4) Admin-sectie (pages) --- */
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {
     const sess = await readSession(req);
     if (!sess || sess.role !== "ADMIN") {
       if (method === "GET" || method === "HEAD") {
-        console.log("[middleware] redirect → /admin/login");
+        if (process.env.NODE_ENV !== "production") {
+          console.log("[middleware] redirect → /admin/login");
+        }
         return NextResponse.redirect(new URL("/admin/login", req.url));
       }
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -139,12 +106,19 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  /* --- 6) Alles overig is publiek --- */
+  /* --- 5) Alles overig (pages) is publiek --- */
   return NextResponse.next();
 }
 
 /* ========= Scope ========= */
 export const config = {
-  // match alle routes behalve statische assets, inclusief route-groepen zoals (protected)
-  matcher: ["/((?!_next|.*\\..*).*)"],
+  // 1) Alle PAGES (geen assets) → auth/redirects voor /partner/* en /admin/*
+  // 2) Alleen de écht beschermde API-prefixen → voorkomt dat publieke API's
+  //    (login, booking, mollie webhook/refresh, etc.) door middleware geraakt worden.
+  matcher: [
+    "/((?!_next|.*\\..*).*)",
+    "/api/partner/:path*",
+    "/api/admin/:path*",
+    "/api/slots/:path*", // laat staan als slots-API intern is; anders weghalen
+  ],
 };

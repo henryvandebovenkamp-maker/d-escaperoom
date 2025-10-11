@@ -206,7 +206,7 @@ export async function POST(req: NextRequest) {
           // ---- Mail naar klant -------------------------------------------------------
           await sendTemplateMail({
             to: customer.email,
-            template: "booking_customer",
+            template: "booking-customer",
             vars: {
               bookingId: booking.id,
               firstName: (customer as any)?.firstName ?? customer.name ?? null,
@@ -226,7 +226,7 @@ export async function POST(req: NextRequest) {
           if (partner.email) {
             await sendTemplateMail({
               to: partner.email,
-              template: "booking_partner",
+              template: "booking-partner",
               vars: {
                 bookingId: booking.id,
                 customerName: [ (customer as any)?.firstName, (customer as any)?.lastName ]
