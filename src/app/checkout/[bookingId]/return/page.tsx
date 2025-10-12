@@ -1,96 +1,45 @@
-// PATH: src/app/checkout/[bookingId]/return/page.tsx
 "use client";
-
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 
-/* ==========================================================
-   Betalingsverwerking (Return-pagina)
-   ----------------------------------------------------------
-   - Toont voortgang in NL
-   - Pollt API tot betaling is verwerkt
-   - Redirect bij status 'CONFIRMED' of 'CANCELLED'
-========================================================== */
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-export default function ReturnClient({
-  params,
-}: {
-  params: { bookingId: string };
-}) {
+export default function ReturnPage() {
   const router = useRouter();
-  const { bookingId } = params;
-  const [attempt, setAttempt] = React.useState(0);
-  const [status, setStatus] = React.useState<{
-    booking?: string;
-    payment?: string;
-  }>({});
-  const [loading, setLoading] = React.useState(true);
+  const params = useParams<{ bookingId: string }>();
+  const bookingId = Array.isArray(params?.bookingId) ? params!.bookingId[0] : params!.bookingId;
 
-  // ---- Poll API ----
   React.useEffect(() => {
-    let active = true;
+    let timer: any;
+    let cancelled = false;
 
-    async function poll() {
+    async function tick() {
       try {
-        const res = await fetch(`/api/booking/status?id=${bookingId}`, {
-          cache: "no-store",
-        });
-        const data = await res.json();
-        if (!active) return;
-
-        setStatus({
-          booking: data.bookingStatus,
-          payment: data.paymentStatus,
-        });
-        setAttempt((n) => n + 1);
-
-        // Zodra bevestigd → redirect
-        if (data.bookingStatus === "CONFIRMED") {
-          router.replace(`/checkout/${bookingId}/success`);
+        const r = await fetch(`/api/booking/${encodeURIComponent(bookingId)}`, { cache: "no-store" });
+        if (!r.ok) throw new Error();
+        const j = await r.json();
+        if (!cancelled && j?.status === "CONFIRMED") {
+          router.replace(`/bedankt/${bookingId}`); // of `/checkout/${bookingId}/bedankt` als je die route gebruikt
           return;
         }
-
-        // Als geannuleerd of mislukt → redirect
-        if (
-          ["CANCELLED", "FAILED", "REFUNDED"].includes(data.paymentStatus)
-        ) {
-          router.replace(`/checkout/${bookingId}/failed`);
-          return;
-        }
-
-        // Anders opnieuw poll na 3s
-        setTimeout(poll, 3000);
-      } catch (err) {
-        console.error(err);
-        if (active) setTimeout(poll, 5000);
-      } finally {
-        if (active) setLoading(false);
-      }
+      } catch {}
+      if (!cancelled) timer = setTimeout(tick, 2000);
     }
 
-    poll();
+    tick();
     return () => {
-      active = false;
+      cancelled = true;
+      if (timer) clearTimeout(timer);
     };
   }, [bookingId, router]);
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center bg-black text-stone-200">
-      <h1 className="text-3xl font-bold mb-2">Even geduld...</h1>
-      <p className="text-stone-400 mb-6">We verwerken je betaling...</p>
-
-      <div className="border border-stone-500 rounded-2xl p-6 text-center">
-        <p>Status boeking: {status.booking ?? "..."}</p>
-        <p>Status betaling: {status.payment ?? "..."}</p>
-        <p className="text-sm text-stone-500 mt-2">poging #{attempt}</p>
+    <main className="min-h-screen bg-stone-50 flex items-center justify-center p-6">
+      <div className="rounded-xl border border-stone-200 bg-white shadow-sm p-5 text-center">
+        <p className="text-stone-800 font-semibold">We verwerken je betaling…</p>
+        <p className="text-stone-600 text-sm mt-1">Je wordt automatisch doorverwezen zodra de betaling is bevestigd.</p>
       </div>
-
-      <button
-        onClick={() => location.reload()}
-        className="mt-8 bg-pink-600 hover:bg-pink-700 text-white font-medium px-6 py-2 rounded-2xl transition"
-      >
-        Ververs nu
-      </button>
     </main>
   );
 }

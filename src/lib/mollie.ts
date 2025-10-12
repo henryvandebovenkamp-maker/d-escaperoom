@@ -1,24 +1,29 @@
-// src/lib/mollie.ts
-// Singleton Mollie client (Node.js only). Werkt met zowel:
-//   import mollie from "@/lib/mollie"
+// PATH: src/lib/mollie.ts
+// Lazy singleton Mollie client (Node.js only), safe for import anywhere.
+// Werkt met:
 //   import { mollie } from "@/lib/mollie"
+//   import mollie from "@/lib/mollie"
+//   import { getMollie } from "@/lib/mollie"
 
 import createMollieClient, { type MollieClient } from "@mollie/api-client";
 
-function assertServerRuntime() {
+function assertServerNodeRuntime() {
+  // Geen browser
   if (typeof window !== "undefined") {
     throw new Error("Mollie client mag niet in de browser gebruikt worden.");
   }
-  // Mollie SDK vereist Node.js (NIET Edge runtime)
-  // Zorg dat je API routes dit hebben:
-  //   export const runtime = "nodejs";
+  // Geen Edge runtime (heeft geen echte Node APIs)
+  const isNode = typeof process !== "undefined" && !!process.versions?.node;
+  if (!isNode) {
+    throw new Error('Mollie client vereist "nodejs" runtime. Zet: export const runtime = "nodejs";');
+  }
 }
 
 function getApiKey(): string {
   const key = process.env.MOLLIE_API_KEY;
   if (!key) {
     throw new Error(
-      "MOLLIE_API_KEY ontbreekt. Zet deze in je .env / Vercel Project Settings."
+      "MOLLIE_API_KEY ontbreekt. Zet deze in .env en in Vercel Project Settings (Production & Preview)."
     );
   }
   return key;
@@ -26,16 +31,24 @@ function getApiKey(): string {
 
 let _client: MollieClient | null = null;
 
-/** Lazy singleton */
+/** Haal de singleton op (instantieer pas bij eerste gebruik) */
 export function getMollie(): MollieClient {
-  assertServerRuntime();
+  assertServerNodeRuntime();
   if (_client) return _client;
   _client = createMollieClient({ apiKey: getApiKey() });
   return _client;
 }
 
-/** Named export voor jouw stijl */
-export const mollie = getMollie();
+/** Lazy proxy: instanties pas wanneer je daadwerkelijk een property/methode gebruikt */
+const mollieProxy: MollieClient = new Proxy({} as MollieClient, {
+  get(_target, prop, receiver) {
+    const inst = getMollie();
+    // @ts-ignore – dynamic property passthrough
+    return Reflect.get(inst, prop, receiver);
+  },
+});
 
-/** Default export voor bestaande imports in code die al zo werken */
-export default mollie;
+/** Named export (aanbevolen) */
+export const mollie = mollieProxy;
+/** Default export (voor bestaande imports) */
+export default mollieProxy;
