@@ -63,7 +63,7 @@ export async function POST(req: Request) {
     const payment = await mollie.payments.create({
       amount: { currency, value: amountValue },
       description: `Aanbetaling EscapeRoom ${booking.partner.name}`,
-      redirectUrl: `${BASE}/checkout/${booking.id}/return`,
+      redirectUrl: `${BASE}/checkout/${booking.id}/bedankt`,
       webhookUrl: `${BASE}/api/payments/mollie/webhook`,
       metadata: { bookingId: booking.id },
       // locale door Mollie laten bepalen
