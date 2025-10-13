@@ -1,72 +1,108 @@
 // PATH: src/lib/mail/templates/base.ts
-import { z } from "zod";
+import { getTransporter, MAIL_FROM, MAIL_BCC, MAIL_DEV_ECHO, DISABLE_EMAIL } from "@/lib/mail/transporter";
 
+/* ===== Types ===== */
 export type Locale = "nl" | "en" | "de" | "es";
-export type TemplateId = "login_code" | "booking_customer" | "booking_partner";
 
-export type RenderHelpers = {
-  appOrigin: string;
-  euro: (cents: number) => string;
-  renderBase: (opts: { title: string; lead?: string; body: string; locale: Locale }) => string;
+export type TemplateId =
+  | "login-code"
+  | "booking-customer"
+  | "booking-partner";
+
+export type TemplateVars = {
+  "login-code": {
+    email: string;
+    code: string;
+    locale?: Locale;
+  };
+  "booking-customer": {
+    customerName: string;
+    partnerName: string;
+    partnerAddress?: string;
+    slotISO: string;
+    players: number;
+    bookingId: string;
+    totalCents: number;
+    depositCents: number;
+    restCents: number;
+    manageUrl: string;
+    locale?: Locale;
+  };
+  "booking-partner": {
+    partnerName: string;
+    partnerEmail?: string;
+    customerName: string;
+    slotISO: string;
+    players: number;
+    bookingId: string;
+    depositCents: number;
+    locale?: Locale;
+  };
 };
 
-export type TemplateDef<V extends z.ZodTypeAny> = {
-  id: TemplateId;
-  varsSchema: V;
-  subject(locale: Locale, v: z.infer<V>): string;
-  renderHtml(locale: Locale, v: z.infer<V>, h: RenderHelpers): string;
-  renderText?(locale: Locale, v: z.infer<V>): string;
+export type TemplateRenderer<T extends TemplateId = TemplateId> = {
+  subject: (vars: TemplateVars[T]) => string;
+  html:    (vars: TemplateVars[T]) => string;
+  text?:   (vars: TemplateVars[T]) => string;
+  from?:   string;
 };
 
-// ✅ value export → maakt dit gegarandeerd een module
-export const registry = new Map<TemplateId, TemplateDef<any>>();
+const registry = new Map<TemplateId, TemplateRenderer<any>>();
 
-export function registerTemplate<T extends z.ZodTypeAny>(def: TemplateDef<T>) {
-  registry.set(def.id, def);
+/* ===== Helpers voor templates ===== */
+export function eur(cents: number, locale: string = "nl-NL") {
+  return (Number(cents || 0) / 100).toLocaleString(locale, { style: "currency", currency: "EUR" });
+}
+export function nlDateTime(iso: string, locale: string = "nl-NL") {
+  const d = new Date(iso);
+  return d.toLocaleString(locale, {
+    weekday: "long", day: "2-digit", month: "long", year: "numeric",
+    hour: "2-digit", minute: "2-digit", timeZone: "Europe/Amsterdam",
+  });
 }
 
-export function getTemplate(id: TemplateId) {
+/* ===== Registry API ===== */
+export function registerTemplate<T extends TemplateId>(id: T, tpl: TemplateRenderer<T>) {
+  registry.set(id, tpl);
+}
+
+export function getTemplate<T extends TemplateId>(id: T): TemplateRenderer<T> {
   const t = registry.get(id);
-  if (!t) throw new Error(`Unknown mail template: ${id}`);
-  return t;
+  if (!t) throw new Error(`Mail template niet geregistreerd: ${id}`);
+  return t as TemplateRenderer<T>;
 }
 
-export function renderBaseFactory(appOrigin: string) {
-  return ({ title, lead, body }: { title: string; lead?: string; body: string; locale: Locale }) => `<!doctype html>
-<html lang="nl">
-<head>
-  <meta charSet="utf-8" />
-  <meta name="viewport" content="width=device-width" />
-  <title>${escapeHtml(title)}</title>
-  <style>
-    body{margin:0;padding:0;background:#fafaf9;color:#0c0a09;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial}
-    .container{max-width:640px;margin:0 auto;padding:24px}
-    .card{background:#fff;border:1px solid #e7e5e4;border-radius:14px;padding:24px}
-    .btn{display:inline-block;padding:12px 16px;border-radius:10px;text-decoration:none;border:1px solid #0a0a0a}
-    .muted{color:#57534e;font-size:12px}
-    h1{font-size:20px;margin:0 0 6px 0}
-    h2{font-size:16px;margin:18px 0 6px 0}
-    p{margin:10px 0}
-    hr{border:none;border-top:1px solid #e7e5e4;margin:18px 0}
-    table{width:100%;border-collapse:collapse}
-    td{padding:6px 0;vertical-align:top}
-    .right{text-align:right}
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="card">
-      <h1>${escapeHtml(title)}</h1>
-      ${lead ? `<p class="muted">${escapeHtml(lead)}</p>` : ""}
-      ${body}
-      <hr />
-      <p class="muted">D-EscapeRoom • <a href="${appOrigin}" target="_blank" rel="noopener">Website</a></p>
-    </div>
-  </div>
-</body>
-</html>`;
-}
+/* ===== High-level send (enkel via templates!) ===== */
+export async function sendTemplateMail<T extends TemplateId>(args: {
+  to: string;
+  template: T;
+  vars: TemplateVars[T];
+  from?: string;
+  bcc?: string;
+  replyTo?: string;
+}) {
+  // forceer side-effect registratie
+  await import("./register");
 
-export function escapeHtml(s: string) {
-  return s.replace(/[&<>"']/g, m => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[m] as string));
+  const tpl = getTemplate(args.template);
+  const subject = tpl.subject(args.vars);
+  const html    = tpl.html(args.vars);
+  const text    = tpl.text?.(args.vars);
+
+  if (MAIL_DEV_ECHO) {
+    console.log("[MAIL:compiled]", { to: args.to, subject, preview: html.slice(0, 180) + "…" });
+  }
+  if (DISABLE_EMAIL) return { ok: true, skipped: "DISABLE_EMAIL=1" as const };
+
+  const transporter = getTransporter();
+  await transporter.sendMail({
+    to: args.to,
+    from: args.from || tpl.from || MAIL_FROM,
+    bcc: args.bcc || MAIL_BCC || undefined,
+    replyTo: args.replyTo,
+    subject,
+    html,
+    text,
+  });
+  return { ok: true };
 }

@@ -1,5 +1,5 @@
 // PATH: src/lib/mail/templates/register.ts
-// ⬇️ Door deze file te importeren, worden alle templates geregistreerd
-import "./login-code";
-import "./booking-customer";
-import "./booking-partner";
+// Zorg dat *alle* templates hier één keer worden geïmporteerd:
+import "@/lib/mail/templates/login-code";
+import "@/lib/mail/templates/booking-customer";
+import "@/lib/mail/templates/booking-partner";

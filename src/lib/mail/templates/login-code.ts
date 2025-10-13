@@ -1,32 +1,17 @@
 // PATH: src/lib/mail/templates/login-code.ts
-import { z } from "zod";
-import { registerTemplate, type TemplateDef, type Locale } from "./base";
+import { registerTemplate, type TemplateVars } from "./base";
 
-const Vars = z.object({
-  email: z.string().email(),
-  code: z.string().min(6).max(6),
-  magicUrl: z.string().url().optional(), // optioneel: 1-click link
-});
-
-const subjectBy = (loc: Locale, code: string) =>
-  loc === "nl" ? `Je inlogcode: ${code}`
-: loc === "de" ? `Dein Login-Code: ${code}`
-: loc === "es" ? `Tu código de acceso: ${code}`
-:               `Your login code: ${code}`;
-
-const T: TemplateDef<typeof Vars> = {
-  id: "login_code",
-  varsSchema: Vars,
-  subject: (loc, v) => subjectBy(loc, v.code),
-  renderHtml(loc, v, h) {
-    const body = `
-      <p>Gebruik de volgende code om in te loggen:</p>
-      <p style="font-size:28px;letter-spacing:4px;"><strong>${v.code}</strong></p>
-      ${v.magicUrl ? `<p><a class="btn" href="${v.magicUrl}">Inloggen met 1 klik</a></p>` : ""}
-      <p class="muted">Deze code verloopt na 10 minuten.</p>
-    `;
-    return h.renderBase({ title: "Inloggen", lead: v.email, body, locale: loc });
-  },
+const LoginTpl = {
+  subject: (v: TemplateVars["login-code"]) => `Je inlogcode: ${v.code}`,
+  html: (v: TemplateVars["login-code"]) => `
+    <div style="font-family:ui-sans-serif;line-height:1.5;color:#0c0c0c">
+      <h1 style="margin:0 0 12px 0;font-size:20px;">Inloggen bij D-EscapeRoom</h1>
+      <p>Gebruik onderstaande code om in te loggen:</p>
+      <p style="font-size:28px;font-weight:700;letter-spacing:4px;">${v.code}</p>
+      <p style="color:#555;">Deze code vervalt na 10 minuten.</p>
+    </div>
+  `,
+  text: (v: TemplateVars["login-code"]) =>
+    `Inloggen bij D-EscapeRoom\n\nCode: ${v.code}\n(Verloopt na 10 minuten)`,
 };
-
-registerTemplate(T);
+registerTemplate("login-code", LoginTpl);

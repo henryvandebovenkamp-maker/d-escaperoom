@@ -1,58 +1,32 @@
 // PATH: src/lib/mail/templates/booking-customer.ts
-import { z } from "zod";
-import { registerTemplate, type TemplateDef, type Locale } from "./base";
+import { registerTemplate, type TemplateVars, eur, nlDateTime } from "./base";
 
-const Vars = z.object({
-  customerEmail: z.string().email(),
-  customerName: z.string().optional(),
-  partnerName: z.string(),
-  partnerAddress: z.string().optional(),
-  slotISO: z.string(),                // "2025-10-13T14:00:00+02:00"
-  players: z.number().int().min(1).max(3),
-  bookingId: z.string(),
-  totalCents: z.number().int(),
-  depositCents: z.number().int(),
-  restCents: z.number().int(),
-  manageUrl: z.string().url().optional(), // link naar /booking/[bookingId]
-});
-
-const subjectBy = (loc: Locale, p: string, when: string) =>
-  loc === "nl" ? `Bevestiging boeking — ${p} — ${when}`
-: loc === "de" ? `Buchungsbestätigung — ${p} — ${when}`
-: loc === "es" ? `Confirmación de reserva — ${p} — ${when}`
-:               `Booking confirmation — ${p} — ${when}`;
-
-const T: TemplateDef<typeof Vars> = {
-  id: "booking_customer",
-  varsSchema: Vars,
-  subject: (loc, v) => subjectBy(loc, v.partnerName, new Date(v.slotISO).toLocaleString("nl-NL")),
-  renderHtml(loc, v, h) {
-    const rows = `
-      <table>
-        <tr><td>Partner</td><td class="right"><strong>${v.partnerName}</strong></td></tr>
-        ${v.partnerAddress ? `<tr><td>Adres</td><td class="right">${v.partnerAddress}</td></tr>` : ""}
-        <tr><td>Datum & tijd</td><td class="right">${new Date(v.slotISO).toLocaleString("nl-NL")}</td></tr>
-        <tr><td>Spelers</td><td class="right">${v.players}</td></tr>
-      </table>
-      <hr/>
-      <table>
-        <tr><td>Totaal</td><td class="right"><strong>${h.euro(v.totalCents)}</strong></td></tr>
-        <tr><td>Aanbetaling (betaald)</td><td class="right">${h.euro(v.depositCents)}</td></tr>
-        <tr><td>Rest op locatie</td><td class="right">${h.euro(v.restCents)}</td></tr>
-      </table>
-    `;
-    const cta = v.manageUrl
-      ? `<p><a class="btn" href="${v.manageUrl}">Bekijk boeking</a></p>`
-      : "";
-
-    const body = `
-      <p>Bedankt voor je boeking! Je aanbetaling is ontvangen. Het resterende bedrag betaal je op de hondenschool.</p>
-      ${rows}
-      ${cta}
-      <p class="muted">Boeking ID: ${v.bookingId}</p>
-    `;
-    return h.renderBase({ title: "Boekingsbevestiging", lead: v.customerEmail, body, locale: loc });
-  },
+const Tpl = {
+  subject: (v: TemplateVars["booking-customer"]) =>
+    `Bevestiging boeking — The Missing Snack — ${nlDateTime(v.slotISO)}`,
+  html: (v: TemplateVars["booking-customer"]) => `
+  <div style="font-family:ui-sans-serif;line-height:1.6;color:#0c0c0c">
+    <h1 style="margin:0 0 12px 0;font-size:20px;">Je boeking is bevestigd 🎉</h1>
+    <p>Hoi ${v.customerName || "gast"},</p>
+    <p>Je speelt <strong>The Missing Snack</strong> bij <strong>${v.partnerName}</strong>.</p>
+    <ul style="padding-left:18px;margin:8px 0 12px 0;">
+      <li><strong>Datum & tijd:</strong> ${nlDateTime(v.slotISO)}</li>
+      <li><strong>Spelers:</strong> ${v.players}</li>
+      ${v.partnerAddress ? `<li><strong>Adres:</strong> ${v.partnerAddress}</li>` : ""}
+      <li><strong>Totaal:</strong> ${eur(v.totalCents)}</li>
+      <li><strong>Aanbetaling (betaald):</strong> ${eur(v.depositCents)}</li>
+      <li><strong>Rest op locatie:</strong> ${eur(v.restCents)}</li>
+    </ul>
+    <p>Je boeking beheren of wijzigen kan hier:<br/>
+      <a href="${v.manageUrl}" style="color:#e11d48">${v.manageUrl}</a>
+    </p>
+    <p style="color:#555">Tot snel! — Team D-EscapeRoom</p>
+  </div>
+  `,
+  text: (v: TemplateVars["booking-customer"]) =>
+    `Boeking bevestigd: The Missing Snack\n` +
+    `Partner: ${v.partnerName}\nDatum & tijd: ${nlDateTime(v.slotISO)}\n` +
+    `Spelers: ${v.players}\nTotaal: ${eur(v.totalCents)} | Aanbetaling: ${eur(v.depositCents)} | Rest: ${eur(v.restCents)}\n` +
+    `Beheer: ${v.manageUrl}\n`,
 };
-
-registerTemplate(T);
+registerTemplate("booking-customer", Tpl);

@@ -1,6 +1,8 @@
 // PATH: src/app/booking/[bookingId]/page.tsx
 import prisma from "@/lib/prisma";
 import { notFound } from "next/navigation";
+import { sendTemplateMail, APP_ORIGIN } from "@/lib/mail"; // ⬅️ NIEUW
+import { PaymentStatus, PaymentType } from "@prisma/client"; // ⬅️ NIEUW
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,6 +24,101 @@ function nlDateTime(iso: string) {
   });
 }
 
+// ⬇️ NIEUW: net adres bij elkaar voor in mail
+function joinAddress(p?: {
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  postalCode?: string | null;
+  city?: string | null;
+  country?: string | null;
+}) {
+  if (!p) return "";
+  const a = [p.addressLine1, p.addressLine2].filter(Boolean).join(", ");
+  const pc = [p.postalCode, p.city].filter(Boolean).join(" ");
+  const rows = [a, pc, p.country || "NL"].filter(Boolean);
+  return rows.join(" · ");
+}
+
+// ⬇️ NIEUW: stuur mails precies één keer zodra er een PAID deposit bestaat
+async function triggerMailsOnce(bookingId: string) {
+  try {
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { partner: true, slot: true, customer: true, discountCode: true, payments: true },
+    });
+    if (!booking || !booking.partner || !booking.slot || !booking.customer) return;
+
+    // Alleen iets doen als er een betaalde aanbetaling is
+    const paidDeposit = await prisma.payment.findFirst({
+      where: {
+        bookingId: booking.id,
+        type: PaymentType.DEPOSIT,
+        status: PaymentStatus.PAID,
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+    if (!paidDeposit) return;
+
+    // Idempotency: check vlag in rawPayload
+    const raw = (paidDeposit.rawPayload as any) || {};
+    if (raw && raw._emailsTriggered) return;
+
+    // Mail-variabelen (alles in centen, rest = total - deposit - discount)
+    const totalCents = Number(booking.totalAmountCents || 0);
+    const depositCents = Number(booking.depositAmountCents || 0);
+    const discountCents = Number(booking.discountAmountCents || 0);
+    const restCents = Math.max(0, totalCents - depositCents - discountCents);
+
+    const slotISO = (booking.slot as any).startTime?.toISOString?.() ?? String((booking.slot as any).startTime);
+    const vars = {
+      customerEmail: booking.customer.email,
+      customerName: booking.customer.name || "",
+      partnerName: booking.partner.name,
+      partnerAddress: joinAddress(booking.partner),
+      slotISO,
+      players: Number(booking.playersCount || 1),
+      bookingId: booking.id,
+      totalCents,
+      depositCents,
+      restCents,
+      discountCents,
+      manageUrl: `${APP_ORIGIN}/booking/${booking.id}`,
+      locale: (booking.customer.locale as "nl" | "en" | "de" | "es") || "nl",
+    };
+
+    // Verstuur klantmail
+    await sendTemplateMail({
+      to: booking.customer.email,
+      template: "booking-customer" as any,
+      vars: vars as any,
+    });
+
+    // Verstuur partnermail (indien bekend)
+    if (booking.partner.email) {
+      await sendTemplateMail({
+        to: booking.partner.email,
+        template: "booking-partner" as any,
+        vars: vars as any,
+      });
+    }
+
+    // Zet idempotency-vlag op het Payment.rawPayload
+    await prisma.payment.update({
+      where: { id: paidDeposit.id },
+      data: {
+        rawPayload: {
+          ...(paidDeposit.rawPayload as any),
+          _emailsTriggered: true,
+          _emailsTriggeredAt: new Date().toISOString(),
+        },
+      },
+    });
+  } catch (err) {
+    console.error("[booking page] ensure mails error", err);
+    // Fout in mail mag de pagina nooit breken
+  }
+}
+
 function StatusBadge({ status }: { status: "PENDING" | "CONFIRMED" | "CANCELLED" }) {
   const map: Record<string, { cls: string; label: string }> = {
     PENDING: { cls: "border-amber-300 bg-amber-100 text-amber-800", label: "In afwachting" },
@@ -40,6 +137,9 @@ export default async function BookingDetailPage({ params }: { params: { bookingI
   });
 
   if (!booking || !booking.slot || !booking.partner) return notFound();
+
+  // ⬇️ NIEUW: probeer mails te versturen (idempotent, breekt UI nooit)
+  await triggerMailsOnce(booking.id);
 
   const partner = booking.partner as any;
   const slotISO = (booking.slot as any).startTime?.toISOString?.() ?? String((booking.slot as any).startTime);
