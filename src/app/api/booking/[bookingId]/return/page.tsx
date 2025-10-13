@@ -22,7 +22,8 @@ export default function ReturnClient({ bookingId }: Props) {
         setStatus({ bookingStatus: data.bookingStatus, paymentStatus: data.paymentStatus });
 
         if (data.confirmed) {
-          router.replace(`/checkout/booking/${bookingId}/bedankt`);
+          // ✅ juiste pad (zonder extra "booking")
+          router.replace(`/checkout/${bookingId}/bedankt`);
           return;
         }
       } catch {
