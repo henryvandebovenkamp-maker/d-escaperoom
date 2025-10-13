@@ -35,6 +35,7 @@ function fmtDateTimeNL(iso: string) {
     month: "long",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Europe/Amsterdam",
   });
 }
 const IconCheck = (p: React.SVGProps<SVGSVGElement>) => (
@@ -210,7 +211,7 @@ export default function CheckoutPage() {
         if (!resp?.ok && !resp?.booking) throw new Error(resp?.error || "Opslaan mislukt");
         setData((d) => (d ? { ...d, customerEmail: customerEmail.trim() } as BookingVM : d));
         setEmailSavedAt(Date.now());
-      } catch (e) {
+      } catch {
         setEmailError("Opslaan mislukt. Probeer opnieuw.");
       } finally {
         setEmailSaving(false);
@@ -313,12 +314,22 @@ export default function CheckoutPage() {
   }
 
   /* ====== Mollie ====== */
+  const canPay = React.useMemo(() => {
+    const err = validateEmail(customerEmail);
+    return !err && !emailSaving && !!data?.id;
+  }, [customerEmail, emailSaving, data?.id]);
+
   async function handlePayNow(id: string) {
     try {
+      const err = validateEmail(customerEmail);
+      setEmailError(err);
+      if (err) return;
+
       setPayLoading(true);
       const res = await fetch("/api/payments/mollie/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        cache: "no-store",
         body: JSON.stringify({ bookingId: id }),
       });
       if (!res.ok) throw new Error(await res.text());
@@ -354,7 +365,7 @@ export default function CheckoutPage() {
       <div className="min-h-screen bg-stone-50">
         <div className="mx-auto max-w-6xl p-4 md:p-8">
           <HeroHeader title="Checkout" subtitle="We konden je boeking niet vinden." />
-          <div className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-800 shadow-sm">
+          <div className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-800 shadow-sm" role="alert">
             Boekingsnummer onbekend of verlopen.
           </div>
         </div>
@@ -399,6 +410,7 @@ export default function CheckoutPage() {
                     placeholder="Jouw naam"
                     className="mt-1 h-10 w-full rounded-xl border border-stone-300 bg-white px-3 text-sm outline-none focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
                     aria-label="Naam klant"
+                    autoComplete="name"
                   />
                 </InfoRow>
 
@@ -417,8 +429,10 @@ export default function CheckoutPage() {
                           : "border-stone-300 focus:border-pink-600 focus:ring-2 focus:ring-pink-300",
                       ].join(" ")}
                       aria-invalid={Boolean(emailError)}
+                      aria-describedby="email-help"
+                      autoComplete="email"
                     />
-                    <div className="min-h-[18px]">
+                    <div id="email-help" className="min-h-[18px]" aria-live="polite">
                       {emailError && <p className="text-[12px] text-rose-700">{emailError}</p>}
                       {emailSaving && !emailError && (
                         <p className="text-[12px] text-stone-600">Opslaan…</p>
@@ -445,6 +459,7 @@ export default function CheckoutPage() {
                       onChange={(e) => setDogName(e.target.value)}
                       placeholder="bijv. Sam"
                       className="mt-1 h-10 w-full rounded-xl border border-stone-300 bg-white px-3 text-sm outline-none focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
+                      autoComplete="off"
                     />
                   </Field>
 
@@ -483,7 +498,7 @@ export default function CheckoutPage() {
                 </Field>
 
                 {/* feedbackregel */}
-                <div className="min-h-[18px]">
+                <div className="min-h-[18px]" aria-live="polite">
                   {savingDog && <p className="text-[12px] text-stone-600">Opslaan…</p>}
                   {savedAt && !savingDog && (
                     <span className="inline-flex items-center gap-1 text-[12px] text-emerald-700">
@@ -500,7 +515,7 @@ export default function CheckoutPage() {
               <button
                 type="button"
                 onClick={() => handlePayNow(data.id)}
-                disabled={payLoading}
+                disabled={payLoading || !canPay}
                 className="rounded-full bg-pink-600 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-pink-700 disabled:opacity-60 focus:outline-none focus:ring-4 focus:ring-pink-300"
               >
                 {payLoading ? "Bezig…" : "Betalen"}
@@ -544,7 +559,7 @@ export default function CheckoutPage() {
           <button
             type="button"
             onClick={() => handlePayNow(data!.id)}
-            disabled={payLoading}
+            disabled={payLoading || !canPay}
             className="rounded-full bg-pink-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-pink-700 disabled:opacity-60 focus:outline-none focus:ring-4 focus:ring-pink-300"
           >
             {payLoading ? "Bezig…" : "Betalen"}
@@ -774,7 +789,7 @@ function PriceCard({
           )}
 
           {message && (
-            <p className={`mt-2 text-[11px] ${message.includes("✔") ? "text-emerald-700" : "text-rose-700"}`}>
+            <p className={`mt-2 text-[11px] ${message.includes("✔") ? "text-emerald-700" : "text-rose-700"}`} aria-live="polite">
               {message}
             </p>
           )}

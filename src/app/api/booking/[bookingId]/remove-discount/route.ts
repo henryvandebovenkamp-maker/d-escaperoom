@@ -1,51 +1,24 @@
+// PATH: src/app/api/booking/[bookingId]/remove-discount/route.ts
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import prisma from "@/lib/prisma";
+import { toBookingVM } from "../../_dto";
 
-const Body = z.object({ bookingId: z.string().min(1) });
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-export async function POST(req: Request) {
+const Params = z.object({ bookingId: z.string().min(1) });
+
+export async function POST(_req: Request, ctx: { params: { bookingId: string } }) {
   try {
-    const { bookingId } = Body.parse(await req.json());
-    const booking = await prisma.booking.findUnique({
-      where: { id: bookingId },
-      select: {
-        id: true,
-        status: true,
-        totalAmountCents: true,
-        partner: { select: { feePercent: true } },
-      },
-    });
-    if (!booking) return NextResponse.json({ ok: false, error: "BOOKING_NOT_FOUND" }, { status: 404 });
-    if (booking.status !== "PENDING") return NextResponse.json({ ok: false, error: "BOOKING_NOT_EDITABLE" }, { status: 409 });
-
-    const baseTotal = booking.totalAmountCents;
-    const deposit = Math.round((baseTotal * Number(booking.partner.feePercent ?? 0)) / 100);
-    const rest = Math.max(0, baseTotal - deposit);
-
+    const { bookingId } = Params.parse(ctx.params);
     const updated = await prisma.booking.update({
-      where: { id: booking.id },
-      data: {
-        discountCodeId: null,
-        discountAmountCents: 0,
-        depositAmountCents: deposit,
-        restAmountCents: rest,
-      },
-      select: {
-        id: true,
-        totalAmountCents: true,
-        discountAmountCents: true,
-        depositAmountCents: true,
-        restAmountCents: true,
-      },
+      where: { id: bookingId },
+      data: { discountAmountCents: 0, discountCodeId: null } as any,
+      include: { partner: true, slot: true, customer: true, discountCode: true },
     });
-
-    return NextResponse.json({
-      ok: true,
-      pricing: { ...updated, effectiveTotalCents: baseTotal },
-    });
+    return NextResponse.json({ ok: true, booking: toBookingVM(updated) });
   } catch (e: any) {
-    console.error("/api/booking/remove-discount error:", e);
-    return NextResponse.json({ ok: false, error: e?.message ?? "UNKNOWN_ERROR" }, { status: 400 });
+    return NextResponse.json({ error: e?.message || "Kon kortingscode niet verwijderen" }, { status: 400 });
   }
 }
