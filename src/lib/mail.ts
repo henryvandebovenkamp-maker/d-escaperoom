@@ -1,10 +1,8 @@
+// PATH: src/lib/mail.ts
+
+// Forceer dat alle templates direct worden geregistreerd zodra je "@/lib/mail" importeert
+import "./mail/templates/register";
+
 export { sendTemplateMail } from "./mail/send-template";
-export {
-  transporter,
-  MAIL_FROM,
-  MAIL_BCC,
-  APP_ORIGIN,
-  MAIL_DEV_ECHO,
-  DISABLE_EMAIL,
-} from "./mail/transporter";
-export { listTemplates, type TemplateId } from "./mail/templates/base";
+export { getTemplate, listTemplates } from "./mail/templates/base";
+export { APP_ORIGIN } from "./mail/transporter";

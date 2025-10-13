@@ -1,37 +1,32 @@
 // PATH: src/lib/mail/templates/base.ts
 
-/* =========================
-   Types
-========================= */
+export type TemplateId =
+  | "login_code"
+  | "booking_customer"
+  | "booking_customer_v2"   // ⬅️ NIEUW
+  | "booking_partner";
 
-export type TemplateId = "login_code" | "booking_customer" | "booking_partner";
-
-// Variabelen per template
 export type TemplateVars = {
-  login_code: {
-    code: string;
-    loginUrl: string;
-  };
+  login_code: { code: string; loginUrl: string };
 
   booking_customer: {
     bookingId: string;
     firstName?: string | null;
     partnerName: string;
     partnerEmail?: string | null;
-    slotISO: string;          // bv. 2025-10-11T10:00:00+02:00
+    slotISO: string;
     players: number;
     totalCents: number;
     depositCents: number;
     restCents: number;
     address?: string | null;
-
-    // Was verplicht; nu optioneel (knop tonen we niet meer)
-    manageUrl?: string;
-
-    // Nieuw
-    dogName?: string | null;
-    googleMapsUrl?: string | null;
+    manageUrl?: string;         // optioneel
+    dogName?: string | null;    // nieuw
+    googleMapsUrl?: string | null; // nieuw
   };
+
+  // v2 gebruikt dezelfde vars (houdt call-sites compatibel)
+  booking_customer_v2: TemplateVars["booking_customer"];
 
   booking_partner: {
     bookingId: string;
@@ -48,14 +43,10 @@ export type TemplateVars = {
 
 export type TemplateDef<T extends TemplateId> = {
   id: T;
-  subject: (v: TemplateVars[T]) => string;  // NL-only
-  html: (v: TemplateVars[T]) => string;     // NL-only
-  text?: (v: TemplateVars[T]) => string;    // NL-only
+  subject: (v: TemplateVars[T]) => string;
+  html: (v: TemplateVars[T]) => string;
+  text?: (v: TemplateVars[T]) => string;
 };
-
-/* =========================
-   Registry
-========================= */
 
 const registry = new Map<TemplateId, TemplateDef<any>>();
 
@@ -73,36 +64,20 @@ export function listTemplates(): TemplateId[] {
   return Array.from(registry.keys());
 }
 
-/* =========================
-   Helpers (NL)
-========================= */
-
+/* Helpers NL */
 export function formatEUR(cents: number) {
   return (cents / 100).toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 }
-
-// Toon: "zaterdag 11 oktober 2025, 10:00"
 export function formatNLDateTime(iso: string) {
   const d = new Date(iso);
   return d.toLocaleString("nl-NL", {
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Europe/Amsterdam",
+    weekday: "long", day: "2-digit", month: "long", year: "numeric",
+    hour: "2-digit", minute: "2-digit", timeZone: "Europe/Amsterdam",
   });
 }
-
-/* =========================
-   Layout
-========================= */
-
 export function layout(opts: { title: string; preheader?: string; bodyHtml: string }) {
   const { title, preheader = "", bodyHtml } = opts;
   const safePre = preheader.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
   return `<!doctype html>
 <html lang="nl">
 <head>
