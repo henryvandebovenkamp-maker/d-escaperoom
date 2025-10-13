@@ -2,16 +2,18 @@
 import { NextResponse, type NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
 import createMollieClient from "@mollie/api-client";
-import { PaymentStatus, PaymentProvider, PaymentType, SlotStatus } from "@prisma/client";
+import { PaymentStatus, PaymentProvider, PaymentType, SlotStatus, BookingStatus } from "@prisma/client";
 import { releaseSlotIfUnpaid } from "@/lib/slots";
 
-// ⬇️ Nieuw: gebruik de nieuwe mail-API (NL-only templates)
+// ⬇️ Force-load mail templates + mail helpers
+import "@/lib/mail/templates/register";
 import { sendTemplateMail, APP_ORIGIN } from "@/lib/mail";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 /* ================================
-   Config & helpers
+   Helpers
 ================================== */
 
 function verifySecret(req: NextRequest): boolean {
@@ -72,6 +74,19 @@ function isTerminalUnpaidStatus(mollieStatus?: string) {
   );
 }
 
+function toMapsUrl(address?: string | null) {
+  if (!address) return undefined;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    address.replace(/\n/g, " ")
+  )}`;
+}
+
+function clampPlayers(p: unknown) {
+  const n = Number(p ?? 1);
+  if (!Number.isFinite(n)) return 1;
+  return Math.max(1, Math.min(3, Math.round(n)));
+}
+
 /* ================================
    Webhook handler
 ================================== */
@@ -79,7 +94,6 @@ export async function POST(req: NextRequest) {
   try {
     if (!verifySecret(req)) {
       console.warn("[mollie-webhook] secret mismatch");
-      // Altijd 200 naar Mollie teruggeven, anders blijft Mollie retrypen
       return NextResponse.json({ ok: true }, { status: 200 });
     }
 
@@ -91,14 +105,21 @@ export async function POST(req: NextRequest) {
     }
 
     const mollie = mollieClient();
-    const mp = await mollie.payments.get(paymentId);
-    const bookingId = (mp.metadata as any)?.bookingId as string | undefined;
 
-    const mappedStatus = mapPaymentStatus(mp.status);
-    const paidAt =
-      (mp as any)?.paidAt ? new Date((mp as any).paidAt as string) : undefined;
-    const currency = mp.amount?.currency ?? "EUR";
-    const amountCents = mp.amount?.value ? Math.round(Number(mp.amount.value) * 100) : 0;
+    let mp: any;
+    try {
+      mp = await mollie.payments.get(paymentId);
+    } catch (e) {
+      console.error("[mollie-webhook] mollie.payments.get failed:", e);
+      return NextResponse.json({ ok: true }, { status: 200 });
+    }
+
+    const bookingId = (mp?.metadata as any)?.bookingId as string | undefined;
+
+    const mappedStatus = mapPaymentStatus(mp?.status);
+    const paidAt = mp?.paidAt ? new Date(mp.paidAt) : undefined;
+    const currency = mp?.amount?.currency ?? "EUR";
+    const amountCents = mp?.amount?.value ? Math.round(Number(mp.amount.value) * 100) : 0;
 
     // ✅ serialize Mollie object zodat Prisma Json het accepteert
     let raw: any;
@@ -106,15 +127,15 @@ export async function POST(req: NextRequest) {
       raw = JSON.parse(JSON.stringify(mp));
     } catch {
       raw = {
-        id: mp.id,
-        status: mp.status,
-        amount: mp.amount,
-        description: (mp as any)?.description,
-        method: (mp as any)?.method,
-        metadata: (mp as any)?.metadata,
-        paidAt: (mp as any)?.paidAt,
-        createdAt: (mp as any)?.createdAt,
-        _links: (mp as any)?._links,
+        id: mp?.id,
+        status: mp?.status,
+        amount: mp?.amount,
+        description: mp?.description,
+        method: mp?.method,
+        metadata: mp?.metadata,
+        paidAt: mp?.paidAt,
+        createdAt: mp?.createdAt,
+        _links: mp?._links,
       };
     }
 
@@ -122,12 +143,12 @@ export async function POST(req: NextRequest) {
     await prisma.payment.upsert({
       where: { providerPaymentId: mp.id },
       create: {
-        bookingId: bookingId ?? "", // als schema bookingId verplicht maakt: lege string zoals je al deed
+        bookingId: bookingId ?? "", // als schema bookingId verplicht maakt
         provider: PaymentProvider.MOLLIE,
         type: PaymentType.DEPOSIT,
         status: mappedStatus,
         providerPaymentId: mp.id,
-        method: (mp as any)?.method ?? undefined,
+        method: mp?.method ?? undefined,
         rawPayload: raw,
         currency,
         amountCents,
@@ -135,7 +156,7 @@ export async function POST(req: NextRequest) {
       },
       update: {
         status: mappedStatus,
-        method: (mp as any)?.method ?? undefined,
+        method: mp?.method ?? undefined,
         rawPayload: raw,
         currency,
         amountCents,
@@ -144,7 +165,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!bookingId) {
-      console.warn("[mollie-webhook] payment without bookingId metadata:", mp.id);
+      console.warn("[mollie-webhook] payment without bookingId metadata:", mp?.id);
       return NextResponse.json({ ok: true }, { status: 200 });
     }
 
@@ -159,15 +180,18 @@ export async function POST(req: NextRequest) {
     }
 
     // 3) Betaald → bevestigen + slot BOOKED (idempotent)
-    if (mp.status === "paid") {
-      const alreadyConfirmed = !!booking.confirmedAt || !!booking.depositPaidAt;
+    if (mp?.status === "paid") {
+      const alreadyConfirmed =
+        booking.status === BookingStatus.CONFIRMED ||
+        !!booking.confirmedAt ||
+        !!booking.depositPaidAt;
 
       if (!alreadyConfirmed) {
         await prisma.$transaction(async (tx) => {
           await tx.booking.update({
             where: { id: booking.id },
             data: {
-              status: "CONFIRMED",
+              status: BookingStatus.CONFIRMED,
               confirmedAt: new Date(),
               depositPaidAt: paidAt ?? new Date(),
             },
@@ -180,78 +204,88 @@ export async function POST(req: NextRequest) {
             });
           }
         });
+      }
 
-        // E-mails (best effort) — ⬇️ AANGEPAST NAAR sendTemplateMail
-        try {
-          const slot = booking.slot!;
-          const customer = booking.customer!;
-          const partner = booking.partner!;
+      // E-mails (best effort)
+      try {
+        const slotISO = booking.slot?.startTime?.toISOString() ?? new Date().toISOString();
+        const totalCents = Number(booking.totalAmountCents ?? 0);
+        const depositCents = Number(booking.depositAmountCents ?? 0);
+        const restCents = Number(
+          booking.restAmountCents ?? Math.max(totalCents - depositCents, 0)
+        );
+        const players = clampPlayers((booking as any)?.players);
+        const partner = booking.partner!;
+        const customer = booking.customer!;
 
-          // Vereiste velden voor de NL-templates (conversies + fallbacks)
-          const slotISO = slot.startTime.toISOString();
-          const totalCents = Number(booking.totalAmountCents || 0);
-          const depositCents = Number(booking.depositAmountCents || 0);
-          const restCents = Number(booking.restAmountCents || Math.max(totalCents - depositCents, 0));
-          const players = Number((booking as any).players ?? 1);
+        const address =
+          [partner.addressLine1, partner.postalCode, partner.city]
+            .filter(Boolean)
+            .join(", ") || undefined;
 
-          const address =
-            [
-              partner.addressLine1,
-              partner.postalCode,
-              partner.city,
-            ]
-              .filter(Boolean)
-              .join(", ") || undefined;
+        // 🔎 debug to Vercel logs
+        console.log("[mollie-webhook] send mails", {
+          bookingId: booking.id,
+          commit: process.env.VERCEL_GIT_COMMIT_SHA,
+          url: process.env.VERCEL_URL,
+          appOrigin: APP_ORIGIN,
+        });
 
-          // ---- Mail naar klant -------------------------------------------------------
+        // ---- Mail naar klant — FORCE V2 ---------------------------------------
+        await sendTemplateMail({
+          to: customer.email,
+          template: "booking_customer_v2" as any,
+          vars: {
+            bookingId: booking.id,
+            firstName: (customer as any)?.firstName ?? customer.name ?? null,
+            partnerName: partner.name,
+            partnerEmail: partner.email ?? undefined,
+            slotISO,
+            players,
+            totalCents,
+            depositCents,
+            restCents,
+            address,
+
+            // Nieuw
+            dogName: (booking as any)?.dogName ?? (booking as any)?.petName ?? null,
+            googleMapsUrl: toMapsUrl(address),
+
+            // manageUrl expres weggelaten (nieuwe template toont 'm niet)
+            // manageUrl: `${APP_ORIGIN}/booking/${booking.id}`,
+          },
+        });
+
+        // ---- Mail naar hondenschool -------------------------------------------
+        if (partner.email) {
           await sendTemplateMail({
-            to: customer.email,
-            template: "booking_customer",
+            to: partner.email,
+            template: "booking_partner",
             vars: {
               bookingId: booking.id,
-              firstName: (customer as any)?.firstName ?? customer.name ?? null,
-              partnerName: partner.name,
-              partnerEmail: partner.email ?? undefined,
+              customerName:
+                [ (customer as any)?.firstName, (customer as any)?.lastName ]
+                  .filter(Boolean)
+                  .join(" ") || customer.name || null,
+              customerEmail: customer.email,
               slotISO,
               players,
               totalCents,
               depositCents,
               restCents,
-              address,
-              manageUrl: `${APP_ORIGIN}/booking/${booking.id}`,
+              partnerDashboardUrl: `${APP_ORIGIN}/partner/dashboard`,
             },
           });
-
-          // ---- Mail naar hondenschool -----------------------------------------------
-          if (partner.email) {
-            await sendTemplateMail({
-              to: partner.email,
-              template: "booking_partner",
-              vars: {
-                bookingId: booking.id,
-                customerName: [ (customer as any)?.firstName, (customer as any)?.lastName ]
-                  .filter(Boolean)
-                  .join(" ") || customer.name || null,
-                customerEmail: customer.email,
-                slotISO,
-                players,
-                totalCents,
-                depositCents,
-                restCents,
-                partnerDashboardUrl: `${APP_ORIGIN}/partner/dashboard`,
-              },
-            });
-          }
-        } catch (e) {
-          console.error("[mollie-webhook] mail failed:", e);
         }
+      } catch (e) {
+        console.error("[mollie-webhook] mail failed:", e);
       }
 
       return NextResponse.json({ ok: true }, { status: 200 });
     }
 
     // 4) Niet-betaald & terminaal → slot vrijgeven (automatisch terug naar PUBLISHED)
-    if (isTerminalUnpaidStatus(mp.status)) {
+    if (isTerminalUnpaidStatus(mp?.status)) {
       try {
         await releaseSlotIfUnpaid(booking.id);
       } catch (e) {
@@ -260,13 +294,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true }, { status: 200 });
     }
 
-    // 5) Overige statussen (open/pending/refunded):
-    // - open/pending: niets doen (kan nog betaald worden)
-    // - refunded: laat de booking staan (beleid afhankelijk); geen auto-release hier
+    // 5) Overige statussen (open/pending/refunded): niets doen
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err) {
     console.error("[mollie-webhook] error:", err);
-    // Altijd 200; Mollie retried anders eindeloos
     return NextResponse.json({ ok: true }, { status: 200 });
   }
 }
