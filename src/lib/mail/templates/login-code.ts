@@ -5,7 +5,7 @@ import { APP_ORIGIN } from "@/lib/env";
 
 const LoginTpl = {
   // ✅ Consistente afzender
-  from: '"D-EscapeRoom" <no-reply@d-escaperoom.nl>',
+  from: '"D-EscapeRoom" <no-reply@d-escaperoom.com>',
 
   subject: (v: TemplateVars["login-code"]) => `Je inlogcode: ${v.code}`,
 

@@ -5,7 +5,7 @@ import { APP_ORIGIN } from "@/lib/env";
 
 const Tpl = {
   // Zorg dat de afzender netjes is
-  from: '"D-EscapeRoom" <no-reply@d-escaperoom.nl>',
+  from: '"D-EscapeRoom" <no-reply@d-escaperoom.com>',
 
   subject: (v: TemplateVars["booking-partner"]) =>
     `Nieuwe boeking 🎉 — ${nlDateTime(v.slotISO)} — ${v.customerName}`,

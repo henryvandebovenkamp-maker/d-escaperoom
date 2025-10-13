@@ -9,7 +9,7 @@ function mapsUrlFromAddress(address: string) {
 
 const Tpl = {
   // ✅ Forceer juiste afzendernaam
-  from: '"D-EscapeRoom" <no-reply@d-escaperoom.nl>',
+  from: '"D-EscapeRoom" <no-reply@d-escaperoom.com>',
 
   subject: (v: TemplateVars["booking-customer"]) =>
     `Bevestiging — The Missing Snack — ${nlDateTime(v.slotISO)}`,
