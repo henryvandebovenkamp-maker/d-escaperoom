@@ -7,8 +7,38 @@ function mapsUrlFromAddress(address: string) {
   return `https://www.google.com/maps/search/?api=1&query=${q}`;
 }
 
+// Format voor Google Calendar: YYYYMMDDTHHMMSSZ
+function asGCalDate(d: Date) {
+  return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+}
+
+function googleCalendarUrl(v: TemplateVars["booking-customer"]) {
+  const start = new Date(v.slotISO);
+  // D-EscapeRoom slotduur = 60 min
+  const end = new Date(start.getTime() + 60 * 60 * 1000);
+
+  const title = `The Missing Snack @ ${v.partnerName}`;
+  const details =
+    `Boeking bevestigd.\n` +
+    `Spelers: ${v.players}\n` +
+    `Totaal: ${eur(v.totalCents)}\nAanbetaling: ${eur(v.depositCents)}\nRest: ${eur(v.restCents)}\n` +
+    (v.manageUrl ? `Beheer je boeking: ${v.manageUrl}\n` : ``);
+
+  const location = v.partnerAddress || "";
+
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: title,
+    dates: `${asGCalDate(start)}/${asGCalDate(end)}`,
+    details,
+    location,
+  });
+
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
 const Tpl = {
-  // ✅ Forceer juiste afzendernaam
+  // ✅ Forceer juiste afzendernaam (laat zo staan als dit voor jou klopt)
   from: '"D-EscapeRoom" <no-reply@d-escaperoom.com>',
 
   subject: (v: TemplateVars["booking-customer"]) =>
@@ -71,13 +101,15 @@ const Tpl = {
       title: "Je boeking is bevestigd 🎉",
       preheader: `Wat leuk dat je met je hond het avontuur aangaat — ${v.partnerName}, ${nlDateTime(v.slotISO)}`,
       bodyHTML: body,
-      cta: { label: "Beheer je boeking", url: v.manageUrl },
+      // 👇 Veranderde knop
+      cta: { label: "Zet in mijn agenda", url: googleCalendarUrl(v) },
       brand: "consumer",
     });
   },
 
-  text: (v: TemplateVars["booking-customer"]) =>
-    [
+  text: (v: TemplateVars["booking-customer"]) => {
+    const gcal = googleCalendarUrl(v);
+    return [
       `Je boeking is bevestigd`,
       ``,
       `Wat leuk dat je het avontuur met je hond aangaat!`,
@@ -85,8 +117,10 @@ const Tpl = {
       `Datum & tijd: ${nlDateTime(v.slotISO)}`,
       `Spelers: ${v.players}`,
       `Totaal: ${eur(v.totalCents)} | Aanbetaling: ${eur(v.depositCents)} | Rest: ${eur(v.restCents)}`,
-      `Beheer: ${v.manageUrl}`,
-    ].join("\n"),
+      `Agenda (Google): ${gcal}`,
+      v.manageUrl ? `Beheer: ${v.manageUrl}` : ``,
+    ].filter(Boolean).join("\n");
+  },
 };
 
 registerTemplate("booking-customer", Tpl);

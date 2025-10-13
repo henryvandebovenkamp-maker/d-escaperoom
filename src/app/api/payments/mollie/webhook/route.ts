@@ -3,12 +3,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
 import createMollieClient from "@mollie/api-client";
 import { PaymentStatus, PaymentProvider, PaymentType, SlotStatus, BookingStatus } from "@prisma/client";
-// Update this import to match the actual export from booking-confirmed.ts
-// For example, if the module exports a default function:
-import sendBookingEmails from "@/lib/events/booking-confirmed"; // ✅ NIEUW
 
-// Or, if the export is named differently, use:
-// import { bookingConfirmedEmails as sendBookingEmails } from "@/lib/events/booking-confirmed";
+// ✅ Gebruik de named export met options (includePartner)
+import { sendBookingEmails } from "@/lib/events/booking-confirmed";
 
 export const runtime = "nodejs";
 
@@ -94,7 +91,7 @@ export async function POST(req: NextRequest) {
       });
 
       if (b) {
-        let justConfirmed = false; // ✅ alleen dan e-mails versturen
+        let justConfirmed = false;
 
         await prisma.$transaction(async (tx) => {
           // Booking → CONFIRMED
@@ -107,7 +104,7 @@ export async function POST(req: NextRequest) {
                 depositPaidAt: paidAt ?? new Date(),
               },
             });
-            justConfirmed = true; // ✅ markeer dat we nu pas bevestigd hebben
+            justConfirmed = true;
           }
 
           // Slot → BOOKED
@@ -119,9 +116,9 @@ export async function POST(req: NextRequest) {
           }
         });
 
-        // ✅ Alleen bij net bevestigde boeking mails sturen (idempotent bij Mollie retries)
+        // ✅ Verstuur BEIDE mails direct (alleen bij net bevestigde boeking)
         if (justConfirmed) {
-          await sendBookingEmails(b.id);
+          await sendBookingEmails(b.id, { includePartner: true }); // ⬅️ belangrijk
         }
       }
     }

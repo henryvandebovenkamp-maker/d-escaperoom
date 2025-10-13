@@ -3,56 +3,39 @@ import prisma from "@/lib/prisma";
 import { APP_ORIGIN } from "@/lib/env";
 import { sendTemplateMail } from "@/lib/mail";
 
-/** Netjes adres samenstellen voor de klantmail. */
-function formatPartnerAddress(p?: {
-  addressLine1?: string | null;
-  addressLine2?: string | null;
-  postalCode?: string | null;
-  city?: string | null;
+/** Restbedrag berekenen met fallback als restAmountCents niet is ingevuld. */
+function calcRestCents(b: {
+  totalAmountCents: number;
+  depositAmountCents: number;
+  discountAmountCents?: number | null;
+  giftCardAppliedCents?: number | null;
+  restAmountCents?: number | null;
 }) {
-  if (!p) return "";
-  const line1 = p.addressLine1?.trim() || "";
-  const line2 = p.addressLine2?.trim() || "";
-  const pc    = p.postalCode?.trim() || "";
-  const city  = p.city?.trim() || "";
-  const address = [line1, line2].filter(Boolean).join(", ");
-  const town    = [pc, city].filter(Boolean).join(" ");
-  return [address, town].filter(Boolean).join(" — ");
+  if (typeof b.restAmountCents === "number" && b.restAmountCents >= 0) return b.restAmountCents;
+  const total = b.totalAmountCents ?? 0;
+  const dep   = b.depositAmountCents ?? 0;
+  const disc  = b.discountAmountCents ?? 0;
+  const gift  = b.giftCardAppliedCents ?? 0;
+  return Math.max(total - dep - disc - gift, 0);
 }
 
-/**
- * Verstuurt de bevestigingsmails (customer + partner) op basis van een bestaande, reeds
- * bevestigde booking. Deze helper **wijzigt geen DB-status**; hij verstuurt alléén e-mails
- * via templates. Perfect om in je webhook ná het bevestigen aan te roepen.
- */
-export async function sendBookingEmails(bookingId: string): Promise<{
-  sentCustomer: boolean;
-  sentPartner: boolean;
-}> {
+/** 1) Alleen klantmail */
+export async function sendCustomerBookingEmail(bookingId: string) {
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
-    include: {
-      partner: { include: { users: true } },
-      slot: true,
-      customer: true,
-      discountCode: true,
-    },
+    include: { partner: true, slot: true, customer: true },
   });
-
   if (!booking || !booking.partner || !booking.slot || !booking.customer) {
-    throw new Error(`[sendBookingEmails] Onvolledige booking-context voor id=${bookingId}`);
+    throw new Error(`[sendCustomerBookingEmail] Onvolledige data voor ${bookingId}`);
   }
 
-  const manageUrl      = `${APP_ORIGIN}/booking/${booking.id}`;
-  const partnerAddress = formatPartnerAddress(booking.partner);
-  const totalCents     = booking.totalAmountCents;
-  const depositCents   = booking.depositAmountCents;
-  const restCents      = Math.max(
-    (booking.restAmountCents ?? (totalCents - depositCents)) || 0,
-    0
-  );
+  const restCents = calcRestCents(booking);
+  const address =
+    [booking.partner.addressLine1, booking.partner.addressLine2].filter(Boolean).join(", ");
+  const town =
+    [booking.partner.postalCode, booking.partner.city].filter(Boolean).join(" ");
+  const partnerAddress = [address, town].filter(Boolean).join(" — ");
 
-  // === CUSTOMER MAIL ===
   await sendTemplateMail({
     to: booking.customer.email,
     template: "booking-customer",
@@ -63,45 +46,66 @@ export async function sendBookingEmails(bookingId: string): Promise<{
       slotISO: booking.slot.startTime.toISOString(),
       players: booking.playersCount,
       bookingId: booking.id,
-      totalCents,
-      depositCents,
+      totalCents: booking.totalAmountCents,
+      depositCents: booking.depositAmountCents,
       restCents,
-      manageUrl,
+      manageUrl: `${APP_ORIGIN}/booking/${booking.id}`,
       locale: (booking.customer.locale as any) || "nl",
     },
   });
+}
 
-  // === PARTNER MAIL ===
-  const partnerRecipients = [
+/** 2) Alleen partnermail (alleen gebruiken bij PAID/webhook) */
+export async function sendPartnerBookingEmail(bookingId: string) {
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: { partner: { include: { users: true } }, slot: true, customer: true },
+  });
+  if (!booking || !booking.partner || !booking.slot || !booking.customer) {
+    throw new Error(`[sendPartnerBookingEmail] Onvolledige data voor ${bookingId}`);
+  }
+
+  const restCents = calcRestCents(booking);
+
+  const recipients = [
     booking.partner.email,
     ...booking.partner.users.map(u => u.email).filter(Boolean),
   ]
     .filter(Boolean)
     .map(s => s!.trim())
-    .filter((v, i, arr) => arr.indexOf(v) === i); // unique
+    .filter((v, i, a) => a.indexOf(v) === i);
 
-  if (partnerRecipients.length > 0) {
-    await sendTemplateMail({
-      to: partnerRecipients[0],
-      template: "booking-partner",
-      vars: {
-        partnerName: booking.partner.name,
-        partnerEmail: booking.partner.email || partnerRecipients[0],
-        customerName: booking.customer.name || booking.customer.email,
-        slotISO: booking.slot.startTime.toISOString(),
-        players: booking.playersCount,
-        bookingId: booking.id,
-        depositCents,
-        locale: "nl",
-        restCents: 0
-      },
-    });
-  } else {
-    console.warn(`[sendBookingEmails] Geen partner e-mail gevonden voor partner ${booking.partnerId}`);
+  if (recipients.length === 0) {
+    console.warn(`[sendPartnerBookingEmail] Geen partner e-mail voor partner ${booking.partnerId}`);
+    return;
   }
 
-  return { sentCustomer: true, sentPartner: partnerRecipients.length > 0 };
+  await sendTemplateMail({
+    to: recipients[0],
+    template: "booking-partner",
+    vars: {
+      partnerName: booking.partner.name,
+      partnerEmail: booking.partner.email || recipients[0],
+      customerName: booking.customer.name || booking.customer.email,
+      slotISO: booking.slot.startTime.toISOString(),
+      players: booking.playersCount,
+      bookingId: booking.id,
+      depositCents: booking.depositAmountCents, // niet getoond in template, maar oké
+      restCents,
+      locale: "nl",
+    },
+  });
 }
 
-/** ↙️ Voor wie per ongeluk default importeert: dit voorkomt de TS-fout. */
+/** 3) Combinatie-helper: standaard GEEN partner (voorkomt dubbele mails bij 'bekijk') */
+export async function sendBookingEmails(
+  bookingId: string,
+  opts: { includePartner?: boolean } = {}
+) {
+  await sendCustomerBookingEmail(bookingId);
+  if (opts.includePartner) {
+    await sendPartnerBookingEmail(bookingId);
+  }
+}
+
 export default sendBookingEmails;
