@@ -93,6 +93,7 @@ export async function sendBookingEmails(bookingId: string): Promise<{
         bookingId: booking.id,
         depositCents,
         locale: "nl",
+        restCents: 0
       },
     });
   } else {

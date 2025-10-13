@@ -36,6 +36,7 @@ export type TemplateVars = {
     players: number;
     bookingId: string;
     depositCents: number;
+    restCents: number;
     locale?: Locale;
   };
 };
