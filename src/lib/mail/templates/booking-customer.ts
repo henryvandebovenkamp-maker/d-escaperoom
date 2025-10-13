@@ -8,17 +8,26 @@ function mapsUrlFromAddress(address: string) {
 }
 
 const Tpl = {
+  // ✅ Forceer juiste afzendernaam
+  from: '"D-EscapeRoom" <no-reply@d-escaperoom.nl>',
+
   subject: (v: TemplateVars["booking-customer"]) =>
     `Bevestiging — The Missing Snack — ${nlDateTime(v.slotISO)}`,
 
   html: (v: TemplateVars["booking-customer"]) => {
     const address = v.partnerAddress || "";
-    const mapsUrl = mapsUrlFromAddress(address);
+    const mapsUrl = address ? mapsUrlFromAddress(address) : "";
     const body = `
       <p style="margin:0 0 12px 0">Hoi ${v.customerName || "gast"},</p>
-      <p style="margin:0 0 16px 0">
+
+      <p style="margin:0 0 8px 0">
         Je boeking voor <strong>The Missing Snack</strong> bij <strong>${v.partnerName}</strong> is
         <span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#f3f4f6;color:#111827;font-weight:600">bevestigd</span>.
+      </p>
+
+      <p style="margin:0 0 16px 0">
+        Wat leuk dat je het avontuur <strong>met je hond</strong> aangaat! 🐾
+        Deze beleving is juist ontworpen om <em>samen</em> te spelen en nieuwe dingen te ontdekken.
       </p>
 
       <table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border:1px solid #e7e5e4;border-radius:10px;margin:8px 0 12px 0">
@@ -53,13 +62,14 @@ const Tpl = {
       </table>
 
       <p style="margin:12px 0 0 0;color:#374151">
-        Tip: kom 5 minuten eerder. Betaling van het restbedrag kan op locatie.
+        <strong>Kleine tips:</strong> kom 5 minuten eerder, neem wat favoriete beloningssnacks mee
+        en zorg dat je hond een kort plasje heeft gedaan. Het resterende bedrag reken je op locatie af.
       </p>
     `;
 
     return wrapEmail({
       title: "Je boeking is bevestigd 🎉",
-      preheader: `Bevestiging voor ${v.partnerName} op ${nlDateTime(v.slotISO)}`,
+      preheader: `Wat leuk dat je met je hond het avontuur aangaat — ${v.partnerName}, ${nlDateTime(v.slotISO)}`,
       bodyHTML: body,
       cta: { label: "Beheer je boeking", url: v.manageUrl },
       brand: "consumer",
@@ -70,6 +80,7 @@ const Tpl = {
     [
       `Je boeking is bevestigd`,
       ``,
+      `Wat leuk dat je het avontuur met je hond aangaat!`,
       `The Missing Snack — ${v.partnerName}`,
       `Datum & tijd: ${nlDateTime(v.slotISO)}`,
       `Spelers: ${v.players}`,
