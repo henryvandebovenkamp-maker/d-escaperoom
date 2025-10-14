@@ -583,43 +583,49 @@ export default function BookingWidget({ defaultPartnerSlug = "" }: { defaultPart
   /* ========== VOLLEDIGE UI na mount ========== */
   return (
     <section aria-label="Boekingswidget" className="space-y-4 rounded-2xl border border-stone-200 bg-white/90 p-4 shadow-md backdrop-blur-sm">
-      {/* ======= HERO ======= */}
+      {/* ======= COMPACTE HEADER ======= */}
       <div className="relative overflow-visible rounded-2xl border border-stone-200">
-        <img src="/images/header-foto.png" alt="" className="pointer-events-none absolute inset-0 h-full w-full rounded-2xl object-cover opacity-80" aria-hidden />
+        <img
+          src="/images/header-foto.png"
+          alt=""
+          className="pointer-events-none absolute inset-0 h-full w-full rounded-2xl object-cover opacity-80"
+          aria-hidden
+        />
         <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-r from-rose-50/60 via-pink-50/50 to-stone-50/60" />
-        <div className="relative z-10 grid gap-4 p-4 md:grid-cols-12 md:items-center">
+        <div className="relative z-10 grid items-center gap-3 p-3 md:grid-cols-12">
+          {/* Zo boek je (blijft) */}
           <div className="md:col-span-3">
-            <div className="rounded-xl border border-stone-200/80 bg-white/80 p-3 shadow-sm backdrop-blur">
-              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-stone-700">Zo boek je</div>
-              <ol className="space-y-1 text-[12px] text-stone-800">
-                <li><strong>Stap 1:</strong> Hondenschool kiezen</li>
-                <li><strong>Stap 2:</strong> Datum &amp; tijd prikken</li>
-                <li><strong>Stap 3:</strong> Avontuur reserveren</li>
+            <div className="rounded-xl border border-stone-200/80 bg-white/80 p-2.5 shadow-sm backdrop-blur">
+              <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-stone-700">Zo boek je</div>
+              <ol className="space-y-0.5 text-[11px] text-stone-800">
+                <li><strong>1:</strong> Selecteer locatie</li>
+                <li><strong>2:</strong> Datum &amp; tijd prikken</li>
+                <li><strong>3:</strong> Reserveren</li>
               </ol>
             </div>
           </div>
+
+          {/* Compacte titel (geen tekst, geen pills) */}
           <div className="md:col-span-6 text-center">
-            <h2 className="text-2xl font-black leading-tight tracking-tight text-stone-900 md:text-3xl">Reserveer een tijdslot</h2>
-            <p className="mx-auto mt-1 max-w-xl text-sm text-stone-700">Een Western-styled puzzel voor baas &amp; hond. Vang de dader, scoor de snack.</p>
-            <div className="mt-2 flex flex-wrap justify-center gap-2">
-              <span className="rounded-full border border-stone-300 bg-white/80 px-2.5 py-1 text-[11px] text-stone-800">±45 min speeltijd</span>
-              <span className="rounded-full border border-stone-300 bg-white/80 px-2.5 py-1 text-[11px] text-stone-800">Advies 2–3 spelers</span>
-              <span className="rounded-full border border-stone-300 bg-white/80 px-2.5 py-1 text-[11px] text-stone-800">Aanbetaling via Mollie</span>
-            </div>
+            <h2 className="text-lg font-extrabold leading-tight tracking-tight text-stone-900 md:text-xl">
+           
+            </h2>
           </div>
+
+          {/* Partner select (ongewijzigd) */}
           <div className="relative z-20 md:col-span-3">
-            <label className="mb-1 block text-[11px] font-medium text-stone-700">Hondenschool in jouw buurt</label>
+            <label className="mb-1 block text-[11px] font-medium text-stone-700">Selecteer een locatie in de buurt</label>
             <select
               value={partnerSlug}
               onChange={(e) => setPartnerSlug(e.target.value)}
               className="h-9 w-full rounded-lg border border-stone-300 bg-white px-2 text-xs outline-none transition focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
-              aria-label="Kies een hondenschool"
+              aria-label="Kies locatie"
             >
               {partners.length === 0 ? (
                 <option value="">{msg ? "Kon niet laden" : "Laden…"}</option>
               ) : (
                 <>
-                  <option value="">— Kies een hondenschool —</option>
+                  <option value="">Kies locatie</option>
                   {partners.map((p) => (
                     <option key={p.slug} value={p.slug}>
                       {p.name}{p.city ? ` — ${p.city}` : ""}
@@ -631,7 +637,7 @@ export default function BookingWidget({ defaultPartnerSlug = "" }: { defaultPart
           </div>
         </div>
       </div>
-      {/* ======= /HERO ======= */}
+      {/* ======= /COMPACTE HEADER ======= */}
 
       {/* ======= Agenda + Details ======= */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -643,8 +649,24 @@ export default function BookingWidget({ defaultPartnerSlug = "" }: { defaultPart
               <span className="rounded-md bg-stone-100 px-2 py-0.5 text-[11px] text-stone-700">{monthLabel(viewMonth)}</span>
             </div>
             <div className="flex items-center gap-1">
-              <button type="button" onClick={() => setViewMonth((m) => addMonths(m, -1))} className="h-8 rounded-lg border border-stone-300 px-2 text-xs font-medium text-stone-800 hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-pink-300" aria-label="Vorige maand" title="Vorige maand">←</button>
-              <button type="button" onClick={() => setViewMonth((m) => addMonths(m, 1))} className="h-8 rounded-lg border border-stone-300 px-2 text-xs font-medium text-stone-800 hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-pink-300" aria-label="Volgende maand" title="Volgende maand">→</button>
+              <button
+                type="button"
+                onClick={() => setViewMonth((m) => addMonths(m, -1))}
+                className="h-8 rounded-lg border border-stone-300 px-2 text-xs font-medium text-stone-800 hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-pink-300"
+                aria-label="Vorige maand"
+                title="Vorige maand"
+              >
+                ←
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMonth((m) => addMonths(m, 1))}
+                className="h-8 rounded-lg border border-stone-300 px-2 text-xs font-medium text-stone-800 hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-pink-300"
+                aria-label="Volgende maand"
+                title="Volgende maand"
+              >
+                →
+              </button>
             </div>
           </div>
 
@@ -688,7 +710,10 @@ export default function BookingWidget({ defaultPartnerSlug = "" }: { defaultPart
                 >
                   {d.getDate()}
                   {!past && !dot.hideDot && (
-                    <span className={`pointer-events-none absolute inset-x-0 bottom-1 mx-auto block h-1.5 w-1.5 rounded-full ${dot.cls}`} aria-hidden />
+                    <span
+                      className={`pointer-events-none absolute inset-x-0 bottom-1 mx-auto block h-1.5 w-1.5 rounded-full ${dot.cls}`}
+                      aria-hidden
+                    />
                   )}
                 </button>
               );
@@ -698,9 +723,9 @@ export default function BookingWidget({ defaultPartnerSlug = "" }: { defaultPart
           {loadingCalendar && <p className="mt-2 text-[11px] text-stone-500">Kalenderstatus laden…</p>}
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-100 px-2 py-1 text-[11px] font-medium text-stone-800"><span className="inline-block h-2 w-2 rounded-full bg-emerald-600" aria-hidden />Groen = &gt;1 boekbaar</span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-orange-300 bg-orange-100 px-2 py-1 text-[11px] font-medium text-stone-800"><span className="inline-block h-2 w-2 rounded-full bg-orange-500" aria-hidden />Oranje = 1 boekbaar</span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-stone-300 bg-stone-100 px-2 py-1 text-[11px] font-medium text-stone-800"><span className="inline-block h-2 w-2 rounded-full bg-stone-500" aria-hidden />Grijs = geen of verleden</span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-100 px-2 py-1 text-[11px] font-medium text-stone-800"><span className="inline-block h-2 w-2 rounded-full bg-emerald-600" aria-hidden />Groen +2  </span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-orange-300 bg-orange-100 px-2 py-1 text-[11px] font-medium text-stone-800"><span className="inline-block h-2 w-2 rounded-full bg-orange-500" aria-hidden />Oranje 1 boekbaar </span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-stone-300 bg-stone-100 px-2 py-1 text-[11px] font-medium text-stone-800"><span className="inline-block h-2 w-2 rounded-full bg-stone-500" aria-hidden />Grijs = Geen tijdsloten beschikbaar</span>
           </div>
         </div>
 

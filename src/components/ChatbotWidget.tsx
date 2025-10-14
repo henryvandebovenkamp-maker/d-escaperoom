@@ -1,20 +1,18 @@
 "use client";
 import * as React from "react";
 
-const locales = ["nl", "en", "de", "es"] as const;
-type Locale = (typeof locales)[number];
+type Locale = "nl" | "en" | "de" | "es";
 
-type Props = {
-  defaultLocale?: Locale;
-};
-
+type Props = { defaultLocale?: Locale };
 type Msg = { id: string; from: "user" | "assistant"; text: string };
 
-const euroPink = "bg-pink-600 hover:bg-pink-700 focus-visible:ring-pink-500";
+const cls = (...s: (string | false | null | undefined)[]) => s.filter(Boolean).join(" ");
 
 export default function ChatbotWidget({ defaultLocale = "nl" }: Props) {
+  // Vaste locale vanuit props (géén selector)
+  const locale: Locale = defaultLocale;
+
   const [open, setOpen] = React.useState(false);
-  const [locale, setLocale] = React.useState<Locale>(defaultLocale);
   const [sessionId, setSessionId] = React.useState<string | undefined>(() =>
     typeof window !== "undefined" ? window.localStorage.getItem("de-chat-sid") || undefined : undefined
   );
@@ -26,16 +24,31 @@ export default function ChatbotWidget({ defaultLocale = "nl" }: Props) {
   ]);
 
   const listRef = React.useRef<HTMLDivElement>(null);
+  const inputRef = React.useRef<HTMLTextAreaElement>(null);
 
   // Scroll naar laatste bericht
   React.useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, busy]);
 
-  // Sla sessionId op (blijft binnen 1 browser sessie)
+  // Focus input zodra widget opent
+  React.useEffect(() => {
+    if (open) setTimeout(() => inputRef.current?.focus(), 60);
+  }, [open]);
+
+  // SessionId opslaan
   React.useEffect(() => {
     if (sessionId) localStorage.setItem("de-chat-sid", sessionId);
   }, [sessionId]);
+
+  // ESC om te sluiten
+  React.useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    if (open) window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
 
   async function send() {
     const msg = input.trim();
@@ -50,12 +63,7 @@ export default function ChatbotWidget({ defaultLocale = "nl" }: Props) {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: msg,
-          role: "CONSUMER", // rol-neutraal: backend zoekt in gezamenlijke FAQ
-          locale,
-          sessionId,
-        }),
+        body: JSON.stringify({ message: msg, role: "CONSUMER", locale, sessionId }),
       });
 
       const json = await res.json();
@@ -69,14 +77,13 @@ export default function ChatbotWidget({ defaultLocale = "nl" }: Props) {
 
       setMessages((m) => [...m, { id: crypto.randomUUID(), from: "assistant", text: answer }]);
 
-      // Debug hulp tijdens testen
       if (process.env.NEXT_PUBLIC_DEBUG_CHAT === "1" && json?.debug) {
         setMessages((m) => [
           ...m,
           { id: crypto.randomUUID(), from: "assistant", text: `🔎 Debug: ${JSON.stringify(json.debug)}` },
         ]);
       }
-    } catch (e: any) {
+    } catch {
       setError("Netwerkfout. Probeer later opnieuw.");
       setMessages((m) => [
         ...m,
@@ -102,64 +109,67 @@ export default function ChatbotWidget({ defaultLocale = "nl" }: Props) {
   }
 
   return (
-    <div className="fixed z-50 bottom-6 right-6">
+    <div className="fixed z-30 bottom-3 right-3 sm:bottom-5 sm:right-5 pointer-events-auto" data-no-print>
+      {/* Gesloten: subtiele 'FAQ' pill */}
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          className={`px-5 py-3 rounded-xl text-white font-semibold shadow ${euroPink}`}
+          title="Open chat & FAQ"
+          aria-label="Open chat en veelgestelde vragen"
+          aria-expanded={open}
+          className={cls(
+            "inline-flex items-center gap-1.5 h-8 sm:h-9 rounded-full",
+            "px-3 sm:px-3.5 border border-stone-300 bg-white/90 text-stone-700",
+            "shadow-sm hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400",
+            "text-[12px] sm:text-[13px] font-medium leading-none"
+          )}
         >
-          Chat & FAQ
+          <span aria-hidden>FAQ</span>
+          <span className="sr-only">Open chat en veelgestelde vragen</span>
         </button>
       )}
 
+      {/* Open paneel: compact en subtiel */}
       {open && (
         <div
           role="dialog"
           aria-label="Chat & FAQ"
           aria-modal="false"
-          className="w-[380px] sm:w-[420px] rounded-xl border border-stone-200 bg-white shadow-2xl overflow-hidden"
+          className={cls(
+            "w-[260px] sm:w-[300px] rounded-xl",
+            "border border-stone-200 bg-white shadow-lg ring-1 ring-black/5 overflow-hidden",
+            "motion-safe:transition-all motion-safe:duration-150"
+          )}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-stone-200 bg-stone-50">
-            <div>
-              <p className="text-xs text-stone-500">D-EscapeRoom</p>
-              <h3 className="text-base font-semibold text-stone-900">Chat & FAQ</h3>
+          <div className="flex items-center justify-between px-2.5 py-2 border-b border-stone-200 bg-stone-50">
+            <div className="min-w-0">
+              <p className="text-[10px] leading-3 text-stone-500">D-EscapeRoom</p>
+              <h3 className="text-[13px] font-semibold text-stone-900">Chat & FAQ</h3>
             </div>
-            <div className="flex items-center gap-2">
-              <select
-                aria-label="Taal"
-                className="text-sm border rounded-md px-2 py-1 bg-white"
-                value={locale}
-                onChange={(e) => setLocale(e.target.value as Locale)}
-              >
-                {locales.map((l) => (
-                  <option key={l} value={l}>
-                    {l.toUpperCase()}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={() => setOpen(false)}
-                className="text-stone-500 hover:text-stone-700 text-sm"
-                aria-label="Sluit chat"
-              >
-                ✕
-              </button>
-            </div>
+            <button
+              onClick={() => setOpen(false)}
+              className="h-7 w-7 inline-flex items-center justify-center rounded-md text-stone-600 hover:text-stone-800 hover:bg-white border border-transparent hover:border-stone-300 text-[13px]"
+              aria-label="Sluit chat"
+              title="Sluiten"
+            >
+              ✕
+            </button>
           </div>
 
           {/* Messages */}
           <div
             ref={listRef}
-            className="max-h-[55vh] overflow-y-auto p-4 space-y-3 text-sm bg-white"
+            className="max-h-[44vh] overflow-y-auto p-2.5 space-y-1.5 text-[13px] bg-white"
             aria-live="polite"
           >
             {messages.map((m) => (
               <div key={m.id} className={`flex ${m.from === "user" ? "justify-end" : "justify-start"}`}>
                 <div
-                  className={`px-3 py-2 rounded-lg shadow-sm ${
-                    m.from === "user" ? "bg-pink-600 text-white" : "bg-stone-100 text-stone-800"
-                  }`}
+                  className={cls(
+                    "px-2.5 py-1.5 rounded-lg shadow-sm",
+                    m.from === "user" ? "bg-stone-900 text-white" : "bg-stone-100 text-stone-800"
+                  )}
                 >
                   {m.text}
                 </div>
@@ -167,8 +177,8 @@ export default function ChatbotWidget({ defaultLocale = "nl" }: Props) {
             ))}
             {busy && (
               <div className="flex justify-start">
-                <div className="px-3 py-2 rounded-lg bg-stone-100 text-stone-500 shadow-sm">
-                  <span className="inline-flex items-center gap-2">
+                <div className="px-2.5 py-1.5 rounded-lg bg-stone-100 text-stone-500 shadow-sm">
+                  <span className="inline-flex items-center gap-1.5">
                     <span className="animate-pulse">●</span>
                     <span className="animate-pulse delay-150">●</span>
                     <span className="animate-pulse delay-300">●</span>
@@ -179,31 +189,37 @@ export default function ChatbotWidget({ defaultLocale = "nl" }: Props) {
           </div>
 
           {/* Input */}
-          <div className="p-3 border-t border-stone-200 bg-stone-50">
-            <div className="flex items-center gap-2">
+          <div className="p-2.5 border-t border-stone-200 bg-stone-50">
+            <div className="flex items-center gap-1.5">
               <label htmlFor="de-chat-input" className="sr-only">
                 Bericht
               </label>
               <textarea
+                ref={inputRef}
                 id="de-chat-input"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={onKeyDown}
                 rows={1}
                 placeholder={busy ? "Bezig met antwoorden..." : "Typ je vraag…"}
-                className="flex-1 resize-none rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400"
+                className="flex-1 resize-none rounded-md border border-stone-300 px-2.5 py-1.5 text-[13px] focus:outline-none focus:ring-2 focus:ring-stone-400 bg-white"
               />
               <button
                 onClick={send}
                 disabled={busy || !input.trim()}
-                className={`shrink-0 px-4 py-2 rounded-md text-white text-sm font-semibold ${euroPink} disabled:opacity-50`}
+                className={cls(
+                  "shrink-0 h-8 px-2.5 rounded-md text-white text-[12px] font-semibold",
+                  "bg-stone-900 hover:bg-stone-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400",
+                  "disabled:opacity-50"
+                )}
+                aria-label="Verstuur bericht"
               >
-                Stuur
+                Verstuur
               </button>
             </div>
-            {!!error && <p className="mt-2 text-[11px] text-pink-700">{error}</p>}
-            <p className="mt-2 text-[11px] text-stone-500">
-              Antwoorden zijn informatief en niet-bindend. Voor specifieke vragen: info@d-escaperoom.com
+            {!!error && <p className="mt-1 text-[11px] text-stone-700">{error}</p>}
+            <p className="mt-1 text-[10.5px] text-stone-500">
+              Antwoorden zijn informatief en niet-bindend. Mail: info@d-escaperoom.com
             </p>
           </div>
         </div>

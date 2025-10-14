@@ -2,7 +2,6 @@
 "use client";
 
 import * as React from "react";
-import Image from "next/image";
 import { useParams } from "next/navigation";
 
 /* ===================== Types ===================== */
@@ -346,7 +345,7 @@ export default function CheckoutPage() {
   /* ===================== UI ===================== */
   if (loading) {
     return (
-      <div className="min-h-screen bg-stone-50">
+      <div className="min-h-[100dvh] bg-stone-50">
         <div className="mx-auto max-w-6xl p-4 md:p-8">
           <HeaderSkeleton />
           <div className="mt-6 grid gap-6 md:grid-cols-3">
@@ -362,9 +361,10 @@ export default function CheckoutPage() {
   }
   if (!data) {
     return (
-      <div className="min-h-screen bg-stone-50">
+      <div className="min-h-[100dvh] bg-stone-50">
         <div className="mx-auto max-w-6xl p-4 md:p-8">
-          <HeroHeader title="Checkout" subtitle="We konden je boeking niet vinden." />
+          {/* Geen PENDING badge meer tonen */}
+          <SimpleHeader title="Bevestig jouw boeking" />
           <div className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-800 shadow-sm" role="alert">
             Boekingsnummer onbekend of verlopen.
           </div>
@@ -374,20 +374,14 @@ export default function CheckoutPage() {
   }
 
   return (
-    <main className="min-h-screen bg-stone-50 text-stone-900">
-      <div className="pointer-events-none sticky top-0 z-0 h-2 w-full bg-gradient-to-r from-rose-200 via-pink-300 to-rose-200" />
-      <div className="relative z-10 mx-auto max-w-6xl p-4 md:p-8">
-        <HeroHeader
-          title="Je boeking"
-          subtitle="Controleer je gegevens, vul info over je hond in en pas eventueel een kortingscode toe."
-          badge={<StatusBadge status={data.status} />}
-          idLabel={data.id}
-        />
+    <main className="min-h-[100dvh] bg-stone-50 text-stone-900">
+      <div className="mx-auto max-w-6xl p-4 md:p-8">
+        {/* Statusbadge wordt NIET getoond wanneer status 'PENDING' is */}
+        <SimpleHeader title="Bevestig jouw boeking" status={data.status} idLabel={data.id} />
 
         <div className="mt-6 grid gap-6 md:grid-cols-3">
           {/* Linker kolom */}
           <section className="md:col-span-2 space-y-6">
-            {/* Overzicht — alles onder elkaar */}
             <Card>
               <CardTitle icon="📅" title="Overzicht" />
               <div className="mt-3 space-y-4">
@@ -403,7 +397,7 @@ export default function CheckoutPage() {
                   {data.playersCount} {data.playersCount === 1 ? "speler" : "spelers"}
                 </InfoRow>
 
-                <InfoRow label="Naam klant" icon={<span aria-hidden>👤</span>}>
+                <InfoRow label="Voornaam" icon={<span aria-hidden>👤</span>}>
                   <input
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
@@ -497,7 +491,6 @@ export default function CheckoutPage() {
                   />
                 </Field>
 
-                {/* feedbackregel */}
                 <div className="min-h-[18px]" aria-live="polite">
                   {savingDog && <p className="text-[12px] text-stone-600">Opslaan…</p>}
                   {savedAt && !savingDog && (
@@ -509,25 +502,6 @@ export default function CheckoutPage() {
                 </div>
               </div>
             </Card>
-
-            {/* Desktop betaal CTA */}
-            <div className="hidden md:block">
-              <button
-                type="button"
-                onClick={() => handlePayNow(data.id)}
-                disabled={payLoading || !canPay}
-                className="rounded-full bg-pink-600 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-pink-700 disabled:opacity-60 focus:outline-none focus:ring-4 focus:ring-pink-300"
-              >
-                {payLoading ? "Bezig…" : "Betalen"}
-              </button>
-              <div className="mt-2 text-xs text-stone-600">
-                Al betaald?{" "}
-                <a className="underline" href={`/checkout/${data.id}/return`}>
-                  Haal bevestiging op
-                </a>
-                .
-              </div>
-            </div>
           </section>
 
           {/* Rechter kolom */}
@@ -545,25 +519,12 @@ export default function CheckoutPage() {
               onClear={() => applyDiscount(null)}
               applying={applying}
               message={discountMsg}
+              onPay={() => handlePayNow(data.id)}
+              canPay={canPay}
+              payLoading={payLoading}
+              bookingId={data.id}
             />
           </aside>
-        </div>
-      </div>
-
-      {/* Mobile CTA */}
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-stone-200 bg-white/95 p-3 shadow-[0_-8px_20px_-12px_rgba(0,0,0,0.15)] backdrop-blur md:hidden">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
-          <div className="text-xs text-stone-600">
-            Je betaalt nu de aanbetaling; het restant betaal je bij de hondenschool.
-          </div>
-          <button
-            type="button"
-            onClick={() => handlePayNow(data!.id)}
-            disabled={payLoading || !canPay}
-            className="rounded-full bg-pink-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-pink-700 disabled:opacity-60 focus:outline-none focus:ring-4 focus:ring-pink-300"
-          >
-            {payLoading ? "Bezig…" : "Betalen"}
-          </button>
         </div>
       </div>
     </main>
@@ -572,54 +533,35 @@ export default function CheckoutPage() {
 
 /* ===================== UI Helpers ===================== */
 
-function HeroHeader({
+function SimpleHeader({
   title,
-  subtitle,
-  badge,
+  status,
   idLabel,
 }: {
   title: string;
-  subtitle?: string;
-  badge?: React.ReactNode;
+  status?: BookingVM["status"];
   idLabel?: string;
 }) {
   return (
-    <header className="relative overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-md">
-      <div className="absolute inset-0">
-        <Image
-          src="/images/header-foto.png"
-          alt="Western thema decor voor D-EscapeRoom"
-          fill
-          priority
-          className="object-cover"
-          sizes="(max-width: 768px) 100vw, 1200px"
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-rose-50/65 via-pink-50/55 to-stone-50/70" />
-        <div className="absolute inset-0 bg-black/10 mix-blend-multiply" aria-hidden />
-      </div>
-
-      <div className="relative grid gap-3 p-5 md:grid-cols-[1fr_auto] md:items-center">
+    <header className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-stone-900 drop-shadow-[0_1px_0_rgba(255,255,255,0.9)]">
-            {title}
-          </h1>
-          {subtitle && <p className="mt-1 text-stone-800">{subtitle}</p>}
+          <h1 className="text-xl font-extrabold text-stone-900">{title}</h1>
           {idLabel && (
-            <p className="mt-2 text-xs font-medium text-stone-800/90">
+            <p className="mt-0.5 text-xs text-stone-600">
               Boekingsnummer: <span className="font-semibold text-stone-900">{idLabel}</span>
             </p>
           )}
         </div>
-        {badge && <div className="justify-self-start md:justify-self-end">{badge}</div>}
+        {/* ❌ Geen 'PENDING' badge meer tonen */}
+        {status && status !== "PENDING" && <StatusBadge status={status} />}
       </div>
-
-      <div className="h-1 w-full bg-gradient-to-r from-pink-300 via-rose-300 to-pink-300" />
     </header>
   );
 }
 
 function HeaderSkeleton() {
-  return <div className="h-28 w-full animate-pulse rounded-2xl bg-stone-100 shadow" />;
+  return <div className="h-10 w-full animate-pulse rounded-2xl bg-stone-100 shadow" />;
 }
 
 function Card({ children }: { children: React.ReactNode }) {
@@ -712,6 +654,10 @@ function PriceCard({
   onClear,
   applying,
   message,
+  onPay,
+  canPay,
+  payLoading,
+  bookingId,
 }: {
   total: number;
   deposit: number;
@@ -725,10 +671,14 @@ function PriceCard({
   onClear: () => void;
   applying: boolean;
   message: string | null;
+  onPay: () => void;
+  canPay: boolean;
+  payLoading: boolean;
+  bookingId: string;
 }) {
   const hasDiscount = discountCents > 0;
   return (
-    <div className="sticky top-6 rounded-2xl border border-stone-200 bg-white shadow-sm">
+    <div className="rounded-2xl border border-stone-200 bg-white shadow-sm md:sticky md:top-6">
       <div className="h-2 w-full rounded-t-2xl bg-gradient-to-r from-pink-300 via-rose-300 to-pink-300" />
       <div className="p-5">
         <div className="flex items-center gap-2">
@@ -745,7 +695,7 @@ function PriceCard({
           <Row label="Rest op locatie" value={euro(rest)} />
         </div>
 
-        {/* kleiner kortingsveld + nette knop */}
+        {/* Kortingscode */}
         <div className="mt-4 rounded-xl border border-stone-200 bg-stone-50/60 p-3">
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-stone-700">Kortingscode</div>
 
@@ -795,14 +745,33 @@ function PriceCard({
           )}
           {!message && !hasDiscount && (
             <p className="mt-2 text-[11px] text-stone-600">
-              Korting wordt over het <strong>hele bedrag (incl. fee)</strong> berekend.
+              Korting wordt over het hele bedrag  berekend.
             </p>
           )}
         </div>
 
-        <p className="mt-3 text-[11px] text-stone-600">
-          Je betaalt nu de aanbetaling; het restant betaal je bij de hondenschool.
-        </p>
+        {/* Simpele 'Betalen' knop direct onder kortingscode */}
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={onPay}
+            disabled={payLoading || !canPay}
+            aria-busy={payLoading}
+            className="w-full rounded-full bg-pink-600 px-4 py-2.5 text-sm font-semibold text-white shadow hover:bg-pink-700 disabled:opacity-60 focus:outline-none focus:ring-4 focus:ring-pink-300"
+          >
+            {payLoading ? "Bezig…" : "Betalen"}
+          </button>
+          <p className="mt-2 text-[11px] text-stone-600">
+            Je betaalt nu de aanbetaling; het restant betaal je bij de hondenschool.
+          </p>
+          <p className="mt-2 text-[11px] text-stone-600">
+            {" "}
+            <a className="underline" href={`/checkout/${bookingId}/return`}>
+              
+            </a>
+            .
+          </p>
+        </div>
       </div>
     </div>
   );

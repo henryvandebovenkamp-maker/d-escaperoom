@@ -17,10 +17,30 @@ type Province = {
   taken?: { by: string; note?: string };
 };
 
+type CalcConfig = {
+  /** UI startwaarden */
+  initialSessions?: number; // default 4
+  initialPlayers?: number;  // default 2
+  /** Grenzen */
+  minSessions?: number;     // default 1
+  maxSessions?: number;     // default 40
+  minPlayers?: number;      // default 1
+  maxPlayers?: number;      // default 8
+  /** Prijs per persoon (vast; read-only in UI) */
+  pricePerPlayer?: number;  // default 39.95
+};
+
 type Props = {
-  /** handmatig overrides per provincie (bijv. bezet zetten) */
   overrides?: Partial<Record<ProvinceCode, { by: string; note?: string }>>;
   className?: string;
+  calcConfig?: CalcConfig;
+  onCalcChange?: (state: {
+    sessionsPerWeek: number;
+    avgPlayers: number;
+    pricePerPlayer: number;
+    weekly: number;
+    monthly: number;
+  }) => void;
 };
 
 /* =========================================
@@ -56,24 +76,6 @@ function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
-function parseMoney(input: string): number {
-  if (!input) return 0;
-  let s = input.replace(/[^\d,.\-]/g, "");
-  const lastComma = s.lastIndexOf(",");
-  const lastDot = s.lastIndexOf(".");
-  if (lastComma > -1 && lastDot > -1) {
-    if (lastComma > lastDot) {
-      s = s.replace(/\./g, "").replace(",", ".");
-    } else {
-      s = s.replace(/,/g, "");
-    }
-  } else if (lastComma > -1) {
-    s = s.replace(",", ".");
-  }
-  const n = Number(s);
-  return Number.isFinite(n) ? n : 0;
-}
-
 function formatEUR(n: number) {
   try {
     return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(n);
@@ -82,7 +84,7 @@ function formatEUR(n: number) {
   }
 }
 
-/** ClientOnly: rendert kinderen pas na mount (voorkomt SSR-hydration issues bij inputs) */
+/** ClientOnly om hydration issues te voorkomen */
 function ClientOnly({ children, fallback = null }: { children: React.ReactNode; fallback?: React.ReactNode }) {
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
@@ -93,19 +95,38 @@ function ClientOnly({ children, fallback = null }: { children: React.ReactNode; 
 /* =========================================
    Component
 ========================================= */
-export default function PartnerWidget({ overrides, className = "" }: Props) {
+export default function PartnerWidget({
+  overrides,
+  className = "",
+  calcConfig,
+  onCalcChange,
+}: Props) {
   const items = React.useMemo(() => applyOverrides(PROVINCES, overrides), [overrides]);
 
-  // Mini-calculator — altijd controlled (geen undefined)
-  const [sessionsPerWeek, setSessionsPerWeek] = React.useState<number>(4);
-  const [avgPlayers, setAvgPlayers] = React.useState<number>(3);
-  const [pricePerPlayer, setPricePerPlayer] = React.useState<number>(39.95);
+  const {
+    initialSessions = 4,
+    initialPlayers  = 2,
+    minSessions = 1,
+    maxSessions = 40,
+    minPlayers = 1,
+    maxPlayers = 8,
+    pricePerPlayer = 39.95,
+  } = calcConfig || {};
+
+  const [sessionsPerWeek, setSessionsPerWeek] =
+    React.useState<number>(clamp(initialSessions, minSessions, maxSessions));
+  const [avgPlayers, setAvgPlayers] =
+    React.useState<number>(clamp(initialPlayers,  minPlayers,  maxPlayers));
 
   const weekly = React.useMemo(
     () => sessionsPerWeek * avgPlayers * pricePerPlayer,
     [sessionsPerWeek, avgPlayers, pricePerPlayer]
   );
   const monthly = React.useMemo(() => weekly * 4, [weekly]);
+
+  React.useEffect(() => {
+    onCalcChange?.({ sessionsPerWeek, avgPlayers, pricePerPlayer, weekly, monthly });
+  }, [sessionsPerWeek, avgPlayers, pricePerPlayer, weekly, monthly, onCalcChange]);
 
   return (
     <section
@@ -117,8 +138,7 @@ export default function PartnerWidget({ overrides, className = "" }: Props) {
     >
       {/* ======= HEADER ======= */}
       <div className="relative overflow-hidden rounded-2xl border border-stone-200">
-        {/* Afbeelding met iets minder overlay → duidelijker */}
-        <div className="absolute inset-0">
+        <div aria-hidden className="absolute inset-0">
           <Image
             src="/images/header-foto.png"
             alt="Western thema decor voor D-EscapeRoom"
@@ -127,7 +147,6 @@ export default function PartnerWidget({ overrides, className = "" }: Props) {
             className="object-cover"
             sizes="(max-width: 768px) 100vw, 1200px"
           />
-          {/* subtiele dual-overlay voor contrast zonder te grijpen */}
           <div className="absolute inset-0 bg-gradient-to-r from-rose-50/65 via-pink-50/55 to-stone-50/70" />
           <div className="absolute inset-0 bg-black/10 mix-blend-multiply" aria-hidden />
         </div>
@@ -140,7 +159,7 @@ export default function PartnerWidget({ overrides, className = "" }: Props) {
             Bied jouw klanten deze unieke beleving
           </h2>
           <p className="mx-auto mt-1 max-w-xl text-[13px] text-stone-800">
-            D-EscapeRoom “The Missing Snack” — Western-styled, veilig en leuk voor hond &amp; baas.
+            D-EscapeRoom “The Missing Snack” — Western-styled, veilig en leuk voor hond &amp; gezin.
           </p>
         </div>
       </div>
@@ -156,10 +175,7 @@ export default function PartnerWidget({ overrides, className = "" }: Props) {
             <div aria-hidden className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-stone-200" />
             <div aria-hidden className="pointer-events-none absolute -inset-px rounded-[14px] bg-gradient-to-br from-rose-50/70 via-pink-50/40 to-stone-50/30" />
             <div className="relative z-10 space-y-2">
-              <h3
-                id="prop-title"
-                className="text-base font-extrabold leading-tight tracking-tight text-stone-900"
-              >
+              <h3 id="prop-title" className="text-base font-extrabold leading-tight tracking-tight text-stone-900">
                 De ‘Missing Snack’ op jouw locatie
               </h3>
               <p className="text-[13px] text-stone-700">
@@ -173,7 +189,7 @@ export default function PartnerWidget({ overrides, className = "" }: Props) {
                     <span className="text-[13px] font-semibold text-stone-900">Unieke beleving</span>
                   </div>
                   <p className="pl-6 text-[13px] text-stone-700">
-                    hond &amp; baas werken samen, leuk voor gezinnen en vriendengroepen.
+                    Hond en mens werken samen — leuk voor gezinnen en vriendengroepen.
                   </p>
                 </li>
                 <li>
@@ -182,7 +198,7 @@ export default function PartnerWidget({ overrides, className = "" }: Props) {
                     <span className="text-[13px] font-semibold text-stone-900">Past in je rooster</span>
                   </div>
                   <p className="pl-6 text-[13px] text-stone-700">
-                    sessies naast je reguliere lessen, met heldere tijdslots.
+                    Sessies naast je reguliere lessen, met heldere tijdslots.
                   </p>
                 </li>
                 <li>
@@ -200,14 +216,14 @@ export default function PartnerWidget({ overrides, className = "" }: Props) {
                     <span className="text-[13px] font-semibold text-stone-900">Exclusief</span>
                   </div>
                   <p className="pl-6 text-[13px] text-stone-700">
-                    maximaal één partner per provincie voor scherpe positionering.
+                    Maximaal één partner per provincie voor scherpe positionering.
                   </p>
                 </li>
               </ul>
             </div>
           </div>
 
-          {/* Rekenmodule (client-only om hydration mismatches door extensies te voorkomen) */}
+          {/* Rekenmodule */}
           <div
             className="relative overflow-hidden rounded-xl border border-stone-200 bg-white p-3 shadow-sm"
             aria-labelledby="calc-title"
@@ -215,10 +231,7 @@ export default function PartnerWidget({ overrides, className = "" }: Props) {
             <div aria-hidden className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-stone-200" />
             <div aria-hidden className="pointer-events-none absolute -inset-px rounded-[14px] bg-gradient-to-br from-rose-50/70 via-pink-50/40 to-stone-50/30" />
             <div className="relative z-10 space-y-2">
-              <h3
-                id="calc-title"
-                className="text-base font-extrabold leading-tight tracking-tight text-stone-900"
-              >
+              <h3 id="calc-title" className="text-base font-extrabold leading-tight tracking-tight text-stone-900">
                 Extra omzet — rekenmodule
               </h3>
               <p className="text-[13px] text-stone-700">
@@ -227,7 +240,6 @@ export default function PartnerWidget({ overrides, className = "" }: Props) {
 
               <ClientOnly
                 fallback={
-                  // Skeleton tijdens SSR (geen inputs → geen hydration-issues)
                   <div className="space-y-2">
                     <div className="grid grid-cols-2 gap-2">
                       <div className="h-12 rounded-lg bg-stone-100 border border-stone-200 animate-pulse" />
@@ -245,39 +257,31 @@ export default function PartnerWidget({ overrides, className = "" }: Props) {
                 <div className="grid grid-cols-2 gap-2" role="group" aria-label="Omzet indicatie">
                   <div className="rounded-lg border border-stone-200 bg-stone-50 p-2">
                     <div className="text-[11px] text-stone-600">Per week</div>
-                    <div className="text-lg font-extrabold text-stone-900">
-                      {formatEUR(weekly)}
-                    </div>
+                    <div className="text-lg font-extrabold text-stone-900">{formatEUR(weekly)}</div>
                   </div>
                   <div className="rounded-lg border border-stone-200 bg-stone-50 p-2">
                     <div className="text-[11px] text-stone-600">Per maand</div>
-                    <div className="text-lg font-extrabold text-stone-900">
-                      {formatEUR(monthly)}
-                    </div>
+                    <div className="text-lg font-extrabold text-stone-900">{formatEUR(monthly)}</div>
                   </div>
                 </div>
 
                 {/* Inputs */}
                 <div className="grid grid-cols-3 gap-2">
-                  <LabeledNumber
+                  <LabeledStepper
                     label="Sessies"
                     value={sessionsPerWeek}
-                    onChange={(v) => setSessionsPerWeek(clamp(v, 1, 40))}
-                    min={1}
-                    max={40}
+                    onChange={(v) => setSessionsPerWeek(clamp(v, minSessions, maxSessions))}
+                    min={minSessions}
+                    max={maxSessions}
                   />
-                  <LabeledNumber
+                  <LabeledStepper
                     label="Gem. pers."
                     value={avgPlayers}
-                    onChange={(v) => setAvgPlayers(clamp(v, 1, 8))}
-                    min={1}
-                    max={8}
+                    onChange={(v) => setAvgPlayers(clamp(v, minPlayers, maxPlayers))}
+                    min={minPlayers}
+                    max={maxPlayers}
                   />
-                  <LabeledMoney
-                    label="€ p.p."
-                    value={pricePerPlayer}
-                    onValue={(n) => setPricePerPlayer(clamp(n, 0, 500))}
-                  />
+                  <ReadOnlyMoney label="€ p.p." value={pricePerPlayer} />
                 </div>
               </ClientOnly>
 
@@ -288,7 +292,7 @@ export default function PartnerWidget({ overrides, className = "" }: Props) {
               {/* CTA */}
               <div className="pt-1">
                 <Link
-                  href="/partner/aanmelden"
+                  href="/contact"
                   className="inline-flex h-10 items-center justify-center rounded-2xl bg-black px-4 text-sm font-semibold text-white shadow hover:bg-black/90 focus:outline-none focus:ring-4 focus:ring-stone-400 focus:ring-offset-2 focus:ring-offset-white transition"
                 >
                   Plan een demo
@@ -335,9 +339,7 @@ export default function PartnerWidget({ overrides, className = "" }: Props) {
                     aria-label={`${p.name}: ${srStatus}`}
                   >
                     <div className="min-w-0">
-                      <div className="truncate text-[12px] font-medium text-stone-900">
-                        {p.name}
-                      </div>
+                      <div className="truncate text-[12px] font-medium text-stone-900">{p.name}</div>
                       <div className="truncate text-[10px] text-stone-700">
                         {isTaken ? `Bezet • ${p.taken?.by}` : isUtrecht ? "Nu te boeken" : "Beschikbaar"}
                       </div>
@@ -368,18 +370,18 @@ export default function PartnerWidget({ overrides, className = "" }: Props) {
 }
 
 /* =========================================
-   Subcomponents — ALTIJD CONTROLLED
+   Subcomponents
 ========================================= */
-function LabeledNumber({
+function LabeledStepper({
   label,
   value,
   onChange,
   step = 1,
-  min,
-  max,
+  min = 0,
+  max = Number.POSITIVE_INFINITY,
 }: {
   label: string;
-  value: number;                // altijd een getal (nooit undefined)
+  value: number;
   onChange: (v: number) => void;
   step?: number;
   min?: number;
@@ -387,70 +389,91 @@ function LabeledNumber({
 }) {
   const id = React.useId();
 
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const raw = e.target.value;
-    const n = raw === "" ? 0 : Number(raw);
-    if (Number.isNaN(n)) return;
-    let next = n;
-    if (typeof min === "number") next = Math.max(min, next);
-    if (typeof max === "number") next = Math.min(max, next);
-    onChange(next);
+  const inc = React.useCallback(
+    () => onChange(clamp(value + step, min, max)),
+    [value, step, min, max, onChange]
+  );
+  const dec = React.useCallback(
+    () => onChange(clamp(value - step, min, max)),
+    [value, step, min, max, onChange]
+  );
+
+  function onKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "ArrowUp") { e.preventDefault(); inc(); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); dec(); }
+    else if (e.key === "Home" && Number.isFinite(min)) { e.preventDefault(); onChange(min); }
+    else if (e.key === "End" && Number.isFinite(max)) { e.preventDefault(); onChange(max); }
   }
 
   return (
     <label className="block text-xs font-medium text-stone-800" htmlFor={id}>
       {label}
-      <input
-        id={id}
-        type="number"
-        step={step}
-        min={min}
-        max={max}
-        inputMode="numeric"
-        className="mt-1 h-10 w-full rounded-lg border border-stone-300 bg-white px-3 text-sm outline-none transition focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
-        value={String(value)}                 // controlled
-        onChange={handleChange}
+      {/* Wrapper die het inputveld + absolute pijlen bevat */}
+      <div
+        role="spinbutton"
+        tabIndex={0}
+        onKeyDown={onKeyDown}
         aria-label={label}
-      />
+        aria-valuenow={value}
+        aria-valuemin={min}
+        aria-valuemax={max}
+        className="relative mt-1"
+      >
+        {/* Waarde (readOnly input) */}
+        <input
+          id={id}
+          readOnly
+          value={String(value)}
+          inputMode="numeric"
+          className="h-10 w-full rounded-lg border border-stone-300 bg-white px-3 pr-10 text-sm outline-none transition focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
+          aria-hidden
+        />
+
+        {/* Pijlen rechts binnen het veld (1 stap per klik) */}
+        <div className="absolute inset-y-0 right-0 w-10 border-l border-stone-300 text-stone-700 dark:text-stone-200">
+          <button
+            type="button"
+            onClick={inc}
+            className="flex h-1/2 w-full items-center justify-center rounded-tr-lg hover:bg-stone-50 active:bg-stone-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-300"
+            aria-label={`${label} verhogen`}
+            title="Verhogen"
+          >
+            <svg className="block h-4 w-4" viewBox="0 0 24 24" aria-hidden>
+              <path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span className="sr-only">Omhoog</span>
+          </button>
+          <button
+            type="button"
+            onClick={dec}
+            className="flex h-1/2 w-full items-center justify-center rounded-br-lg hover:bg-stone-50 active:bg-stone-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-300"
+            aria-label={`${label} verlagen`}
+            title="Verlagen"
+          >
+            <svg className="block h-4 w-4" viewBox="0 0 24 24" aria-hidden>
+              <path d="M18 9l-6 6-6-6" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span className="sr-only">Omlaag</span>
+          </button>
+        </div>
+      </div>
     </label>
   );
 }
 
-function LabeledMoney({
-  label,
-  value,
-  onValue,
-}: {
-  label: string;
-  value: number;                 // altijd een getal
-  onValue: (n: number) => void;
-}) {
+function ReadOnlyMoney({ label, value }: { label: string; value: number }) {
   const id = React.useId();
-
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    onValue(parseMoney(e.target.value));
-  }
-  function handleBlur(e: React.FocusEvent<HTMLInputElement>) {
-    onValue(parseMoney(e.target.value));
-  }
-
-  // We geven gewoon de numerieke string weer; op blur/typen parsen we netjes.
-  // (Geen server-side geformatteerde string → minder kans op mismatches.)
-  const display = String(value);
-
   return (
-    <label className="block text-xs font-medium text-stone-800" htmlFor={id}>
-      {label}
-      <input
-        id={id}
-        type="text"
-        inputMode="decimal"
-        className="mt-1 h-10 w-full rounded-lg border border-stone-300 bg-white px-3 text-sm outline-none transition focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
-        value={display}                       // controlled
-        onChange={handleChange}
-        onBlur={handleBlur}
-        aria-label={label}
-      />
-    </label>
+    <div className="block text-xs font-medium text-stone-800" aria-labelledby={id}>
+      <span id={id}>{label}</span>
+      <div
+        className="mt-1 flex h-10 items-center justify-between rounded-lg border border-stone-300 bg-stone-50 px-3 text-sm text-stone-900"
+        aria-readonly="true"
+        title="Prijs per persoon (vast)"
+      >
+        <span className="font-semibold">{formatEUR(value)}</span>
+        <span className="text-[11px] text-stone-600">p.p.</span>
+      </div>
+    </div>
   );
 }

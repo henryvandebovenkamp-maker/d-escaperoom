@@ -13,10 +13,10 @@ export default function Pricing() {
           id="prijzen-title"
           className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight text-stone-900"
         >
-          Onze prijzen
+          Wat kost het?
         </h2>
         <p className="mt-3 max-w-2xl mx-auto text-sm sm:text-base text-stone-700">
-          Je betaalt nu alleen de aanbetaling, het resterende bedrag voldoe je bij de hondenschool.
+         Je betaalt een aanbetaling, de rest op locatie.
         </p>
 
         {/* Divider */}

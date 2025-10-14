@@ -5,19 +5,15 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-type Locale = "nl" | "en" | "de" | "es" | "ja";
-
 const SECTIONS = ["skills", "prijzen", "partner", "contact"] as const;
 type SectionId = (typeof SECTIONS)[number];
 type AnchorId = SectionId | "boeken";
 
-export default function Header({ locale = "nl" as Locale }) {
+export default function Header() {
   const pathname = usePathname() || "/";
   const [drawerOpen, setDrawerOpen] = React.useState(false);
-  const [langOpen, setLangOpen] = React.useState(false);
   const [scrolled, setScrolled] = React.useState(false);
   const [active, setActive] = React.useState<SectionId | null>(null);
-  const langRef = React.useRef<HTMLDivElement>(null);
 
   // Refs voor hoogte-metingen (mobiel spacer)
   const fixedWrapRef = React.useRef<HTMLDivElement>(null);
@@ -31,45 +27,18 @@ export default function Header({ locale = "nl" as Locale }) {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  /* ===== Close language dropdown on outside click / ESC ===== */
+  /* ===== ESC sluit het mobiele menu ===== */
   React.useEffect(() => {
-    const onDoc = (e: MouseEvent) => {
-      if (!langRef.current) return;
-      if (!langRef.current.contains(e.target as Node)) setLangOpen(false);
-    };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setLangOpen(false);
-        setDrawerOpen(false);
-      }
+      if (e.key === "Escape") setDrawerOpen(false);
     };
-    document.addEventListener("mousedown", onDoc);
     window.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      window.removeEventListener("keydown", onKey);
-    };
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  /* ===== Locale & anchors ===== */
-  const localeMatch = pathname.match(/^\/(nl|en|de|es|ja)(?=\/|$)/);
-  const currentPrefix: `/${Locale}` | "" = (localeMatch ? `/${localeMatch[1]}` : "") as any;
-  const isHome =
-    pathname === "/" || pathname === `${currentPrefix}/` || pathname === currentPrefix;
-
-  const toAnchor = (id: AnchorId) =>
-    isHome ? `#${id}` : `${currentPrefix || ""}/#${id}`;
-
-  const baseWithoutLocale =
-    pathname.replace(/^\/(nl|en|de|es|ja)(?=\/|$)/, "") || "/";
-
-  // Vlaggen + labels
-  const locales = [
-    { code: "en" as const, label: "Engels", flag: "🇬🇧", href: "/en" + (baseWithoutLocale === "/" ? "" : baseWithoutLocale) },
-    { code: "de" as const, label: "Duits",  flag: "🇩🇪", href: "/de" + (baseWithoutLocale === "/" ? "" : baseWithoutLocale) },
-    { code: "es" as const, label: "Spaans", flag: "🇪🇸", href: "/es" + (baseWithoutLocale === "/" ? "" : baseWithoutLocale) },
-    { code: "ja" as const, label: "Japans", flag: "🇯🇵", href: "/ja" + (baseWithoutLocale === "/" ? "" : baseWithoutLocale) },
-  ];
+  /* ===== Anchors (zonder locale) ===== */
+  const isHome = pathname === "/" || pathname === "";
+  const toAnchor = (id: AnchorId) => (isHome ? `#${id}` : `/#${id}`);
 
   /* ===== Active section underline (home only) ===== */
   React.useEffect(() => {
@@ -114,7 +83,7 @@ export default function Header({ locale = "nl" as Locale }) {
       ro.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [measure, drawerOpen, langOpen]);
+  }, [measure, drawerOpen]);
 
   return (
     <>
@@ -169,7 +138,7 @@ export default function Header({ locale = "nl" as Locale }) {
                   </Link>
                 </nav>
 
-                {/* Actions + Language */}
+                {/* Actions */}
                 <div className="hidden items-center gap-2 md:flex">
                   <Link
                     href="/partner/login"
@@ -183,61 +152,6 @@ export default function Header({ locale = "nl" as Locale }) {
                   >
                     Boek nu
                   </Link>
-
-                  {/* Language dropdown */}
-                  <div ref={langRef} className="relative">
-                    <button
-                      type="button"
-                      aria-label="Taal selecteren"
-                      aria-haspopup="listbox"
-                      aria-expanded={langOpen}
-                      onClick={() => setLangOpen((v) => !v)}
-                      className="ml-1 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-300 bg-white/75 text-stone-700 shadow-sm transition hover:bg-stone-50"
-                      title="Taal"
-                    >
-                      🌐
-                    </button>
-
-                    {langOpen && (
-                      <ul
-                        role="listbox"
-                        tabIndex={-1}
-                        className="absolute right-0 z-[60] mt-2 w-56 rounded-xl border border-stone-200 bg-white shadow-xl"
-                      >
-                        {locales.map((l) => {
-                          const selected = l.code === locale;
-                          return (
-                            <li key={l.code}>
-                              <Link
-                                role="option"
-                                aria-selected={selected}
-                                href={l.href}
-                                onClick={() => setLangOpen(false)}
-                                className={[
-                                  "flex items-center justify-between gap-3 px-3 py-2 text-sm",
-                                  selected ? "bg-stone-50" : "bg-white",
-                                  "text-stone-800 hover:bg-stone-100",
-                                ].join(" ")}
-                              >
-                                <span className="inline-flex items-center gap-2">
-                                  <span className="text-base leading-none">{l.flag}</span>
-                                  <span>{l.label}</span>
-                                </span>
-                                {selected && (
-                                  <span
-                                    aria-hidden
-                                    className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white"
-                                  >
-                                    <CheckIcon className="h-3 w-3" />
-                                  </span>
-                                )}
-                              </Link>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  </div>
                 </div>
 
                 {/* Mobile hamburger */}
@@ -269,43 +183,6 @@ export default function Header({ locale = "nl" as Locale }) {
                     </Link>
                   ))}
 
-                  {/* Language block */}
-                  <div className="mt-2 rounded-lg border border-stone-200 bg-stone-50/70">
-                    <div className="px-3 pt-2 text-[11px] font-semibold uppercase tracking-wide text-stone-600">
-                      🌐 Taal
-                    </div>
-                    <div className="pb-2">
-                      {locales.map((l) => {
-                        const selected = l.code === locale;
-                        return (
-                          <Link
-                            key={l.code}
-                            href={l.href}
-                            onClick={() => setDrawerOpen(false)}
-                            className={[
-                              "flex items-center justify-between gap-3 px-3 py-2 text-sm",
-                              selected ? "bg-stone-50" : "bg-transparent",
-                              "text-stone-800 hover:bg-stone-100",
-                            ].join(" ")}
-                          >
-                            <span className="inline-flex items-center gap-2">
-                              <span className="text-base leading-none">{l.flag}</span>
-                              <span>{l.label}</span>
-                            </span>
-                            {selected && (
-                              <span
-                                aria-hidden
-                                className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white"
-                              >
-                                <CheckIcon className="h-3 w-3" />
-                              </span>
-                            )}
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  </div>
-
                   {/* Actions */}
                   <div className="mt-3 grid grid-cols-2 gap-2">
                     <Link
@@ -332,7 +209,6 @@ export default function Header({ locale = "nl" as Locale }) {
 
       {/* Mobiele spacer zodat content niet onder de fixed header kruipt */}
       <div className="md:hidden" style={{ height: fixedH }} />
-
     </>
   );
 }
@@ -371,12 +247,4 @@ function labelFor(id: SectionId) {
     case "contact":
       return "Contact";
   }
-}
-
-function CheckIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 20 20" fill="currentColor" {...props}>
-      <path d="M7.629 13.233 3.9 9.504l1.414-1.414 2.315 2.315 6.057-6.057 1.414 1.414z" />
-    </svg>
-  );
 }
