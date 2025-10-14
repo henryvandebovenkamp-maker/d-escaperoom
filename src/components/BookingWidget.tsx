@@ -300,10 +300,26 @@ async function fetchDaySlots(
   return { published, bookedCount };
 }
 
+/* ===================== Helpers: verlopen slots filteren ===================== */
+function filterFutureSlotsForDay(dayISO: string, slots: SlotItem[]): SlotItem[] {
+  const d = parseISO(dayISO);
+  if (isPastDay(d)) return []; // hele dag voorbij → niets
+  if (!isToday(d)) return slots; // toekomst → alles tonen
+  const now = Date.now() + 5 * 60 * 1000; // 5-min marge
+  return slots.filter((s) => new Date(s.startTime).getTime() > now);
+}
+
 /* ===================== Component ===================== */
-export default function BookingWidget({ defaultPartnerSlug = "" }: { defaultPartnerSlug?: string }) {
+export default function BookingWidget({
+  defaultPartnerSlug = "",
+  fixedPartnerSlug,
+}: {
+  defaultPartnerSlug?: string;
+  fixedPartnerSlug?: string;
+}) {
   const router = useRouter();
   const preview = usePreviewMode();
+  const locked = Boolean(fixedPartnerSlug);
 
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
@@ -312,7 +328,7 @@ export default function BookingWidget({ defaultPartnerSlug = "" }: { defaultPart
 
   // Partner state
   const [partners, setPartners] = React.useState<PartnerOption[]>([]);
-  const [partnerSlug, setPartnerSlug] = React.useState<string>(defaultPartnerSlug);
+  const [partnerSlug, setPartnerSlug] = React.useState<string>(fixedPartnerSlug ?? defaultPartnerSlug);
 
   // Calendar state
   const [viewMonth, setViewMonth] = React.useState<Date>(startOfMonth(new Date()));
@@ -364,6 +380,12 @@ export default function BookingWidget({ defaultPartnerSlug = "" }: { defaultPart
       try {
         const list = await fetchPartners(preview, ac.signal);
         setPartners(list);
+
+        if (locked && fixedPartnerSlug) {
+          setPartnerSlug(fixedPartnerSlug);
+          return;
+        }
+
         if (defaultPartnerSlug && list.find((p) => p.slug === defaultPartnerSlug)) {
           setPartnerSlug(defaultPartnerSlug);
         } else if (!list.find((p) => p.slug === partnerSlug)) {
@@ -375,7 +397,14 @@ export default function BookingWidget({ defaultPartnerSlug = "" }: { defaultPart
     })();
     return () => ac.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preview]);
+  }, [preview, locked, fixedPartnerSlug]);
+
+  // Sync partnerSlug wanneer fixed verandert
+  React.useEffect(() => {
+    if (locked && fixedPartnerSlug && partnerSlug !== fixedPartnerSlug) {
+      setPartnerSlug(fixedPartnerSlug);
+    }
+  }, [locked, fixedPartnerSlug, partnerSlug]);
 
   /* Calendar counts */
   React.useEffect(() => {
@@ -391,8 +420,8 @@ export default function BookingWidget({ defaultPartnerSlug = "" }: { defaultPart
       try {
         const agg = await fetchCalendarCounts(partnerSlug, gridStart, gridEnd, preview, ac.signal);
         setDayStats(agg);
-      } catch (err) {
-        if ((err as any)?.name !== "AbortError") setDayStats({});
+      } catch {
+        setDayStats({});
       } finally {
         setLoadingCalendar(false);
       }
@@ -413,8 +442,12 @@ export default function BookingWidget({ defaultPartnerSlug = "" }: { defaultPart
 
     fetchDaySlots(partnerSlug, selectedDayISO, ac.signal)
       .then(({ published, bookedCount }) => {
-        setSlots(published);
-        const pub = published.length;
+        // 🔧 filter verlopen slots
+        const filtered = filterFutureSlotsForDay(selectedDayISO, published);
+        setSlots(filtered);
+
+        // Schrijf de gefilterde aantallen terug in de dagstatistieken
+        const pub = filtered.length;
         const boo = bookedCount;
         setDayStats((prev) => ({ ...prev, [selectedDayISO]: { published: pub, booked: boo, total: pub + boo } }));
       })
@@ -508,13 +541,8 @@ export default function BookingWidget({ defaultPartnerSlug = "" }: { defaultPart
   const calendarDays = React.useMemo(() => buildCalendarDays(viewMonth), [viewMonth]);
   const selectedDate = parseISO(selectedDayISO);
 
-  /* “Vandaag” → alleen toekomst (5 min marge) */
-  const filteredSlots = React.useMemo(() => {
-    const d = parseISO(selectedDayISO);
-    if (!isToday(d)) return slots;
-    const now = Date.now() + 5 * 60 * 1000;
-    return slots.filter((s) => new Date(s.startTime).getTime() > now);
-  }, [slots, selectedDayISO]);
+  // NB: slots-state is al gefilterd op verlopen tijden; dit is puur nog voor badge/logica
+  const filteredSlots = React.useMemo(() => filterFutureSlotsForDay(selectedDayISO, slots), [slots, selectedDayISO]);
 
   const availableCount = filteredSlots.length;
   const availabilityBadge =
@@ -593,7 +621,7 @@ export default function BookingWidget({ defaultPartnerSlug = "" }: { defaultPart
         />
         <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-r from-rose-50/60 via-pink-50/50 to-stone-50/60" />
         <div className="relative z-10 grid items-center gap-3 p-3 md:grid-cols-12">
-          {/* Zo boek je (blijft) */}
+          {/* Zo boek je */}
           <div className="md:col-span-3">
             <div className="rounded-xl border border-stone-200/80 bg-white/80 p-2.5 shadow-sm backdrop-blur">
               <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-stone-700">Zo boek je</div>
@@ -605,35 +633,47 @@ export default function BookingWidget({ defaultPartnerSlug = "" }: { defaultPart
             </div>
           </div>
 
-          {/* Compacte titel (geen tekst, geen pills) */}
+          {/* Compacte titel */}
           <div className="md:col-span-6 text-center">
-            <h2 className="text-lg font-extrabold leading-tight tracking-tight text-stone-900 md:text-xl">
-           
-            </h2>
+            <h2 className="text-lg font-extrabold leading-tight tracking-tight text-stone-900 md:text-xl"></h2>
           </div>
 
-          {/* Partner select (ongewijzigd) */}
+          {/* Partner select / lock */}
           <div className="relative z-20 md:col-span-3">
-            <label className="mb-1 block text-[11px] font-medium text-stone-700">Selecteer een locatie in de buurt</label>
-            <select
-              value={partnerSlug}
-              onChange={(e) => setPartnerSlug(e.target.value)}
-              className="h-9 w-full rounded-lg border border-stone-300 bg-white px-2 text-xs outline-none transition focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
-              aria-label="Kies locatie"
-            >
-              {partners.length === 0 ? (
-                <option value="">{msg ? "Kon niet laden" : "Laden…"}</option>
-              ) : (
-                <>
-                  <option value="">Kies locatie</option>
-                  {partners.map((p) => (
-                    <option key={p.slug} value={p.slug}>
-                      {p.name}{p.city ? ` — ${p.city}` : ""}
-                    </option>
-                  ))}
-                </>
-              )}
-            </select>
+            <label className="mb-1 block text-[11px] font-medium text-stone-700">
+              Locatie
+            </label>
+
+            {locked ? (
+              <div className="h-9 w-full select-none rounded-lg border border-stone-300 bg-stone-50 px-2 text-xs text-stone-700">
+                <div className="flex h-full items-center justify-between">
+                  <span className="truncate">
+                    {selectedPartner?.name ?? partnerSlug}
+                    {selectedPartner?.city ? ` — ${selectedPartner.city}` : ""}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <select
+                value={partnerSlug}
+                onChange={(e) => setPartnerSlug(e.target.value)}
+                className="h-9 w-full rounded-lg border border-stone-300 bg-white px-2 text-xs outline-none transition focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
+                aria-label="Kies locatie"
+              >
+                {partners.length === 0 ? (
+                  <option value="">{msg ? "Kon niet laden" : "Laden…"}</option>
+                ) : (
+                  <>
+                    <option value="">Kies locatie</option>
+                    {partners.map((p) => (
+                      <option key={p.slug} value={p.slug}>
+                        {p.name}{p.city ? ` — ${p.city}` : ""}
+                      </option>
+                    ))}
+                  </>
+                )}
+              </select>
+            )}
           </div>
         </div>
       </div>

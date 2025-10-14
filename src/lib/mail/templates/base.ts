@@ -4,11 +4,15 @@ import { getTransporter, MAIL_FROM, MAIL_BCC, MAIL_DEV_ECHO, DISABLE_EMAIL } fro
 /* ===== Types ===== */
 export type Locale = "nl" | "en" | "de" | "es";
 
+/** Voeg nieuwe template-ids toe maar behoud bestaande */
 export type TemplateId =
   | "login-code"
   | "booking-customer"
-  | "booking-partner";
+  | "booking-partner"
+  | "contact-notify"
+  | "contact-receipt";
 
+/** Vars per template-id — bestaande velden ongewijzigd gelaten, contact-varianten toegevoegd */
 export type TemplateVars = {
   "login-code": {
     email: string;
@@ -37,6 +41,26 @@ export type TemplateVars = {
     bookingId: string;
     depositCents: number;
     restCents: number;
+    locale?: Locale;
+  };
+
+  /** ⬇️ nieuw: interne notificatie naar jullie inbox */
+  "contact-notify": {
+    fullName: string;
+    email: string;
+    phone?: string;
+    topic: string;
+    message: string;
+    callOk: boolean;
+    locale?: Locale;
+  };
+
+  /** ⬇️ nieuw: ontvangstbevestiging naar inzender */
+  "contact-receipt": {
+    fullName: string;
+    email: string;
+    topic: string;
+    message: string;
     locale?: Locale;
   };
 };
@@ -74,36 +98,91 @@ export function getTemplate<T extends TemplateId>(id: T): TemplateRenderer<T> {
 }
 
 /* ===== High-level send (enkel via templates!) ===== */
-export async function sendTemplateMail<T extends TemplateId>(args: {
+/** Optie 1 — object-vorm (bestaande stijl) */
+export type TemplateSendArgs<T extends TemplateId = TemplateId> = {
   to: string;
   template: T;
   vars: TemplateVars[T];
   from?: string;
   bcc?: string;
   replyTo?: string;
-}) {
-  // forceer side-effect registratie
+};
+
+/** Optie 2 — korte vorm (nieuw): sendTemplateMail("id", vars, { to, ... }) */
+export type TemplateSendOverrides = {
+  to: string;
+  from?: string;
+  bcc?: string;
+  replyTo?: string;
+};
+
+/* Overloads voor beide stijlen */
+export async function sendTemplateMail<T extends TemplateId>(
+  args: TemplateSendArgs<T>
+): Promise<{ ok: true } | { ok: true; skipped: "DISABLE_EMAIL=1" }>;
+export async function sendTemplateMail<T extends TemplateId>(
+  template: T,
+  vars: TemplateVars[T],
+  overrides: TemplateSendOverrides
+): Promise<{ ok: true } | { ok: true; skipped: "DISABLE_EMAIL=1" }>;
+
+/* Implementatie */
+export async function sendTemplateMail<T extends TemplateId>(
+  a: TemplateSendArgs<T> | T,
+  b?: TemplateVars[T],
+  c?: TemplateSendOverrides
+): Promise<{ ok: true } | { ok: true; skipped: "DISABLE_EMAIL=1" }> {
+  // forceer side-effect registratie (alle templates importeren)
   await import("./register");
 
-  const tpl = getTemplate(args.template);
-  const subject = tpl.subject(args.vars);
-  const html    = tpl.html(args.vars);
-  const text    = tpl.text?.(args.vars);
+  // Normaliseren naar object-vorm
+  let to: string;
+  let template: T;
+  let vars: TemplateVars[T];
+  let from: string | undefined;
+  let bcc: string | undefined;
+  let replyTo: string | undefined;
+
+  if (typeof a === "string") {
+    // korte vorm
+    template = a as T;
+    vars = b as TemplateVars[T];
+    to = c?.to as string;
+    from = c?.from;
+    bcc = c?.bcc;
+    replyTo = c?.replyTo;
+  } else {
+    // object-vorm
+    template = a.template as T;
+    vars = a.vars as TemplateVars[T];
+    to = a.to;
+    from = a.from;
+    bcc = a.bcc;
+    replyTo = a.replyTo;
+  }
+
+  if (!to) throw new Error("sendTemplateMail: 'to' is verplicht.");
+
+  const tpl = getTemplate(template);
+  const subject = tpl.subject(vars as any);
+  const html    = tpl.html(vars as any);
+  const text    = tpl.text?.(vars as any);
 
   if (MAIL_DEV_ECHO) {
-    console.log("[MAIL:compiled]", { to: args.to, subject, preview: html.slice(0, 180) + "…" });
+    console.log("[MAIL:compiled]", { to, template, subject, preview: html.slice(0, 180) + "…" });
   }
   if (DISABLE_EMAIL) return { ok: true, skipped: "DISABLE_EMAIL=1" as const };
 
   const transporter = getTransporter();
   await transporter.sendMail({
-    to: args.to,
-    from: args.from || tpl.from || MAIL_FROM,
-    bcc: args.bcc || MAIL_BCC || undefined,
-    replyTo: args.replyTo,
+    to,
+    from: from || tpl.from || MAIL_FROM,
+    bcc: bcc || MAIL_BCC || undefined,
+    replyTo,
     subject,
     html,
     text,
   });
+
   return { ok: true };
 }

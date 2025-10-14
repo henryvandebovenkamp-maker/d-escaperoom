@@ -156,10 +156,10 @@ export default function PartnerWidget({
             id="partner-widget-title"
             className="text-xl md:text-2xl font-black leading-tight tracking-tight text-stone-900 drop-shadow-[0_1px_0_rgba(255,255,255,0.9)]"
           >
-            Bied jouw klanten deze unieke beleving
+            Beleving die doorverteld wordt
           </h2>
           <p className="mx-auto mt-1 max-w-xl text-[13px] text-stone-800">
-            D-EscapeRoom “The Missing Snack” — Western-styled, veilig en leuk voor hond &amp; gezin.
+            D-EscapeRoom “The Missing Snack” — Samenwerken, puzzelen en plezier maken.
           </p>
         </div>
       </div>
@@ -176,20 +176,20 @@ export default function PartnerWidget({
             <div aria-hidden className="pointer-events-none absolute -inset-px rounded-[14px] bg-gradient-to-br from-rose-50/70 via-pink-50/40 to-stone-50/30" />
             <div className="relative z-10 space-y-2">
               <h3 id="prop-title" className="text-base font-extrabold leading-tight tracking-tight text-stone-900">
-                De ‘Missing Snack’ op jouw locatie
+                D-Escaperoom op jouw locatie?
               </h3>
               <p className="text-[13px] text-stone-700">
-                Speelse, veilige beleving die moeiteloos in je rooster past.
+                Deze unieke beleving op jouw locatie?
               </p>
 
               <ul className="space-y-2">
                 <li>
                   <div className="flex items-baseline gap-2">
                     <span aria-hidden>🐶</span>
-                    <span className="text-[13px] font-semibold text-stone-900">Unieke beleving</span>
+                    <span className="text-[13px] font-semibold text-stone-900">Beleving</span>
                   </div>
                   <p className="pl-6 text-[13px] text-stone-700">
-                    Hond en mens werken samen — leuk voor gezinnen en vriendengroepen.
+                    Hond en mens werken samen, we samen aan een nog betere band.
                   </p>
                 </li>
                 <li>
@@ -198,7 +198,7 @@ export default function PartnerWidget({
                     <span className="text-[13px] font-semibold text-stone-900">Past in je rooster</span>
                   </div>
                   <p className="pl-6 text-[13px] text-stone-700">
-                    Sessies naast je reguliere lessen, met heldere tijdslots.
+                    Past goed in je bestaande lesaanbod.
                   </p>
                 </li>
                 <li>
@@ -216,7 +216,7 @@ export default function PartnerWidget({
                     <span className="text-[13px] font-semibold text-stone-900">Exclusief</span>
                   </div>
                   <p className="pl-6 text-[13px] text-stone-700">
-                    Maximaal één partner per provincie voor scherpe positionering.
+                    Maximaal D-Escaperoom per provincie
                   </p>
                 </li>
               </ul>
@@ -232,10 +232,10 @@ export default function PartnerWidget({
             <div aria-hidden className="pointer-events-none absolute -inset-px rounded-[14px] bg-gradient-to-br from-rose-50/70 via-pink-50/40 to-stone-50/30" />
             <div className="relative z-10 space-y-2">
               <h3 id="calc-title" className="text-base font-extrabold leading-tight tracking-tight text-stone-900">
-                Extra omzet — rekenmodule
+                Rekenmodule
               </h3>
               <p className="text-[13px] text-stone-700">
-                Pas je aannames aan en zie direct wat het kan opleveren.
+                Kijk wat D-escaperoom jou kan opleveren.
               </p>
 
               <ClientOnly
@@ -292,10 +292,11 @@ export default function PartnerWidget({
               {/* CTA */}
               <div className="pt-1">
                 <Link
-                  href="/contact"
+                  href="#contact"
                   className="inline-flex h-10 items-center justify-center rounded-2xl bg-black px-4 text-sm font-semibold text-white shadow hover:bg-black/90 focus:outline-none focus:ring-4 focus:ring-stone-400 focus:ring-offset-2 focus:ring-offset-white transition"
+                  aria-label="Neem contact op"
                 >
-                  Plan een demo
+                  neem contact op
                 </Link>
               </div>
             </div>

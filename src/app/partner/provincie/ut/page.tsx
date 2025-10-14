@@ -1,5 +1,6 @@
-// PATH: src/app/page.tsx
+// PATH: src/app/partner/provincie/ut/page.tsx
 import * as React from "react";
+import type { Metadata } from "next";
 import Script from "next/script";
 
 import Header from "@/components/Header";
@@ -9,9 +10,16 @@ import Pricing from "@/components/Pricing";
 import BookingWidget from "@/components/BookingWidget";
 import PartnerOpportunity from "@/components/PartnerOpportunity";
 import ChatbotWidget from "@/components/ChatbotWidget";
-import ClientContactSection from "@/components/ClientContactSection"; // ← client wrapper
+import ClientContactSection from "@/components/ClientContactSection";
 
-export default function HomePage() {
+export const metadata: Metadata = {
+  title: "D-EscapeRoom in Utrecht – boek bij WoofExperience",
+  description:
+    "Boek de unieke D-EscapeRoom ervaring voor jou en je hond in de provincie Utrecht. Aanbetaling online, rest op locatie.",
+  alternates: { canonical: "https://d-escaperoom.vercel.app/partner/provincie/ut" },
+};
+
+export default function UtrechtLandingPage() {
   return (
     <main id="main" className="bg-stone-50 text-stone-900">
       <Header />
@@ -22,7 +30,14 @@ export default function HomePage() {
       <section id="boeken" aria-labelledby="boeken-title" className="bg-stone-50 py-16">
         <div className="mx-auto w-full max-w-6xl px-4">
           <h2 id="boeken-title" className="sr-only">Boeken</h2>
-          <BookingWidget />
+
+          {/* Subtiel label */}
+          <p className="mb-3 text-sm text-stone-600">
+            Beschikbaar in <span className="font-medium">Utrecht</span>
+          </p>
+
+          {/* 🔒 LOCK op WoofExperience (let op spelling) */}
+          <BookingWidget fixedPartnerSlug="woofexperience" />
         </div>
       </section>
 
@@ -36,13 +51,10 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* CONTACT — client-only via wrapper */}
       <ClientContactSection />
-
-      {/* Subtiele chatbot, zonder taalprops */}
       <ChatbotWidget />
 
-      <Script id="view-home-event" strategy="afterInteractive">
+      <Script id="view-utrecht-event" strategy="afterInteractive">
         {`
           (function(){
             var sent = false;
@@ -57,10 +69,10 @@ export default function HomePage() {
             function trySend(){
               if(sent) return;
               if(!hasConsentAnalytics()) return;
-              if (window.gtag) { window.gtag('event','view_home'); sent = true; sessionStorage.setItem('ev_view_home_sent','1'); return; }
-              if (window.plausible) { window.plausible('view_home'); sent = true; sessionStorage.setItem('ev_view_home_sent','1'); return; }
+              if (window.gtag) { window.gtag('event','view_partner_province_ut'); sent = true; sessionStorage.setItem('ev_view_ut_sent','1'); return; }
+              if (window.plausible) { window.plausible('view_partner_province_ut'); sent = true; sessionStorage.setItem('ev_view_ut_sent','1'); return; }
             }
-            if (sessionStorage.getItem('ev_view_home_sent')) { sent = true; }
+            if (sessionStorage.getItem('ev_view_ut_sent')) { sent = true; }
             trySend();
             window.addEventListener('cookie-consent-changed', trySend);
             window.addEventListener('trackers-ready', trySend);
