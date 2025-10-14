@@ -19,21 +19,47 @@ function calcRestCents(b: {
   return Math.max(total - dep - disc - gift, 0);
 }
 
-/** 1) Alleen klantmail */
+/** 1) Alleen klantmail (idempotent via emailsSentAt) */
 export async function sendCustomerBookingEmail(bookingId: string) {
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
-    include: { partner: true, slot: true, customer: true },
+    select: {
+      id: true,
+      emailsSentAt: true,
+      totalAmountCents: true,
+      depositAmountCents: true,
+      discountAmountCents: true,
+      giftCardAppliedCents: true,
+      restAmountCents: true,
+      playersCount: true,
+      partner: {
+        select: {
+          name: true,
+          email: true,
+          addressLine1: true,
+          addressLine2: true,
+          postalCode: true,
+          city: true,
+        },
+      },
+      slot: { select: { startTime: true } },
+      customer: { select: { name: true, email: true, locale: true } },
+    },
   });
+
   if (!booking || !booking.partner || !booking.slot || !booking.customer) {
     throw new Error(`[sendCustomerBookingEmail] Onvolledige data voor ${bookingId}`);
   }
 
+  // ⛳ Idempotency guard
+  if (booking.emailsSentAt) {
+    console.info(`[sendCustomerBookingEmail] E-mails al verzonden voor ${bookingId}; overslaan.`);
+    return;
+  }
+
   const restCents = calcRestCents(booking);
-  const address =
-    [booking.partner.addressLine1, booking.partner.addressLine2].filter(Boolean).join(", ");
-  const town =
-    [booking.partner.postalCode, booking.partner.city].filter(Boolean).join(" ");
+  const address = [booking.partner.addressLine1, booking.partner.addressLine2].filter(Boolean).join(", ");
+  const town = [booking.partner.postalCode, booking.partner.city].filter(Boolean).join(" ");
   const partnerAddress = [address, town].filter(Boolean).join(" — ");
 
   await sendTemplateMail({
@@ -55,18 +81,42 @@ export async function sendCustomerBookingEmail(bookingId: string) {
   });
 }
 
-/** 2) Alleen partnermail (alleen gebruiken bij PAID/webhook) */
+/** 2) Alleen partnermail (idempotent via emailsSentAt) */
 export async function sendPartnerBookingEmail(bookingId: string) {
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
-    include: { partner: { include: { users: true } }, slot: true, customer: true },
+    select: {
+      id: true,
+      emailsSentAt: true,
+      totalAmountCents: true,
+      depositAmountCents: true,
+      discountAmountCents: true,
+      giftCardAppliedCents: true,
+      restAmountCents: true,
+      playersCount: true,
+      customer: { select: { name: true, email: true } },
+      slot: { select: { startTime: true } },
+      partner: {
+        select: {
+          name: true,
+          email: true,
+          users: { select: { email: true } },
+        },
+      },
+    },
   });
+
   if (!booking || !booking.partner || !booking.slot || !booking.customer) {
     throw new Error(`[sendPartnerBookingEmail] Onvolledige data voor ${bookingId}`);
   }
 
-  const restCents = calcRestCents(booking);
+  // ⛳ Idempotency guard
+  if (booking.emailsSentAt) {
+    console.info(`[sendPartnerBookingEmail] E-mails al verzonden voor ${bookingId}; overslaan.`);
+    return;
+  }
 
+  const restCents = calcRestCents(booking);
   const recipients = [
     booking.partner.email,
     ...booking.partner.users.map(u => u.email).filter(Boolean),
@@ -76,36 +126,57 @@ export async function sendPartnerBookingEmail(bookingId: string) {
     .filter((v, i, a) => a.indexOf(v) === i);
 
   if (recipients.length === 0) {
-    console.warn(`[sendPartnerBookingEmail] Geen partner e-mail voor partner ${booking.partnerId}`);
+    console.warn(`[sendPartnerBookingEmail] Geen partner e-mail voor booking ${bookingId}`);
     return;
   }
 
   await sendTemplateMail({
-    to: recipients[0],
+    to: recipients[0]!,
     template: "booking-partner",
     vars: {
       partnerName: booking.partner.name,
-      partnerEmail: booking.partner.email || recipients[0],
+      partnerEmail: booking.partner.email || recipients[0]!,
       customerName: booking.customer.name || booking.customer.email,
       slotISO: booking.slot.startTime.toISOString(),
       players: booking.playersCount,
       bookingId: booking.id,
-      depositCents: booking.depositAmountCents, // niet getoond in template, maar oké
+      depositCents: booking.depositAmountCents,
       restCents,
       locale: "nl",
     },
   });
 }
 
-/** 3) Combinatie-helper: standaard GEEN partner (voorkomt dubbele mails bij 'bekijk') */
+/**
+ * 3) Combinatie-helper:
+ * - Stuurt klant + optioneel partner
+ * - Markeert booking.emailsSentAt na succesvolle verzending
+ * - Idempotent: als emailsSentAt al gezet is → no-op
+ */
 export async function sendBookingEmails(
   bookingId: string,
   opts: { includePartner?: boolean } = {}
 ) {
+  const existing = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    select: { id: true, emailsSentAt: true },
+  });
+  if (!existing) throw new Error(`[sendBookingEmails] Booking niet gevonden: ${bookingId}`);
+
+  if (existing.emailsSentAt) {
+    console.info(`[sendBookingEmails] E-mails al verzonden voor ${bookingId}; overslaan.`);
+    return;
+  }
+
   await sendCustomerBookingEmail(bookingId);
   if (opts.includePartner) {
     await sendPartnerBookingEmail(bookingId);
   }
+
+  await prisma.booking.update({
+    where: { id: bookingId },
+    data: { emailsSentAt: new Date() },
+  });
 }
 
 export default sendBookingEmails;

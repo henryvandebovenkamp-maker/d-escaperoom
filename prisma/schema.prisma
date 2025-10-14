@@ -219,7 +219,8 @@ model Booking {
   customerId           String
 
   status               BookingStatus  @default(PENDING)
-
+  emailsSentAt         DateTime? 
+  
   // Prijsopbouw (valideer op API: >= 0, en total = deposit + rest - korting)
   currency             String         @default("EUR")
   totalAmountCents     Int
