@@ -20,7 +20,7 @@ function calcRestCents(b: {
 }
 
 /** 1) Alleen klantmail (idempotent via emailsSentAt) */
-export async function sendCustomerBookingEmail(bookingId: string) {
+export async function sendCustomerBookingEmail(bookingId: string, p0: { force: boolean; }) {
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
     select: {
@@ -82,7 +82,7 @@ export async function sendCustomerBookingEmail(bookingId: string) {
 }
 
 /** 2) Alleen partnermail (idempotent via emailsSentAt) */
-export async function sendPartnerBookingEmail(bookingId: string) {
+export async function sendPartnerBookingEmail(bookingId: string, p0: { force: boolean; }) {
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
     select: {
@@ -168,9 +168,9 @@ export async function sendBookingEmails(
     return;
   }
 
-  await sendCustomerBookingEmail(bookingId);
+  await sendCustomerBookingEmail(bookingId, { force: false });
   if (opts.includePartner) {
-    await sendPartnerBookingEmail(bookingId);
+    await sendPartnerBookingEmail(bookingId, { force: false });
   }
 
   await prisma.booking.update({
