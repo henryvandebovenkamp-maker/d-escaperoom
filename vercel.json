@@ -1,9 +1,0 @@
-{
-  "redirects": [
-    { "source": "/", "destination": "/nl", "permanent": true },
-    { "source": "/:path((?!nl).*)", "destination": "/nl/:path", "permanent": true }
-  ],
-  "rewrites": [
-    { "source": "/api/:path*", "destination": "/nl/api/:path*" }
-  ]
-}
