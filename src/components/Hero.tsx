@@ -17,38 +17,41 @@ export default function Hero() {
           sizes="100vw"
           className="object-cover"
         />
-        {/* Donkere overlay + zachte vignette voor focus */}
         <div className="absolute inset-0 bg-stone-950/55" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,transparent_50%,rgba(12,10,9,0.6)_100%)]" />
       </div>
 
       {/* Content */}
-      <div className="relative mx-auto max-w-3xl px-4 py-28 sm:py-36 text-center">
-        {/* Eyebrow */}
+      <div className="relative mx-auto max-w-4xl px-4 py-28 sm:py-36 text-center">
         <span className="inline-block rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-medium tracking-wide text-stone-100/90 backdrop-blur-sm">
           UNIEKE ESCAPEROOM ERVARING
         </span>
 
-        {/* Sub-eyebrow */}
         <p className="mt-2 text-sm font-medium text-stone-200/90">
           Werk samen met je hond.
         </p>
 
-        {/* Titel (thema) */}
+        {/* Lockup (titel + korte tekst) als één afbeelding */}
         <h1
           id="hero-title"
-          className="mt-4 text-4xl font-extrabold tracking-tight text-white sm:text-6xl"
+          aria-label="The Missing Snack — Los door samenwerking de interactieve puzzels op."
+          className="mt-6 leading-none"
         >
-          The Missing Snack
+          <Image
+            src="/images/hero-lockup.svg"   // <-- juiste verwijzing (public/images/hero-lockup.svg)
+            alt=""
+            width={2000}
+            height={600}
+            priority
+            className="mx-auto w-[min(90vw,60rem)] h-auto"
+          />
         </h1>
 
-        {/* Subtitel — nadruk op samenwerking en plezier */}
-        <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-stone-200 sm:text-lg">
-          Los door samenwerking de interactieve puzzels op.
-         
-        </p>
+        {/* Verborgen fallback/SEO */}
+        <p className="sr-only">The Missing Snack</p>
+        <p className="sr-only">Los door samenwerking de interactieve puzzels op.</p>
 
-        {/* CTA: consumenten-focus */}
+        {/* CTA */}
         <div className="mt-10 flex flex-wrap justify-center gap-3">
           <Link
             href="#boeken"
@@ -64,7 +67,7 @@ export default function Hero() {
           </Link>
         </div>
 
-        {/* Feature chips (opgeschoond + speeladvies) */}
+        {/* Feature chips */}
         <ul
           aria-label="Kenmerken van de ervaring"
           className="mt-8 flex flex-wrap justify-center gap-2"
