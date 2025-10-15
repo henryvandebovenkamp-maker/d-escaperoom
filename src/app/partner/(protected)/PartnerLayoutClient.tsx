@@ -151,7 +151,7 @@ export default function PartnerLayoutClient({ children, email, partnerSlug }: Pr
                 <NavLink href="/partner/agenda" size="lg">📅 Agenda</NavLink>
                 <NavLink href="/partner/profile" size="lg">🏷️ Profiel</NavLink>
                 <NavLink href="/partner/revenue" size="lg">💶 Omzet</NavLink>
-                <NavLink href="/partner/discounts" size="lg">％ Kortingen/Acties</NavLink>
+                {/* Verwijderd: Kortingen/Acties */}
               </nav>
 
               <div className="mt-4 rounded-xl bg-stone-50 p-3 text-xs text-stone-600">
@@ -208,7 +208,7 @@ export default function PartnerLayoutClient({ children, email, partnerSlug }: Pr
                   <NavLink href="/partner/agenda">📅 Agenda</NavLink>
                   <NavLink href="/partner/profile">🏷️ Profiel</NavLink>
                   <NavLink href="/partner/revenue">💶 Omzet</NavLink>
-                  <NavLink href="/partner/discounts">％ Kortingen/Acties</NavLink>
+                  {/* Verwijderd: Kortingen/Acties */}
                 </nav>
 
                 {/* Uitloggen via route handler (GET) */}
