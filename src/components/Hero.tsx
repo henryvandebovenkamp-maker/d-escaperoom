@@ -26,12 +26,12 @@ export default function Hero() {
       <div className="relative mx-auto max-w-3xl px-4 py-28 sm:py-36 text-center">
         {/* Eyebrow */}
         <span className="inline-block rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-medium tracking-wide text-stone-100/90 backdrop-blur-sm">
-          WERK SAMEN MET JE HOND
+          UNIEKE ESCAPEROOM ERVARING
         </span>
 
         {/* Sub-eyebrow */}
         <p className="mt-2 text-sm font-medium text-stone-200/90">
-          Een unieke escaperoom ervaring
+          Werk samen met je hond.
         </p>
 
         {/* Titel (thema) */}
@@ -44,9 +44,8 @@ export default function Hero() {
 
         {/* Subtitel — nadruk op samenwerking en plezier */}
         <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-stone-200 sm:text-lg">
-          Een avontuurlijke escape-ervaring die je <em>samen</em> met je hond beleeft.
-          Jij ontraadt de puzzels, je hond speurt en verrast. Hondvriendelijk,
-          laagdrempelig en bovenal: geweldig om samen te doen.
+          Los door samenwerking de interactieve puzzels op.
+         
         </p>
 
         {/* CTA: consumenten-focus */}
@@ -71,8 +70,8 @@ export default function Hero() {
           className="mt-8 flex flex-wrap justify-center gap-2"
         >
           {[
-            "45 min avontuur",
-            "Hondvriendelijk & prikkelarm",
+            "Speelduur +/- 45 min",
+            "Hondvriendelijk",
             "Speeladvies: 2 spelers + 1 hond",
           ].map((label) => (
             <li

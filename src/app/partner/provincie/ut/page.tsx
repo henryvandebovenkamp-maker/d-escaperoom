@@ -12,11 +12,14 @@ import PartnerOpportunity from "@/components/PartnerOpportunity";
 import ChatbotWidget from "@/components/ChatbotWidget";
 import ClientContactSection from "@/components/ClientContactSection";
 
+export const dynamic = "force-static";
+
 export const metadata: Metadata = {
   title: "D-EscapeRoom in Utrecht – boek bij WoofExperience",
   description:
     "Boek de unieke D-EscapeRoom ervaring voor jou en je hond in de provincie Utrecht. Aanbetaling online, rest op locatie.",
-  alternates: { canonical: "https://d-escaperoom.vercel.app/partner/provincie/ut" },
+  // Tip: zet je definitieve domein hier zodra TransIP klaar is
+  alternates: { canonical: "https://d-escaperoom.com/partner/provincie/ut" },
 };
 
 export default function UtrechtLandingPage() {
@@ -30,23 +33,17 @@ export default function UtrechtLandingPage() {
       <section id="boeken" aria-labelledby="boeken-title" className="bg-stone-50 py-16">
         <div className="mx-auto w-full max-w-6xl px-4">
           <h2 id="boeken-title" className="sr-only">Boeken</h2>
-
-          {/* Subtiel label */}
           <p className="mb-3 text-sm text-stone-600">
             Beschikbaar in <span className="font-medium">Utrecht</span>
           </p>
-
-          {/* 🔒 LOCK op WoofExperience (let op spelling) */}
+          {/* 🔒 Vast op WoofExperience */}
           <BookingWidget fixedPartnerSlug="woofexperience" />
         </div>
       </section>
 
       <section id="partner" aria-labelledby="partner-title" className="bg-stone-50 py-16">
         <div className="mx-auto w-full max-w-6xl px-4">
-          <h2
-            id="partner-title"
-            className="mb-8 text-center text-3xl font-extrabold tracking-tight text-stone-900"
-          />
+          <h2 id="partner-title" className="mb-8 text-center text-3xl font-extrabold tracking-tight text-stone-900" />
           <PartnerOpportunity />
         </div>
       </section>

@@ -10,7 +10,7 @@ export default function Skills() {
     {
       icon: "🤝",
       title: "Teamwerk",
-      text: "Elke puzzel vraagt om samenwerken: jij begeleidt, je hond onderzoekt  als één team.",
+      text: "Elke puzzel vraagt om samenwerken: jij begeleidt, je hond onderzoekt als één team.",
     },
     {
       icon: "💬",
@@ -40,7 +40,11 @@ export default function Skills() {
   ];
 
   return (
-    <section id="skills" aria-labelledby="skills-title" className="relative bg-stone-50 py-16 sm:py-20">
+    <section
+      id="skills"
+      aria-labelledby="skills-title"
+      className="relative bg-stone-50 py-16 sm:py-20"
+    >
       {/* zachte achtergrondtextuur */}
       <div
         aria-hidden
@@ -55,19 +59,24 @@ export default function Skills() {
 
       <div className="relative mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
         <div className="overflow-hidden rounded-3xl border border-stone-200 bg-white/90 shadow-lg backdrop-blur-sm">
-          {/* decoratieve topband */}
-          <div aria-hidden className="h-24 w-full bg-gradient-to-r from-rose-50/90 via-pink-50/80 to-stone-50/90" />
+          {/* TOPBAND met titel in het midden */}
+          <div className="relative grid h-28 w-full place-items-center bg-gradient-to-r from-rose-50/90 via-pink-50/80 to-stone-50/90">
+            <h2
+              id="skills-title"
+              className="text-balance text-2xl font-black tracking-tight text-stone-900 sm:text-3xl"
+            >
+              Speuren, samenwerken & fun.
+            </h2>
+          </div>
 
-          {/* header */}
+          {/* header copy onder de balk */}
           <div className="px-6 pt-6 text-center sm:px-10">
             <span className="mx-auto inline-block rounded-full border border-stone-200 bg-white/70 px-3 py-1 text-[11px] font-semibold tracking-wider text-stone-700">
               PUZZELEN MET JE HOND
             </span>
-            <h2 id="skills-title" className="mt-3 text-balance text-2xl font-black tracking-tight text-stone-900 sm:text-3xl">
-              Plezier en samenwerken.
-            </h2>
-            <p className="mx-auto mt-2 max-w-2xl text-sm text-stone-700">
-              Onze escaperoom is ontworpen om jullie als team te laten groeien: vertrouwen, communicatie en plezier komen samen in één ervaring.
+            <p className="mx-auto mt-3 max-w-2xl text-sm text-stone-700">
+              Onze escaperoom is ontworpen om jullie als team te laten groeien: vertrouwen, communicatie en plezier
+              komen samen in één ervaring.
             </p>
 
             {/* ornament divider */}
@@ -79,10 +88,17 @@ export default function Skills() {
           </div>
 
           {/* grid */}
-          <ul role="list" className="grid grid-cols-1 gap-4 px-4 pb-8 sm:grid-cols-2 sm:gap-5 sm:px-6 lg:grid-cols-3 lg:gap-6 lg:px-8">
+          <ul
+            role="list"
+            className="grid grid-cols-1 gap-4 px-4 pb-8 sm:grid-cols-2 sm:gap-5 sm:px-6 lg:grid-cols-3 lg:gap-6 lg:px-8"
+          >
             {skills.map((s) => (
               <li key={s.title} className="list-none">
-                <Link href="#boeken" aria-label={`${s.title} — meer informatie`} className="group block focus:outline-none">
+                <Link
+                  href="#boeken"
+                  aria-label={`${s.title} — meer informatie`}
+                  className="group block focus:outline-none"
+                >
                   <article
                     aria-labelledby={`skill-${slugify(s.title)}-title`}
                     aria-describedby={`skill-${slugify(s.title)}-text`}
@@ -105,10 +121,16 @@ export default function Skills() {
                         {s.icon}
                       </span>
                       <div>
-                        <h3 id={`skill-${slugify(s.title)}-title`} className="text-sm font-semibold text-stone-900">
+                        <h3
+                          id={`skill-${slugify(s.title)}-title`}
+                          className="text-sm font-semibold text-stone-900"
+                        >
                           {s.title}
                         </h3>
-                        <p id={`skill-${slugify(s.title)}-text`} className="mt-1 text-sm leading-relaxed text-stone-700">
+                        <p
+                          id={`skill-${slugify(s.title)}-text`}
+                          className="mt-1 text-sm leading-relaxed text-stone-700"
+                        >
                           {s.text}
                         </p>
                         <span className="mt-3 inline-block h-[2px] w-12 rounded bg-stone-200 transition-colors duration-300 group-hover:bg-pink-300" />

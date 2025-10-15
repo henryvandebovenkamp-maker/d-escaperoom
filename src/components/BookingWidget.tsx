@@ -6,6 +6,14 @@ import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { trackEvent } from "@/lib/analytics";
 
+/* ===================== Abort helper (nieuw) ===================== */
+function isAbortError(err: unknown): boolean {
+  return (
+    (err as any)?.name === "AbortError" ||
+    (typeof DOMException !== "undefined" && err instanceof DOMException && err.name === "AbortError")
+  );
+}
+
 /* ===================== Types ===================== */
 type SlotItem = {
   id: string;
@@ -231,10 +239,22 @@ async function fetchDaySlots(
       payload = await r.json();
       break;
     } catch (e) {
+      // ⬇️ Belangrijk: als het een AbortError is, direct doorgeven (niet wrappen)
+      if (isAbortError(e)) throw e;
       lastErr = e;
     }
   }
-  if (!payload) throw new Error(String(lastErr ?? "Kon tijdsloten niet laden"));
+
+  if (!payload) {
+    // ⬇️ Als de laatste fout een AbortError was, ook als AbortError opnieuw gooien
+    if (isAbortError(lastErr) || signal?.aborted) {
+      // gooi een AbortError-achtige error zodat bovenliggende catch 'm stil houdt
+      const err: any = lastErr instanceof Error ? lastErr : new Error("Aborted");
+      err.name = "AbortError";
+      throw err;
+    }
+    throw new Error(String(lastErr ?? "Kon tijdsloten niet laden"));
+  }
 
   const items: any[] = Array.isArray(payload) ? payload : payload.items ?? payload.slots ?? payload.published ?? [];
 
@@ -392,7 +412,7 @@ export default function BookingWidget({
           setPartnerSlug(list[0]?.slug ?? "");
         }
       } catch (err: any) {
-        if (err?.name !== "AbortError") setMsg(err?.message || "Kon hondenscholen niet laden");
+        if (!isAbortError(err)) setMsg(err?.message || "Kon hondenscholen niet laden");
       }
     })();
     return () => ac.abort();
@@ -452,7 +472,7 @@ export default function BookingWidget({
         setDayStats((prev) => ({ ...prev, [selectedDayISO]: { published: pub, booked: boo, total: pub + boo } }));
       })
       .catch((err) => {
-        if ((err as any)?.name !== "AbortError") setMsg(err.message || "Kon tijdsloten niet laden");
+        if (!isAbortError(err)) setMsg((err as any)?.message || "Kon tijdsloten niet laden");
       })
       .finally(() => setLoadingSlots(false));
 
@@ -532,7 +552,7 @@ export default function BookingWidget({
         setMsg("Boeking aangemaakt, maar geen bookingId ontvangen.");
       }
     } catch (err: any) {
-      setMsg(err?.message || "Er ging iets mis bij reserveren");
+      if (!isAbortError(err)) setMsg(err?.message || "Er ging iets mis bij reserveren");
     } finally {
       setSubmitting(false);
     }

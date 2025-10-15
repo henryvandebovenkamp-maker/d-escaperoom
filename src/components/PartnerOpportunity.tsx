@@ -156,7 +156,7 @@ export default function PartnerWidget({
             id="partner-widget-title"
             className="text-xl md:text-2xl font-black leading-tight tracking-tight text-stone-900 drop-shadow-[0_1px_0_rgba(255,255,255,0.9)]"
           >
-            Beleving die doorverteld wordt
+            Beleving die doorverteld wordt.
           </h2>
           <p className="mx-auto mt-1 max-w-xl text-[13px] text-stone-800">
             D-EscapeRoom “The Missing Snack” — Samenwerken, puzzelen en plezier maken.

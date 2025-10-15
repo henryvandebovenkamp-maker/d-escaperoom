@@ -16,7 +16,7 @@ export default function Pricing() {
           Wat kost het?
         </h2>
         <p className="mt-3 max-w-2xl mx-auto text-sm sm:text-base text-stone-700">
-         Je betaalt een aanbetaling, de rest op locatie.
+         Betaal makkelijk met iDEAL of creditcard.
         </p>
 
         {/* Divider */}
@@ -95,7 +95,7 @@ export default function Pricing() {
 
         {/* Speeladvies */}
         <p className="mt-8 text-center text-sm font-medium text-stone-800">
-          👉 Voor de optimale beleving raden we <strong>2 personen + 1 hond</strong> aan
+          👉 Voor de optimale beleving raden we <strong>2 personen + 1 hond</strong> aan.
         </p>
       </div>
     </section>

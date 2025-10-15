@@ -113,9 +113,20 @@ export default function Header() {
               <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-r from-rose-50/90 via-pink-50/80 to-stone-50/90" />
 
               <div className="relative flex h-16 items-center justify-between gap-3 px-4">
-                {/* Logo */}
-                <Link href="/" className="font-black tracking-tight text-stone-900">
-                  🐾 D-EscapeRoom
+                {/* Logo (transparant) */}
+                <Link
+                  href="/"
+                  aria-label="D-EscapeRoom home"
+                  className="inline-flex items-center bg-transparent"
+                >
+                  <img
+                    src="/logo.svg"
+                    alt="D-EscapeRoom"
+                    className="h-8 w-auto sm:h-10 bg-transparent"
+                    style={{ backgroundColor: "transparent" }}
+                    loading="eager"
+                  />
+                  <span className="sr-only">D-EscapeRoom</span>
                 </Link>
 
                 {/* Desktop nav */}
