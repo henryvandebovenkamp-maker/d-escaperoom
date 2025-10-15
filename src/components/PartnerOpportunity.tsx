@@ -316,7 +316,8 @@ export default function PartnerWidget({
             {items.map((p) => {
               const isTaken = Boolean(p.taken);
               const isUtrecht = p.code === "UT";
-              const href = `/partner/provincie/${p.code.toLowerCase()}`;
+              // ✅ partner-prefix verwijderd
+              const href = `/provincie/${p.code.toLowerCase()}`;
 
               const statusLabel = isTaken ? "Bezet" : isUtrecht ? "Boek" : "Open";
               const srStatus = isTaken
