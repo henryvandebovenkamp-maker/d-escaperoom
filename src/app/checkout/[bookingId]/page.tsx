@@ -59,6 +59,12 @@ const IconMail = (p: React.SVGProps<SVGSVGElement>) => (
     <path d="m22 8-10 7L2 8" />
   </svg>
 );
+/* Nieuw: alert-icoontje voor foutmeldingen/success */
+const IconAlert = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} {...p}>
+    <path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+  </svg>
+);
 
 /* network helper */
 async function postJSON<T>(url: string, body: any): Promise<T> {
@@ -306,7 +312,13 @@ export default function CheckoutPage() {
       setCouponInput(vm.discount?.code ?? "");
       setDiscountMsg(code ? "Kortingscode toegepast ✔️" : "Kortingscode verwijderd");
     } catch (e: any) {
-      setDiscountMsg(e?.message || "Kortingscode ongeldig of verlopen");
+      // 🔔 Enige inhoudelijke wijziging: nette, behulpzame foutmelding met ingevoerde code
+      const typed = (couponInput || "").trim().toUpperCase();
+      const pretty =
+        typed
+          ? `De kortingscode ‘${typed}’ is ongeldig of niet van toepassing op deze boeking. Controleer de spelling (hoofdletters), of vraag bij de hondenschool naar een geldige/actieve code.`
+          : "Deze kortingscode is ongeldig of niet van toepassing op deze boeking.";
+      setDiscountMsg(pretty);
     } finally {
       setApplying(false);
     }
@@ -677,6 +689,8 @@ function PriceCard({
   bookingId: string;
 }) {
   const hasDiscount = discountCents > 0;
+  const isSuccess = message ? (message.includes("✔") || message.toLowerCase().startsWith("ok")) : false;
+
   return (
     <div className="rounded-2xl border border-stone-200 bg-white shadow-sm md:sticky md:top-6">
       <div className="h-2 w-full rounded-t-2xl bg-gradient-to-r from-pink-300 via-rose-300 to-pink-300" />
@@ -738,11 +752,22 @@ function PriceCard({
             </div>
           )}
 
+          {/* 🔔 Nette fout/succes melding (role=alert) */}
           {message && (
-            <p className={`mt-2 text-[11px] ${message.includes("✔") ? "text-emerald-700" : "text-rose-700"}`} aria-live="polite">
-              {message}
-            </p>
+            <div
+              role="alert"
+              className={[
+                "mt-2 flex items-start gap-2 rounded-lg border px-3 py-2 text-[12px]",
+                isSuccess
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                  : "border-rose-300 bg-rose-50 text-rose-800",
+              ].join(" ")}
+            >
+              <IconAlert className="mt-[2px] h-4 w-4 shrink-0" />
+              <span>{message}</span>
+            </div>
           )}
+
           {!message && !hasDiscount && (
             <p className="mt-2 text-[11px] text-stone-600">
               Korting wordt over het hele bedrag  berekend.

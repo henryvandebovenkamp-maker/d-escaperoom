@@ -1,191 +1,175 @@
 // PATH: src/app/api/chat/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import prisma from "@/lib/prisma";
-import { answerQuestion, type Locale, type Role } from "@/lib/faq";
+import { PrismaClient } from "@prisma/client";
 
-/** ✅ Draai op Node (niet Edge) om bundlegrootte-limiet te vermijden */
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic"; // dit is altijd dynamisch (geen SSG)
+export const dynamic = "force-dynamic"; // nooit cachen
+export const runtime = "nodejs";        // Prisma vereist Node runtime (geen Edge)
 
-/**
- * ENV verwacht:
- * - OPENAI_API_KEY=sk-...
- * - OPENAI_MODEL=gpt-4o-mini (default)
- * - ENABLE_CHAT_LOGS=0|1
- * - DEBUG_CHAT=0|1  (voegt 'debug' toe aan response)
- */
-const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
-const DEBUG = process.env.DEBUG_CHAT === "1";
+// ---- Prisma (global re-use in dev) ----
+declare global {
+  // eslint-disable-next-line no-var
+  var _prisma: PrismaClient | undefined;
+}
+const prisma = global._prisma ?? new PrismaClient();
+if (process.env.NODE_ENV !== "production") global._prisma = prisma;
 
-/* ===================== Validation ===================== */
-const Body = z.object({
-  message: z.string().min(1).max(1000),
+// ---- Validatie ----
+const BodySchema = z.object({
+  message: z.string().min(1).max(2000),
   role: z.enum(["CONSUMER", "PARTNER", "ADMIN"]).default("CONSUMER"),
   locale: z.enum(["nl", "en", "de", "es"]).default("nl"),
   sessionId: z.string().optional(),
 });
 
-/* ===================== Rate limiting (in-memory) ===================== */
-type Bucket = { tokens: number; ts: number };
-const BUCKETS: Record<string, Bucket> = {};
-function rateLimit(key: string, limit = 60, windowMs = 60_000) {
-  const now = Date.now();
-  const b = BUCKETS[key] ?? { tokens: limit, ts: now };
-  if (now - b.ts >= windowMs) {
-    b.tokens = limit;
-    b.ts = now;
-  }
-  if (b.tokens <= 0) return false;
-  b.tokens -= 1;
-  BUCKETS[key] = b;
-  return true;
-}
-
-/* ===================== Helpers ===================== */
-function json(data: unknown, init?: number | ResponseInit) {
-  const res = NextResponse.json(data, typeof init === "number" ? { status: init } : init);
-  res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
-  return res;
-}
-
-/** Eerst proberen met onze FAQ-logica (rol-neutraal). Null = graag AI fallback. */
-function faqAnswer(message: string, role: Role, locale: Locale): string | null {
-  const a = answerQuestion(message, role, locale);
-  // Als de FAQ al de contactfallback geeft, laat AI het proberen.
-  const FALLBACK_SNIPPETS = ["info@d-escaperoom.com", "info@d-escaperoom.nl"];
-  const isFallback = FALLBACK_SNIPPETS.some((s) => a.toLowerCase().includes(s.toLowerCase()));
-  return isFallback ? null : a;
-}
-
-/** OpenAI fallback met korte timeout en strikte system prompt */
-async function aiAnswer(prompt: string, role: Role, locale: Locale) {
-  if (!process.env.OPENAI_API_KEY) {
-    return { text: null as string | null, debug: { reason: "NO_KEY" as const } };
+// ---- System prompt (korte, feitelijke richtlijnen) ----
+function systemPrompt(locale: "nl" | "en" | "de" | "es", role: "CONSUMER" | "PARTNER" | "ADMIN") {
+  // Voor nu focussen we op NL (je kunt EN/DE/ES later invullen):
+  if (locale !== "nl") {
+    return `Answer in ${locale.toUpperCase()}. If unsure, ask one clarifying question. Keep it concise and helpful.`;
   }
 
-  const langName =
-    locale === "nl" ? "Nederlands" :
-    locale === "de" ? "Duits" :
-    locale === "es" ? "Spaans" : "Engels";
+  const common = `
+Je bent de helpdesk-assistent van D-EscapeRoom (mens + hond escaperoom).
+Stijl: kort, vriendelijk, concreet. Antwoord in het Nederlands.
 
-  const system = [
-    `Je bent een supportmedewerker van D-EscapeRoom (Western-thema).`,
-    `Praat vriendelijk, duidelijk en menselijk, in 1–3 zinnen.`,
-    `Antwoord altijd in ${langName}.`,
-    `Productregels: 60-min tijdslot (±45 min speeltijd), max 3 spelers, 1 boeking per slot.`,
-    `Betaling: aanbetaling via Mollie = partner fee% van totaal; restant op locatie; weekend/avond toeslag kan gelden.`,
-    `Rol-context: ${role} (alleen gebruiken als nuttig, niets verzinnen).`,
-    `Wees eerlijk: als je het niet zeker weet, zeg dat en verwijs naar info@d-escaperoom.com.`,
-  ].join(" ");
+Feiten:
+- Boeken: kies hondenschool → datum → tijdslot (60 min; speeltijd ±45 min).
+- Capaciteit: per slot 1 boeking, max 3 spelers; advies: 1 hond.
+- Prijs: basis + evt. avond/weekendtoeslag (verschilt per slot).
+- Betaling: nu alleen aanbetaling via Mollie = partner feePercent% van het totaal; rest op locatie.
+- Kalenderkleuren: Groen = meerdere slots, Oranje = nog enkele, Paars = vol.
+- Annuleren/omboeken: in principe mogelijk tot ~24 uur vooraf (precies volgens bevestigingsmail/locatiebeleid).
+- Geen aannames over live-beschikbaarheid; verwijs zo nodig naar de boekingswidget.
+- Geen interne admin/partner links of interne info delen.
+- Bij onduidelijkheid: stel maximaal 1 gerichte vervolgvraag.
+- Support: verwijs naar info@d-escaperoom.com wanneer passend.
+`.trim();
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 12_000);
+  const partnerNote =
+    role === "PARTNER"
+      ? `
+Extra voor PARTNER:
+- Je kunt partners helpen met uitleg over: slots publiceren (status: oranje concept, groen gepubliceerd, paars geboekt), fee%/aanbetaling, dashboard met boekingen/aanbetalingen/bezetting.
+- Deel geen privacygevoelige of andere partnerspecifieke data.`
+      : "";
 
+  return [common, partnerNote].filter(Boolean).join("\n\n");
+}
+
+// ---- OpenAI call (API) ----
+async function callOpenAI(messages: { role: "system" | "user" | "assistant"; content: string }[]) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return {
+      answer: "De chat is tijdelijk niet beschikbaar (config). Mail ons via info@d-escaperoom.com.",
+      debug: { reason: "NO_OPENAI_KEY" },
+    };
+  }
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+      temperature: 0.3,
+      max_tokens: 400,
+      messages,
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => String(res.status));
+    return {
+      answer: "Er ging iets mis met beantwoorden. Mail ons via info@d-escaperoom.com.",
+      debug: { status: res.status, err: errText },
+    };
+  }
+
+  const json = await res.json();
+  const answer = json?.choices?.[0]?.message?.content?.trim() || "Ik kan nu even geen antwoord genereren.";
+  return { answer, debug: { model: json?.model, usage: json?.usage } };
+}
+
+// ---- Handler ----
+export async function POST(req: NextRequest) {
   try {
-    const r = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: prompt },
-        ],
-        temperature: 0.2,
-        max_tokens: 220,
-      }),
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-
-    const j = await r.json();
-    if (!r.ok) {
-      return { text: null, debug: { status: r.status, error: j?.error?.message || "openai_error" } };
+    const raw = await req.json().catch(() => null);
+    const parsed = BodySchema.safeParse(raw);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Bad Request", issues: parsed.error.flatten() }, { status: 400 });
     }
-    const content: string | null = j?.choices?.[0]?.message?.content?.trim() ?? null;
-    return { text: content, debug: null as Record<string, unknown> | null };
-  } catch (e) {
-    clearTimeout(timer);
-    const msg = e instanceof Error ? e.message : "fetch_failed_or_timeout";
-    return { text: null, debug: { error: msg } };
-  }
-}
+    const { message, role, locale, sessionId: incomingSid } = parsed.data;
 
-/* ===================== Handler ===================== */
-export async function POST(req: Request) {
-  const ip =
-    req.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
-    req.headers.get("x-real-ip") ||
-    "local";
+    // --- Session ophalen/aanmaken ---
+    let sessionId = incomingSid;
+    let session =
+      sessionId
+        ? await prisma.chatSession.findUnique({ where: { id: sessionId } })
+        : null;
 
-  if (!rateLimit(`${ip}:chat`, 60, 60_000)) {
-    return json({ error: "Too many requests" }, 429);
-  }
-
-  const body = await req.json().catch(() => null);
-  const parsed = Body.safeParse(body);
-  if (!parsed.success) {
-    return json({ error: parsed.error.message }, 400);
-  }
-
-  const { message, role, locale, sessionId } = parsed.data;
-
-  // 1) FAQ → snel & goedkoop
-  let answer: string | null = faqAnswer(message, role as Role, locale as Locale);
-
-  // 2) AI fallback
-  let debugInfo: Record<string, unknown> | null = null;
-  if (!answer) {
-    const { text, debug } = await aiAnswer(message, role as Role, locale as Locale);
-    answer = text;
-    debugInfo = debug;
-  }
-
-  // 3) Nette contactfallback wanneer AI ook niets gaf
-  if (!answer) {
-    const contact = "info@d-escaperoom.com";
-    switch (locale) {
-      case "nl":
-        answer = `Ik weet het niet 100% zeker. Mail ons gerust op ${contact}, dan helpen we je persoonlijk verder.`;
-        break;
-      case "de":
-        answer = `Ich bin nicht 100% sicher. Schreiben Sie uns an ${contact}, wir helfen Ihnen persönlich weiter.`;
-        break;
-      case "es":
-        answer = `No estoy 100% seguro. Escríbenos a ${contact} y te ayudamos personalmente.`;
-        break;
-      default:
-        answer = `I'm not 100% sure. Please email us at ${contact} and we'll help you personally.`;
-    }
-  }
-
-  // 4) Optioneel loggen met Prisma (best effort; geen crash als model ontbreekt)
-  if (process.env.ENABLE_CHAT_LOGS === "1") {
-    try {
-      const sess = sessionId
-        ? await prisma.chatSession.update({ where: { id: sessionId }, data: { role, locale } })
-        : await prisma.chatSession.create({ data: { role, locale } });
-
-      await prisma.chatMessage.createMany({
-        data: [
-          { sessionId: sess.id, from: "user", content: message },
-          { sessionId: sess.id, from: "assistant", content: answer! },
-        ],
+    if (!session) {
+      // Geen (geldige) sessie gevonden → aanmaken
+      if (sessionId) {
+        // aanmaken met meegegeven id (compatibel met localStorage-ids)
+        session = await prisma.chatSession.create({
+          data: { id: sessionId, role, locale },
+        });
+      } else {
+        // laat Prisma cuid() genereren
+        session = await prisma.chatSession.create({
+          data: { role, locale },
+        });
+        sessionId = session.id;
+      }
+    } else {
+      // Sessie bestaat → role/locale updaten (laatste voorkeur leidend)
+      await prisma.chatSession.update({
+        where: { id: session.id },
+        data: { role, locale },
       });
-
-      return json(
-        DEBUG ? { answer, sessionId: sess.id, debug: debugInfo } : { answer, sessionId: sess.id },
-        200
-      );
-    } catch {
-      // Logging is nice-to-have; negeer fouten en ga door.
     }
-  }
 
-  // 5) Response
-  return json(DEBUG ? { answer, debug: debugInfo } : { answer }, 200);
+    // --- Userbericht opslaan ---
+    await prisma.chatMessage.create({
+      data: { sessionId: session.id, from: "user", content: message },
+    });
+
+    // --- Geschiedenis ophalen (laatste ~16 berichten) ---
+    const history = await prisma.chatMessage.findMany({
+      where: { sessionId: session.id },
+      orderBy: { createdAt: "asc" },
+      take: 16,
+      select: { from: true, content: true },
+    });
+
+    // --- Berichten voor LLM opbouwen ---
+    const sys = systemPrompt(locale, role);
+    const llmMsgs: { role: "system" | "user" | "assistant"; content: string }[] = [
+      { role: "system", content: sys },
+      ...history.map((m) => ({
+        role: m.from === "user" ? "user" : "assistant",
+        content: m.content,
+      })) as { role: "user" | "assistant"; content: string }[],
+    ];
+
+    // --- OpenAI aanroepen ---
+    const { answer, debug } = await callOpenAI(llmMsgs);
+
+    // --- Antwoord opslaan ---
+    await prisma.chatMessage.create({
+      data: { sessionId: session.id, from: "assistant", content: answer },
+    });
+
+    const payload: any = { sessionId: session.id, answer };
+    if (process.env.DEBUG_CHAT === "1") payload.debug = debug;
+
+    return NextResponse.json(payload, { status: 200 });
+  } catch (err: any) {
+    console.error("API /api/chat error:", err);
+    return NextResponse.json(
+      { error: "Server error", detail: err?.message ?? String(err) },
+      { status: 500 }
+    );
+  }
 }
