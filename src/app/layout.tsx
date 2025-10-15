@@ -12,7 +12,8 @@ export const metadata: Metadata = {
   metadataBase: new URL(APP_ORIGIN),
   title: { default: "D-EscapeRoom", template: "%s | D-EscapeRoom" },
   description: "The Missing Snack — boek je sessie",
-  themeColor: "#1c1917",
+  // ⬇️ verplaatst naar `viewport`
+  // themeColor: "#1c1917",
   referrer: "origin-when-cross-origin",
   robots: { index: true, follow: true },
 
@@ -51,6 +52,9 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   viewportFit: "cover",
+  // ⬇️ hier hoort themeColor nu thuis
+  colorScheme: "light",
+  themeColor: "#1c1917",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

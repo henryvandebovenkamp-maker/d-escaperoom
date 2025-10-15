@@ -1,6 +1,6 @@
 // PATH: src/app/partner/provincie/ut/page.tsx
 import * as React from "react";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 
 import Header from "@/components/Header";
@@ -14,11 +14,19 @@ import ClientContactSection from "@/components/ClientContactSection";
 
 export const dynamic = "force-static";
 
+/** Next 15: themeColor hoort hier in viewport, niet in metadata */
+export const viewport: Viewport = {
+  // Kies je kleur(en); voorbeeld hieronder zet beide schema's op zwart
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#000000" },
+    { media: "(prefers-color-scheme: dark)",  color: "#000000" },
+  ],
+};
+
 export const metadata: Metadata = {
   title: "D-EscapeRoom in Utrecht – boek bij WoofExperience",
   description:
     "Boek de unieke D-EscapeRoom ervaring voor jou en je hond in de provincie Utrecht. Aanbetaling online, rest op locatie.",
-  // Tip: zet je definitieve domein hier zodra TransIP klaar is
   alternates: { canonical: "https://d-escaperoom.com/partner/provincie/ut" },
 };
 

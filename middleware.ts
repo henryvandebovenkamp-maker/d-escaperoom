@@ -36,68 +36,43 @@ function isAny(pathname: string, patterns: RegExp[]) {
 }
 
 /* ========= Route sets ========= */
-/** Altijd publiek: geen auth */
-const PUBLIC_PATHS: RegExp[] = [
-  /^\/$/,                         // home
-  /^\/_next\//,                   // Next assets
-  /^\/images\//,                  // public images
-  /^\/public\//,                  // extra public
-  /^\/favicon\.ico$/,
-
-  // expliciet public API's (booking widget + auth + mollie)
+/** Publieke API-endpoints (geen auth nodig) */
+const PUBLIC_API_PATHS: RegExp[] = [
   /^\/api\/public\//,
   /^\/api\/auth\/login\/request$/,
   /^\/api\/auth\/login\/verify$/,
-  /^\/api\/auth\/redirect$/,      // ✅ toegevoegd
+  /^\/api\/auth\/redirect$/,
   /^\/api\/booking\/price$/,
   /^\/api\/booking\/create$/,
   /^\/api\/payments\/mollie\/create$/,
   /^\/api\/payments\/mollie\/webhook$/,
-
-  // login pagina's
-  /^\/partner\/login$/,
-  /^\/admin\/login$/,
 ];
 
 /** Beschermde API's (cookie vereist) */
 const PROTECTED_API: RegExp[] = [
-  /^\/api\/partner\//,            // partner-only API
-  /^\/api\/admin\//,              // admin-only API
-  /^\/api\/slots\//,              // intern slotsbeheer
+  /^\/api\/partner\//,   // partner-only API
+  /^\/api\/admin\//,     // admin-only API
+  /^\/api\/slots\//,     // intern slotsbeheer
 ];
 
 /* ========= Middleware ========= */
 export async function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
+  const { pathname, search } = req.nextUrl;
   const method = req.method;
 
-  /* --- 0) Fix oude route-groepen zoals /(protected)/ --- */
-  const cleanedPath = pathname.replace(/\/\(([^)]+)\)(?=\/|$)/g, "");
-  if (cleanedPath !== pathname) {
-    const redirectUrl = req.nextUrl.clone();
-    redirectUrl.pathname = cleanedPath;
-    console.log(`[middleware] redirecting ${pathname} → ${cleanedPath}`);
-    return NextResponse.redirect(redirectUrl);
-  }
-
-  /* --- 1) CORS preflight & statics --- */
-  if (
-    method === "OPTIONS" ||
-    pathname.startsWith("/_next/") ||
-    pathname.startsWith("/images/") ||
-    pathname.startsWith("/public/") ||
-    pathname === "/favicon.ico"
-  ) {
+  /* --- 0) CORS preflight voor API --- */
+  if (pathname.startsWith("/api/") && method === "OPTIONS") {
     return NextResponse.next();
   }
 
-  /* --- 2) Public whitelist --- */
-  if (isAny(pathname, PUBLIC_PATHS)) {
-    return NextResponse.next();
-  }
-
-  /* --- 3) API-protectie (zonder redirect) --- */
+  /* --- 1) API-beleid --- */
   if (pathname.startsWith("/api/")) {
+    // Public API's direct doorlaten
+    if (isAny(pathname, PUBLIC_API_PATHS)) {
+      return NextResponse.next();
+    }
+
+    // Protectie voor partner/admin/slots API's
     if (isAny(pathname, PROTECTED_API)) {
       const sess = await readSession(req);
       if (!sess) {
@@ -110,41 +85,59 @@ export async function middleware(req: NextRequest) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
     }
+
+    // Alle overige /api/* mogen door
     return NextResponse.next();
   }
 
-  /* --- 4) Partner-sectie --- */
+  /* --- 2) Partner-sectie --- */
   if (pathname === "/partner" || pathname.startsWith("/partner/")) {
+    // Login & Logout altijd vrij
+    if (pathname === "/partner/login" || pathname === "/partner/logout") {
+      return NextResponse.next();
+    }
+
     const sess = await readSession(req);
     if (!sess || sess.role !== "PARTNER") {
       if (method === "GET" || method === "HEAD") {
-        console.log("[middleware] redirect → /partner/login");
-        return NextResponse.redirect(new URL("/partner/login", req.url));
+        const url = req.nextUrl.clone();
+        url.pathname = "/partner/login";
+        url.search = "";
+        url.searchParams.set("next", pathname + (search || ""));
+        return NextResponse.redirect(url);
       }
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     return NextResponse.next();
   }
 
-  /* --- 5) Admin-sectie --- */
+  /* --- 3) Admin-sectie --- */
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+    // Login & Logout altijd vrij
+    if (pathname === "/admin/login" || pathname === "/admin/logout") {
+      return NextResponse.next();
+    }
+
     const sess = await readSession(req);
     if (!sess || sess.role !== "ADMIN") {
       if (method === "GET" || method === "HEAD") {
-        console.log("[middleware] redirect → /admin/login");
-        return NextResponse.redirect(new URL("/admin/login", req.url));
+        const url = req.nextUrl.clone();
+        url.pathname = "/admin/login";
+        url.search = "";
+        url.searchParams.set("next", pathname + (search || ""));
+        return NextResponse.redirect(url);
       }
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     return NextResponse.next();
   }
 
-  /* --- 6) Alles overig is publiek --- */
+  // Overige routes (o.a. /provincie/*) zijn publiek en worden niet geraakt door de matcher.
   return NextResponse.next();
 }
 
 /* ========= Scope ========= */
 export const config = {
-  // match alle routes behalve statische assets, inclusief route-groepen zoals (protected)
-  matcher: ["/((?!_next|.*\\..*).*)"],
+  // Middleware draait alléén op partner, admin en API routes → geen effect op /provincie/*
+  matcher: ["/partner/:path*", "/admin/:path*", "/api/:path*"],
 };
