@@ -20,6 +20,29 @@ function normalize(p?: string | null) {
   return p.endsWith("/") && p !== "/" ? p.slice(0, -1) : p;
 }
 
+/* ============ LogoutButton (fix 404) ============ */
+function LogoutButton({ className }: { className?: string }) {
+  const router = useRouter();
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        try {
+          await fetch("/api/auth/logout", { method: "POST", cache: "no-store" });
+        } finally {
+          // Ga altijd naar home, ongeacht wat de API terugstuurt
+          router.replace("/");
+          // Forceer refresh van client cache/state
+          router.refresh();
+        }
+      }}
+      className={className}
+    >
+      Uitloggen
+    </button>
+  );
+}
+
 /* ============ NavLink ============ */
 function NavLink({
   href,
@@ -166,14 +189,10 @@ export default function AdminLayoutClient({ children, email }: Props) {
                 Ingelogd als <span className="font-medium text-stone-900">{email}</span>
               </div>
 
-              <form action="/api/auth/logout" method="post" className="mt-4 px-2">
-                <button
-                  type="submit"
-                  className="w-full rounded-2xl bg-stone-900 px-4 py-3 text-sm font-semibold text-white shadow hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:ring-offset-2"
-                >
-                  Uitloggen
-                </button>
-              </form>
+              {/* Was: <form action="/api/auth/logout" method="post">… */}
+              <div className="mt-4 px-2">
+                <LogoutButton className="w-full rounded-2xl bg-stone-900 px-4 py-3 text-sm font-semibold text-white shadow hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:ring-offset-2" />
+              </div>
             </div>
           </div>
         </div>
@@ -206,14 +225,9 @@ export default function AdminLayoutClient({ children, email }: Props) {
                   <NavLink href="/admin/revenue">💶 Omzet</NavLink>
                   <NavLink href="/admin/discounts">％ Kortingen/Acties</NavLink>
                 </nav>
-                <form action="/api/auth/logout" method="post">
-                  <button
-                    type="submit"
-                    className="rounded-2xl bg-stone-900 px-4 py-2 text-sm font-semibold text-white shadow hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:ring-offset-2"
-                  >
-                    Uitloggen
-                  </button>
-                </form>
+
+                {/* Was: <form action="/api/auth/logout" method="post">… */}
+                <LogoutButton className="rounded-2xl bg-stone-900 px-4 py-2 text-sm font-semibold text-white shadow hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:ring-offset-2" />
               </div>
             </div>
           </div>

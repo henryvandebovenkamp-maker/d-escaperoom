@@ -10,29 +10,43 @@ export type ProvinceCode = keyof typeof NAMES;
 
 export default function ProvinceUnavailable({ code }: { code: ProvinceCode }) {
   const province = NAMES[code];
+
   return (
-    <main className="bg-stone-50 text-stone-900">
-      <section className="border-b border-stone-200 bg-gradient-to-b from-stone-100 to-stone-50">
-        <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-12 text-center">
-          <span className="inline-flex items-center gap-2 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-stone-700 ring-1 ring-stone-200 shadow-sm">
+    <main aria-labelledby="page-title" className="bg-stone-50 text-stone-900">
+      {/* Hero / Banner */}
+      <section className="relative isolate overflow-hidden border-b border-stone-200">
+        <div
+          aria-hidden
+          className="absolute inset-0 bg-gradient-to-b from-rose-50/60 via-pink-50/40 to-stone-50"
+        />
+        <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-12 text-center relative">
+          <span className="inline-flex items-center gap-2 rounded-full bg-white/95 px-3 py-1 text-[12px] font-medium text-stone-700 ring-1 ring-stone-200 shadow-sm">
             Provincie: {province}
             <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
-            Vrij
+            <span className="sr-only">status:</span> Vrij
           </span>
-          <h1 className="mt-4 text-[26px] sm:text-3xl font-extrabold tracking-tight">Nog niet beschikbaar</h1>
+
+          <h1
+            id="page-title"
+            className="mt-4 text-[26px] sm:text-3xl font-extrabold tracking-tight"
+          >
+            Nog niet beschikbaar in {province}
+          </h1>
+
           <p className="mt-2 text-sm sm:text-base text-stone-700">
-            In {province} is <span className="font-semibold">D-EscapeRoom</span> nog niet live.
+            In <span className="font-semibold">D-EscapeRoom</span> is hier nog niet live.
           </p>
         </div>
       </section>
 
-      {/* ENIGE KNOP */}
+      {/* Card met enige knop */}
       <section className="mx-auto max-w-lg px-4 sm:px-6 lg:px-8 py-10">
-        <div className="rounded-2xl border border-stone-200 bg-white/95 p-4 shadow-sm">
+        <div className="relative overflow-hidden rounded-2xl border border-stone-200 bg-white/95 p-5 shadow-sm">
+          <div aria-hidden className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-stone-200" />
           <div className="flex justify-center">
             <Link
               href="/"
-              className="inline-flex items-center justify-center rounded-2xl px-4 h-9 text-[13px] font-semibold bg-white text-stone-900 ring-1 ring-stone-300 hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-black"
+              className="inline-flex h-10 items-center justify-center rounded-2xl bg-white px-4 text-[13px] font-semibold text-stone-900 ring-1 ring-stone-300 transition hover:bg-stone-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-stone-400/30 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
             >
               Terug naar home
             </Link>

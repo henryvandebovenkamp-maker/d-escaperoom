@@ -9,17 +9,32 @@ const SECTIONS = ["skills", "prijzen", "partner", "contact"] as const;
 type SectionId = (typeof SECTIONS)[number];
 type AnchorId = SectionId | "boeken";
 
+// alle provincies als slugs (lowercase)
+const PROVINCE_SLUGS = [
+  "dr", "fl", "fr", "ge", "gr", "lb", "nb", "nh", "ov", "ut", "zh", "ze",
+] as const;
+type ProvinceSlug = (typeof PROVINCE_SLUGS)[number];
+
 export default function Header() {
-  const pathname = usePathname() || "/";
+  const pathnameRaw = usePathname() || "/";
+
+  // --- Bepaal context-basis (/ut, /ge, ...) of root ---
+  const base = React.useMemo(() => {
+    const clean = pathnameRaw.split("#")[0].split("?")[0] || "/";
+    const first = clean.split("/")[1]?.toLowerCase() || "";
+    const inProvince = PROVINCE_SLUGS.includes(first as ProvinceSlug);
+    return inProvince ? `/${first}` : "/";
+  }, [pathnameRaw]);
+
   const [drawerOpen, setDrawerOpen] = React.useState(false);
   const [scrolled, setScrolled] = React.useState(false);
   const [active, setActive] = React.useState<SectionId | null>(null);
 
-  // Refs voor hoogte-metingen (mobiel spacer)
+  // Hoogte voor mobiele spacer
   const fixedWrapRef = React.useRef<HTMLDivElement>(null);
   const [fixedH, setFixedH] = React.useState<number>(0);
 
-  /* ===== Scroll blur/shadow (geen auto-hide) ===== */
+  // Scroll styling
   React.useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
     onScroll();
@@ -27,30 +42,28 @@ export default function Header() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  /* ===== ESC sluit het mobiele menu ===== */
+  // ESC sluit mobiel menu
   React.useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setDrawerOpen(false);
-    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setDrawerOpen(false);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  /* ===== Anchors (zonder locale) ===== */
-  const isHome = pathname === "/" || pathname === "";
-  const toAnchor = (id: AnchorId) => (isHome ? `#${id}` : `/#${id}`);
+  // Link builder: blijf in context ("/ut#prijzen") of root ("#prijzen")
+  const hrefInContext = React.useCallback(
+    (id: AnchorId) => `${base === "/" ? "" : base}#${id}`,
+    [base]
+  );
 
-  /* ===== Active section underline (home only) ===== */
+  // Active section underline wanneer de secties op de pagina aanwezig zijn
   React.useEffect(() => {
-    if (!isHome) {
-      setActive(null);
-      return;
-    }
     const targets = SECTIONS.map((id) => document.getElementById(id)).filter(
       Boolean
     ) as HTMLElement[];
-    if (!targets.length) return;
-
+    if (!targets.length) {
+      setActive(null);
+      return;
+    }
     const io = new IntersectionObserver(
       (entries) => {
         const top = entries
@@ -62,14 +75,9 @@ export default function Header() {
     );
     targets.forEach((el) => io.observe(el));
     return () => io.disconnect();
-  }, [isHome]);
+  }, [base]);
 
-  const linkCls = (id: SectionId) =>
-    `relative text-[13px] ${
-      active === id ? "text-stone-900" : "text-stone-700 hover:text-stone-900"
-    }`;
-
-  /* ===== Meet hoogte voor mobiele spacer ===== */
+  // Hoogte meten voor mobiele spacer
   const measure = React.useCallback(() => {
     if (!fixedWrapRef.current) return;
     setFixedH(fixedWrapRef.current.offsetHeight || 0);
@@ -84,6 +92,11 @@ export default function Header() {
       window.removeEventListener("resize", measure);
     };
   }, [measure, drawerOpen]);
+
+  const linkCls = (id: SectionId) =>
+    `relative text-[13px] ${
+      active === id ? "text-stone-900" : "text-stone-700 hover:text-stone-900"
+    }`;
 
   return (
     <>
@@ -113,9 +126,9 @@ export default function Header() {
               <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-r from-rose-50/90 via-pink-50/80 to-stone-50/90" />
 
               <div className="relative flex h-16 items-center justify-between gap-3 px-4">
-                {/* Logo (transparant) */}
+                {/* Logo: linkt naar huidige context-root (bijv. /ut) */}
                 <Link
-                  href="/"
+                  href={base === "/" ? "/" : base}
                   aria-label="D-EscapeRoom home"
                   className="inline-flex items-center bg-transparent"
                 >
@@ -131,19 +144,19 @@ export default function Header() {
 
                 {/* Desktop nav */}
                 <nav className="hidden items-center gap-6 md:flex" aria-label="Primaire">
-                  <Link href={toAnchor("skills")} className={linkCls("skills")}>
+                  <Link href={hrefInContext("skills")} className={linkCls("skills")}>
                     🎯 Skills
                     {active === "skills" && <ActiveUnderline />}
                   </Link>
-                  <Link href={toAnchor("prijzen")} className={linkCls("prijzen")}>
+                  <Link href={hrefInContext("prijzen")} className={linkCls("prijzen")}>
                     💰 Prijzen
                     {active === "prijzen" && <ActiveUnderline />}
                   </Link>
-                  <Link href={toAnchor("partner")} className={linkCls("partner")}>
+                  <Link href={hrefInContext("partner")} className={linkCls("partner")}>
                     🤝 Partner worden
                     {active === "partner" && <ActiveUnderline />}
                   </Link>
-                  <Link href={toAnchor("contact")} className={linkCls("contact")}>
+                  <Link href={hrefInContext("contact")} className={linkCls("contact")}>
                     📞 Contact
                     {active === "contact" && <ActiveUnderline />}
                   </Link>
@@ -158,7 +171,7 @@ export default function Header() {
                     Partner login
                   </Link>
                   <Link
-                    href={toAnchor("boeken")}
+                    href={hrefInContext("boeken")}
                     className="rounded-2xl bg-pink-600 px-4 py-2 text-[13px] font-semibold text-white shadow hover:bg-pink-700 focus:outline-none focus:ring-4 focus:ring-pink-300"
                   >
                     Boek nu
@@ -186,7 +199,7 @@ export default function Header() {
                   {SECTIONS.map((id) => (
                     <Link
                       key={id}
-                      href={toAnchor(id)}
+                      href={hrefInContext(id)}
                       onClick={() => setDrawerOpen(false)}
                       className="rounded-lg px-3 py-2 text-sm text-stone-800 hover:bg-stone-100"
                     >
@@ -204,7 +217,7 @@ export default function Header() {
                       Partner login
                     </Link>
                     <Link
-                      href={toAnchor("boeken")}
+                      href={hrefInContext("boeken")}
                       onClick={() => setDrawerOpen(false)}
                       className="rounded-2xl bg-pink-600 px-4 py-2 text-center text-sm font-semibold text-white shadow hover:bg-pink-700"
                     >
