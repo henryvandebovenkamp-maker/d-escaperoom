@@ -165,15 +165,13 @@ export default function PartnerLayoutClient({ children, email, partnerSlug }: Pr
                 ) : null}
               </div>
 
-              {/* wijziging: redirect naar homepage */}
-              <form action="/api/auth/logout?redirect=/" method="post" className="mt-4 px-2">
-                <button
-                  type="submit"
-                  className="w-full rounded-2xl bg-stone-900 px-4 py-3 text-sm font-semibold text-white shadow hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:ring-offset-2"
-                >
-                  Uitloggen
-                </button>
-              </form>
+              {/* Uitloggen via route handler (GET) */}
+              <a
+                href="/partner/logout"
+                className="mt-4 block rounded-2xl bg-stone-900 px-4 py-3 text-center text-sm font-semibold text-white shadow hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:ring-offset-2"
+              >
+                Uitloggen
+              </a>
             </div>
           </div>
         </div>
@@ -212,15 +210,14 @@ export default function PartnerLayoutClient({ children, email, partnerSlug }: Pr
                   <NavLink href="/partner/revenue">💶 Omzet</NavLink>
                   <NavLink href="/partner/discounts">％ Kortingen/Acties</NavLink>
                 </nav>
-                {/* wijziging: redirect naar homepage */}
-                <form action="/api/auth/logout?redirect=/" method="post">
-                  <button
-                    type="submit"
-                    className="rounded-2xl bg-stone-900 px-4 py-2 text-sm font-semibold text-white shadow hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:ring-offset-2"
-                  >
-                    Uitloggen
-                  </button>
-                </form>
+
+                {/* Uitloggen via route handler (GET) */}
+                <a
+                  href="/partner/logout"
+                  className="rounded-2xl bg-stone-900 px-4 py-2 text-sm font-semibold text-white shadow hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:ring-offset-2"
+                >
+                  Uitloggen
+                </a>
               </div>
             </div>
           </div>
