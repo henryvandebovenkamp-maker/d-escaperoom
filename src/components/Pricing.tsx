@@ -29,23 +29,23 @@ export default function Pricing() {
         {/* Divider */}
         <div className="mx-auto mt-6 h-1 w-28 rounded-full bg-gradient-to-r from-pink-400 via-rose-300 to-pink-400" />
 
-        {/* Cards (typografisch, subtiel duidelijker + hover) */}
+        {/* Cards (50% lagere hoogte) */}
         <div className="mx-auto mt-12 max-w-3xl grid gap-6 sm:grid-cols-2">
           {/* Kaart: 1 persoon */}
           <article
             className="
-              group relative h-72 sm:h-80 overflow-hidden rounded-2xl border border-stone-200
+              group relative h-36 sm:h-40 overflow-hidden rounded-2xl border border-stone-200
               bg-gradient-to-br from-rose-50/90 via-stone-50 to-stone-100/80
               shadow-[0_10px_30px_-12px_rgba(0,0,0,0.25)]
               transition-all duration-500 ease-out will-change-transform
               hover:scale-[1.015] hover:shadow-[0_18px_44px_-18px_rgba(0,0,0,0.35)]
             "
           >
-            {/* Subtiele ‘watermark’ (iets zichtbaarder + kleine beweging op hover) */}
+            {/* Watermark compacter */}
             <div
               aria-hidden
               className="
-                absolute right-3 top-2 text-9xl sm:text-[10rem] leading-none opacity-15 select-none pointer-events-none
+                absolute right-3 top-2 text-6xl sm:text-7xl leading-none opacity-15 select-none pointer-events-none
                 transition-transform duration-500 ease-out
                 group-hover:translate-x-1 group-hover:-rotate-2 group-hover:opacity-20
               "
@@ -53,17 +53,16 @@ export default function Pricing() {
               🐾
             </div>
 
-            {/* Zachte highlight/vignette in de hoek voor meer definitie */}
+            {/* Zachte highlight / vignette compacter */}
             <div
               aria-hidden
               className="
-                absolute -right-10 -top-10 h-40 w-40 sm:h-56 sm:w-56 rounded-full
-                bg-white/25 blur-2xl opacity-40
-                pointer-events-none
+                absolute -right-8 -top-8 h-28 w-28 sm:h-36 sm:w-36 rounded-full
+                bg-white/25 blur-2xl opacity-40 pointer-events-none
               "
             />
 
-            {/* Subtiele ring die op hover een roze accent krijgt */}
+            {/* Subtiele ring (on hover roze tint) */}
             <div
               aria-hidden
               className="
@@ -73,23 +72,22 @@ export default function Pricing() {
               "
             />
 
-            <div className="relative z-10 flex h-full flex-col justify-end p-5 sm:p-6 text-left">
-              <h3 className="text-base sm:text-lg font-bold tracking-tight text-stone-900">1 persoon</h3>
+            <div className="relative z-10 flex h-full flex-col justify-end p-4 sm:p-5 text-left">
+              <h3 className="text-sm sm:text-base font-bold tracking-tight text-stone-900">1 persoon</h3>
               <div className="mt-1 flex items-baseline gap-2">
-                <span className="text-3xl sm:text-4xl font-black leading-none text-stone-900">€ 49,95</span>
+                <span className="text-3xl sm:text-3xl font-black leading-none text-stone-900">€ 49,95</span>
                 <span className="text-xs sm:text-sm font-medium text-stone-700">per sessie</span>
               </div>
-              <div className="mt-4">
+              <div className="mt-3">
                 <Link
                   href="#boeken"
                   aria-label="Boek nu: 1 persoon voor € 49,95"
                   className="
-                    inline-flex h-12 sm:h-12 items-center justify-center rounded-3xl
-                    bg-pink-600 px-5 sm:px-6 text-base sm:text-lg font-bold text-white
+                    inline-flex h-10 sm:h-10 items-center justify-center rounded-3xl
+                    bg-pink-600 px-5 text-base sm:text-base font-bold text-white
                     shadow hover:bg-pink-700
                     focus:outline-none focus-visible:ring-4 focus-visible:ring-pink-300 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50
-                    active:translate-y-[1px]
-                    transition-colors
+                    active:translate-y-[1px] transition-colors
                   "
                 >
                   Boek nu
@@ -101,7 +99,7 @@ export default function Pricing() {
           {/* Kaart: 2 of meer personen */}
           <article
             className="
-              group relative h-72 sm:h-80 overflow-hidden rounded-2xl border border-stone-200
+              group relative h-36 sm:h-40 overflow-hidden rounded-2xl border border-stone-200
               bg-gradient-to-br from-rose-50/90 via-stone-50 to-stone-100/80
               shadow-[0_10px_30px_-12px_rgba(0,0,0,0.25)]
               transition-all duration-500 ease-out will-change-transform
@@ -111,7 +109,7 @@ export default function Pricing() {
             <div
               aria-hidden
               className="
-                absolute right-3 top-2 text-9xl sm:text-[10rem] leading-none opacity-15 select-none pointer-events-none
+                absolute right-3 top-2 text-6xl sm:text-7xl leading-none opacity-15 select-none pointer-events-none
                 transition-transform duration-500 ease-out
                 group-hover:-translate-y-0.5 group-hover:rotate-1 group-hover:opacity-20
               "
@@ -122,9 +120,8 @@ export default function Pricing() {
             <div
               aria-hidden
               className="
-                absolute -right-10 -top-10 h-40 w-40 sm:h-56 sm:w-56 rounded-full
-                bg-white/25 blur-2xl opacity-40
-                pointer-events-none
+                absolute -right-8 -top-8 h-28 w-28 sm:h-36 sm:w-36 rounded-full
+                bg-white/25 blur-2xl opacity-40 pointer-events-none
               "
             />
 
@@ -137,23 +134,22 @@ export default function Pricing() {
               "
             />
 
-            <div className="relative z-10 flex h-full flex-col justify-end p-5 sm:p-6 text-left">
-              <h3 className="text-base sm:text-lg font-bold tracking-tight text-stone-900">2 of meer personen</h3>
+            <div className="relative z-10 flex h-full flex-col justify-end p-4 sm:p-5 text-left">
+              <h3 className="text-sm sm:text-base font-bold tracking-tight text-stone-900">2 of meer personen</h3>
               <div className="mt-1 flex items-baseline gap-2">
-                <span className="text-3xl sm:text-4xl font-black leading-none text-stone-900">€ 39,95</span>
+                <span className="text-3xl sm:text-3xl font-black leading-none text-stone-900">€ 39,95</span>
                 <span className="text-xs sm:text-sm font-semibold text-stone-700">p.p.</span>
               </div>
-              <div className="mt-4">
+              <div className="mt-3">
                 <Link
                   href="#boeken"
                   aria-label="Boek nu: 2 of meer personen voor € 39,95 p.p."
                   className="
-                    inline-flex h-12 sm:h-12 items-center justify-center rounded-3xl
-                    bg-pink-600 px-5 sm:px-6 text-base sm:text-lg font-bold text-white
+                    inline-flex h-10 sm:h-10 items-center justify-center rounded-3xl
+                    bg-pink-600 px-5 text-base sm:text-base font-bold text-white
                     shadow hover:bg-pink-700
                     focus:outline-none focus-visible:ring-4 focus-visible:ring-pink-300 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50
-                    active:translate-y-[1px]
-                    transition-colors
+                    active:translate-y-[1px] transition-colors
                   "
                 >
                   Boek nu
