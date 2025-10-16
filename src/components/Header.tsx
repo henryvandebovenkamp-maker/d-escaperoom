@@ -145,7 +145,7 @@ export default function Header() {
                 {/* Desktop nav */}
                 <nav className="hidden items-center gap-6 md:flex" aria-label="Primaire">
                   <Link href={hrefInContext("skills")} className={linkCls("skills")}>
-                    🎯 Skills
+                    🎯 Vaardigheden
                     {active === "skills" && <ActiveUnderline />}
                   </Link>
                   <Link href={hrefInContext("prijzen")} className={linkCls("prijzen")}>
@@ -153,7 +153,7 @@ export default function Header() {
                     {active === "prijzen" && <ActiveUnderline />}
                   </Link>
                   <Link href={hrefInContext("partner")} className={linkCls("partner")}>
-                    🤝 Partner worden
+                    🤝 Hondenscholen
                     {active === "partner" && <ActiveUnderline />}
                   </Link>
                   <Link href={hrefInContext("contact")} className={linkCls("contact")}>
@@ -263,11 +263,11 @@ function emojiFor(id: SectionId) {
 function labelFor(id: SectionId) {
   switch (id) {
     case "skills":
-      return "Skills";
+      return "Vaardigheden";
     case "prijzen":
       return "Prijzen";
     case "partner":
-      return "Partner worden";
+      return "Hondenscholen";
     case "contact":
       return "Contact";
   }

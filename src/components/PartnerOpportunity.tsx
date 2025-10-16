@@ -69,33 +69,23 @@ export default function PartnerWidget({ overrides, className = "" }: Props) {
         className,
       ].join(" ")}
     >
-      {/* ======= HERO ======= */}
-      <div className="relative overflow-hidden rounded-2xl border border-stone-200">
-        <div aria-hidden className="absolute inset-0">
+      {/* ======= HEADER-STRIP (zelfde als Contact/Skills) ======= */}
+      <div className="relative w-full overflow-hidden h-14 sm:h-16 lg:h-20 rounded-2xl border border-stone-200">
+        <div className="flex h-full w-full items-start justify-center pt-2 sm:pt-3">
           <Image
-            src="/images/header-foto.png"
-            alt="Western thema decor voor D-EscapeRoom"
-            fill
-            priority
-            className="object-cover"
-            sizes="(max-width: 768px) 100vw, 1200px"
+            src="/images/hondenschool-header.png" // 2304×224 px
+            alt="" // decoratief
+            width={2304}
+            height={224}
+            className="h-[95%] w-auto object-contain"
+            priority={false}
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-rose-50/65 via-pink-50/55 to-stone-50/70" />
-          <div className="absolute inset-0 bg-black/10 mix-blend-multiply" />
         </div>
-
-        <div className="relative z-10 p-4 text-center">
-          <h2
-            id="partner-widget-title"
-            className="text-xl md:text-2xl font-black leading-tight tracking-tight text-stone-900 drop-shadow-[0_1px_0_rgba(255,255,255,0.9)]"
-          >
-            Beleving die doorverteld wordt.
-          </h2>
-          <p className="mx-auto mt-1 max-w-xl text-[13px] text-stone-800">
-            D-EscapeRoom “The Missing Snack” — samenwerken, puzzelen en plezier maken.
-          </p>
-        </div>
+        <h2 id="partner-widget-title" className="sr-only">
+          Partner worden
+        </h2>
       </div>
+      {/* ======= /HEADER ======= */}
 
       <div className="mx-auto w-full max-w-6xl">
         {/* ======= BOVENRIJ: Propositie + Provincies (tekst) ======= */}
@@ -115,7 +105,6 @@ export default function PartnerWidget({ overrides, className = "" }: Props) {
                 Voeg een onderscheidende belevenis toe die naadloos past in je lesaanbod — en bouw aan een sterkere band tussen mens en hond.
               </p>
 
-              {/* —— JOUW 4 PUNTEN, PRECIES ZO —— */}
               <ul className="space-y-2">
                 <li className="flex items-start gap-3">
                   <span aria-hidden className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full border border-stone-300 bg-stone-50 text-[13px]">🐶</span>
@@ -160,7 +149,7 @@ export default function PartnerWidget({ overrides, className = "" }: Props) {
                   href="#contact"
                   className="inline-flex h-10 items-center justify-center rounded-2xl bg-pink-600 px-4 text-sm font-semibold text-white shadow hover:bg-pink-700 focus:outline-none focus:ring-4 focus:ring-pink-500/40 focus:ring-offset-2 focus:ring-offset-white transition"
                 >
-                  neem contact op
+                  Neem contact op
                 </Link>
               </div>
             </div>
@@ -175,7 +164,7 @@ export default function PartnerWidget({ overrides, className = "" }: Props) {
             <div aria-hidden className="pointer-events-none absolute -inset-px rounded-[14px] bg-gradient-to-br from-stone-50/70 via-rose-50/35 to-pink-50/25" />
             <div className="relative z-10">
               <h3 id="provincies-tekst-title" className="text-lg font-extrabold text-stone-900">
-                Beschikbaarheid per provincie,
+                Beschikbaarheid per provincie
               </h3>
               <p className="mt-1 text-[13px] text-stone-700">
                 Nog beschikbaar? Neem contact op voor de mogelijkheden.

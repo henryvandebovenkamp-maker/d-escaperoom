@@ -239,16 +239,13 @@ async function fetchDaySlots(
       payload = await r.json();
       break;
     } catch (e) {
-      // ⬇️ Belangrijk: als het een AbortError is, direct doorgeven (niet wrappen)
       if (isAbortError(e)) throw e;
       lastErr = e;
     }
   }
 
   if (!payload) {
-    // ⬇️ Als de laatste fout een AbortError was, ook als AbortError opnieuw gooien
     if (isAbortError(lastErr) || signal?.aborted) {
-      // gooi een AbortError-achtige error zodat bovenliggende catch 'm stil houdt
       const err: any = lastErr instanceof Error ? lastErr : new Error("Aborted");
       err.name = "AbortError";
       throw err;
@@ -597,7 +594,24 @@ export default function BookingWidget({
   /* ========== SKELETON vóór mount ========== */
   if (!mounted) {
     return (
-      <section aria-label="Boekingswidget" className="space-y-4 rounded-2xl border border-stone-200 bg-white/90 p-4 shadow-md backdrop-blur-sm">
+      <section
+        aria-label="Boekingswidget"
+        className="space-y-4 rounded-2xl border border-stone-200 bg-white/90 p-4 shadow-md backdrop-blur-sm"
+      >
+        {/* TOPBAND: 'Boek nu' */}
+        <div className="relative w-full overflow-hidden h-14 sm:h-16 lg:h-20">
+          <div className="flex h-full w-full items-start justify-center pt-4 sm:pt-5">
+            <img
+              src="/images/booking-header.png"
+              alt=""
+              width={2304}
+              height={224}
+              className="h-[95%] w-auto object-contain"
+            />
+          </div>
+          <h2 className="sr-only">Boek nu</h2>
+        </div>
+
         <div className="relative overflow-hidden rounded-2xl border border-stone-200">
           <div className="h-40 w-full animate-pulse bg-stone-100" />
         </div>
@@ -630,7 +644,24 @@ export default function BookingWidget({
 
   /* ========== VOLLEDIGE UI na mount ========== */
   return (
-    <section aria-label="Boekingswidget" className="space-y-4 rounded-2xl border border-stone-200 bg-white/90 p-4 shadow-md backdrop-blur-sm">
+    <section
+      aria-label="Boekingswidget"
+      className="space-y-4 rounded-2xl border border-stone-200 bg-white/90 p-4 shadow-md backdrop-blur-sm"
+    >
+      {/* ===== TOPBAND: 'Boek nu' zoals bij Skills ===== */}
+      <div className="relative w-full overflow-hidden h-14 sm:h-16 lg:h-20">
+        <div className="flex h-full w-full items-start justify-center pt-4 sm:pt-5">
+          <img
+            src="/images/booking-header.png"
+            alt="" // decoratief
+            width={2304}
+            height={224}
+            className="h-[95%] w-auto object-contain"
+          />
+        </div>
+        <h2 className="sr-only">Boek nu</h2>
+      </div>
+
       {/* ======= COMPACTE HEADER ======= */}
       <div className="relative overflow-visible rounded-2xl border border-stone-200">
         <img
@@ -655,7 +686,7 @@ export default function BookingWidget({
 
           {/* Compacte titel */}
           <div className="md:col-span-6 text-center">
-            <h2 className="text-lg font-extrabold leading-tight tracking-tight text-stone-900 md:text-xl"></h2>
+            <h3 className="text-lg font-extrabold leading-tight tracking-tight text-stone-900 md:text-xl"></h3>
           </div>
 
           {/* Partner select / lock */}

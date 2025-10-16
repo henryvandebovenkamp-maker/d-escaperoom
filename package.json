@@ -29,6 +29,7 @@
     "date-fns": "^4.1.0",
     "jose": "^6.1.0",
     "jsonwebtoken": "^9.0.2",
+    "lucide-react": "0.545.0",
     "luxon": "^3.7.2",
     "mollie": "^2.0.2",
     "next": "^15.5.3",
