@@ -18,7 +18,7 @@ const ContactSchema = z.object({
   callOk: z.boolean(),
 });
 
-const CONTACT_TO = process.env.CONTACT_TO || "info@d-escaperoom.nl";
+const CONTACT_TO = process.env.CONTACT_TO || "info@d-escaperoom.com";
 const CONTACT_BCC = process.env.CONTACT_BCC;
 const DISABLED = process.env.DISABLE_EMAIL === "true";
 

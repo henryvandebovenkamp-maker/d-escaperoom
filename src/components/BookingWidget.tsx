@@ -882,26 +882,53 @@ export default function BookingWidget({
 
           {/* Form */}
           <form onSubmit={onReserve} className="mt-3 space-y-3" aria-label="Reserveringsformulier">
+            {/* Rij 1: Aantal spelers + Naam hond (naast elkaar) */}
             <div className="flex flex-nowrap items-start gap-2">
               <label className="w-28 shrink-0 text-xs font-medium text-stone-800">
                 Aantal spelers
-                <select value={players} onChange={(e) => setPlayers(Number(e.target.value))} className="mt-1 h-10 w-full rounded-lg border border-stone-300 bg-white px-2 text-sm outline-none transition focus:border-pink-600 focus:ring-2 focus:ring-pink-300">
-                  <option value={1}>1</option><option value={2}>2</option><option value={3}>3</option>
+                <select
+                  value={players}
+                  onChange={(e) => setPlayers(Number(e.target.value))}
+                  className="mt-1 h-10 w-full rounded-lg border border-stone-300 bg-white px-2 text-sm outline-none transition focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
+                >
+                  <option value={1}>1</option>
+                  <option value={2}>2</option>
+                  <option value={3}>3</option>
                 </select>
               </label>
-              <label className="min-w-0 flex-1 text-xs font-medium text-stone-800">
-                Jouw naam
-                <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="bijv. Jamie de Vries" className="mt-1 h-10 w-full min-w-0 rounded-lg border border-stone-300 bg-white px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-pink-600 focus:ring-2 focus:ring-pink-300" />
-              </label>
+
               <label className="min-w-0 flex-1 text-xs font-medium text-stone-800">
                 Naam hond
-                <input value={dogName} onChange={(e) => setDogName(e.target.value)} placeholder="bijv. Sam" className="mt-1 h-10 w-full min-w-0 rounded-lg border border-stone-300 bg-white px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-pink-600 focus:ring-2 focus:ring-pink-300" />
+                <input
+                  value={dogName}
+                  onChange={(e) => setDogName(e.target.value)}
+                  placeholder="bijv. Sam"
+                  className="mt-1 h-10 w-full min-w-0 rounded-lg border border-stone-300 bg-white px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
+                />
               </label>
             </div>
 
+            {/* Rij 2: Jouw naam */}
+            <label className="block text-xs font-medium text-stone-800">
+              Jouw naam
+              <input
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="bijv. Jamie de Vries"
+                className="mt-1 h-10 w-full rounded-lg border border-stone-300 bg-white px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
+              />
+            </label>
+
+            {/* Rij 3: E-mailadres (ongewijzigd) */}
             <label className="block text-xs font-medium text-stone-800">
               E-mailadres
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jij@example.com" className="mt-1 h-10 w-full rounded-lg border border-stone-300 bg-white px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-pink-600 focus:ring-2 focus:ring-pink-300" />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="jij@example.com"
+                className="mt-1 h-10 w-full rounded-lg border border-stone-300 bg-white px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
+              />
             </label>
 
             {price && (
@@ -915,7 +942,11 @@ export default function BookingWidget({
 
             {msg && <p className="rounded-md bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700">{msg}</p>}
 
-            <button type="submit" disabled={submitting || !slotId} className="w-full rounded-2xl bg-pink-600 px-4 py-2.5 text-sm font-semibold text-white shadow hover:bg-pink-700 focus:outline-none focus:ring-4 focus:ring-pink-300 disabled:opacity-60">
+            <button
+              type="submit"
+              disabled={submitting || !slotId}
+              className="w-full rounded-2xl bg-pink-600 px-4 py-2.5 text-sm font-semibold text-white shadow hover:bg-pink-700 focus:outline-none focus:ring-4 focus:ring-pink-300 disabled:opacity-60"
+            >
               {submitting ? "Reserveren…" : "Reserveer nu"}
             </button>
 

@@ -312,7 +312,6 @@ export default function CheckoutPage() {
       setCouponInput(vm.discount?.code ?? "");
       setDiscountMsg(code ? "Kortingscode toegepast ✔️" : "Kortingscode verwijderd");
     } catch (e: any) {
-      // 🔔 Enige inhoudelijke wijziging: nette, behulpzame foutmelding met ingevoerde code
       const typed = (couponInput || "").trim().toUpperCase();
       const pretty =
         typed
@@ -443,11 +442,8 @@ export default function CheckoutPage() {
                       {emailSaving && !emailError && (
                         <p className="text-[12px] text-stone-600">Opslaan…</p>
                       )}
-                      {emailSavedAt && !emailError && !emailSaving && (
-                        <span className="inline-flex items-center gap-1 text-[12px] text-emerald-700">
-                          <IconCheck className="h-3 w-3" /> Opgeslagen
-                        </span>
-                      )}
+                      {/* ✅ Succesmelding (vinkje/tekst) NIET meer tonen */}
+                      {emailSavedAt && !emailError && !emailSaving && null}
                     </div>
                   </div>
                 </InfoRow>
@@ -505,11 +501,8 @@ export default function CheckoutPage() {
 
                 <div className="min-h-[18px]" aria-live="polite">
                   {savingDog && <p className="text-[12px] text-stone-600">Opslaan…</p>}
-                  {savedAt && !savingDog && (
-                    <span className="inline-flex items-center gap-1 text-[12px] text-emerald-700">
-                      <IconCheck className="h-3 w-3" /> Opgeslagen
-                    </span>
-                  )}
+                  {/* ✅ Succesmelding (vinkje/‘Opgeslagen’) NIET meer tonen */}
+                  {savedAt && !savingDog && null}
                   {msg && <span className="text-[12px] text-rose-700">{msg}</span>}
                 </div>
               </div>
@@ -699,7 +692,7 @@ function PriceCard({
           <div className="inline-flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-rose-100 to-pink-100">
             💳
           </div>
-          <div className="text-sm font-extrabold tracking-tight">Prijs</div>
+        <div className="text-sm font-extrabold tracking-tight">Prijs</div>
         </div>
 
         <div className="mt-3 space-y-2 text-sm">
@@ -791,9 +784,7 @@ function PriceCard({
           </p>
           <p className="mt-2 text-[11px] text-stone-600">
             {" "}
-            <a className="underline" href={`/checkout/${bookingId}/return`}>
-              
-            </a>
+            <a className="underline" href={`/checkout/${bookingId}/return`}></a>
             .
           </p>
         </div>
