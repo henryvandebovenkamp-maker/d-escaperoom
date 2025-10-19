@@ -44,8 +44,8 @@ export default function UtrechtLandingPage() {
           <p className="mb-3 text-sm text-stone-600">
             Beschikbaar in <span className="font-medium">Utrecht</span>
           </p>
-          {/* 🔒 Vast op WoofExperience */}
-          <BookingWidget fixedPartnerSlug="woofexperience" />
+          {/* 🔒 Vast op Spin en Kwispel */}
+          <BookingWidget fixedPartnerSlug="spin-en-kwispel" />
         </div>
       </section>
 

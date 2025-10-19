@@ -35,7 +35,7 @@ const PROVINCES: Province[] = [
   { code: "NB", name: "Noord-Brabant" },
   { code: "NH", name: "Noord-Holland" },
   { code: "OV", name: "Overijssel" },
-  { code: "UT", name: "Utrecht", taken: { by: "WoofExperience", note: "Regio Utrecht is bezet" } },
+  { code: "UT", name: "Utrecht", taken: { by: "Spin en Kwispel", note: "Regio Utrecht is bezet" } },
   { code: "ZH", name: "Zuid-Holland" },
   { code: "ZE", name: "Zeeland" },
 ];
