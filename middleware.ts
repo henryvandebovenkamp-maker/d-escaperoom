@@ -10,6 +10,9 @@ const COOKIE_LEGACY  = "de_session";
 const SECRET_STRING  = process.env.SESSION_SECRET || "dev-secret-change-me";
 const SECRET = new TextEncoder().encode(SECRET_STRING);
 
+// Hold toggle (env: SITE_HOLD=1 => site op slot, behalve allowlist)
+const HOLD_ENABLED = process.env.SITE_HOLD === "1";
+
 /* ========= Helpers ========= */
 async function readSession(
   req: NextRequest
@@ -66,6 +69,17 @@ const PROTECTED_API: RegExp[] = [
   /^\/api\/slots\//,              // intern slotsbeheer
 ];
 
+/** Hold-allowlist: wat mag zichtbaar blijven bij SITE_HOLD=1 */
+const HOLD_ALLOW: RegExp[] = [
+  /^\/hold(?:\/)?$/,              // de hold-pagina zelf
+  /^\/_next\//,                   // assets
+  /^\/favicon\.ico$/,
+  /^\/robots\.txt$/,
+  /^\/sitemap\.xml$/,
+  /^\/images\//,
+  /^\/public\//,
+];
+
 /* ========= Middleware ========= */
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -89,6 +103,15 @@ export async function middleware(req: NextRequest) {
     pathname === "/favicon.ico"
   ) {
     return NextResponse.next();
+  }
+
+  /* --- 1.5) HOLD MODE: pagina's dicht, behalve allowlist (API's blijven werken) --- */
+  if (HOLD_ENABLED && !pathname.startsWith("/api/")) {
+    if (!isAny(pathname, HOLD_ALLOW)) {
+      const url = req.nextUrl.clone();
+      url.pathname = "/hold";
+      return NextResponse.rewrite(url);
+    }
   }
 
   /* --- 2) Public whitelist --- */

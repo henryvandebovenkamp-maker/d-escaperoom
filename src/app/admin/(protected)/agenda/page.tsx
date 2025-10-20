@@ -4,34 +4,61 @@
 import * as React from "react";
 
 /* =============================================================
-   Admin/Partner Agenda — v3
+   Admin/Partner Agenda — v4
    - Alleen GEBOEKTE slots (client-side filter isBooked)
    - Views: Day / Week / Month
    - Western/stone UI + WCAG AA
    - Annuleren: POST /api/booking/cancel (≥24u restitutie indicatie)
+   - BookingCard inhoud gespiegeld aan booking detail pagina
    ============================================================= */
 
 /* ================================
-   Types — conform /api/agenda en /api/partners/list
+   Types — conform /api/agenda (uitgebreid + backwards-compatible)
    ================================ */
+type BookingStatus = "PENDING" | "CONFIRMED" | "CANCELLED";
+
 type AgendaItem = {
+  /* basis */
   id: string;
+  status?: BookingStatus | null;
+
+  /* partner */
   partnerSlug: string | null;
   partnerName: string | null;
+  partnerAddressLine1?: string | null;
+  partnerPostalCode?: string | null;
+  partnerCity?: string | null;
+  partnerGoogleMapsUrl?: string | null;
+
+  /* tijd */
   startTime: string;      // ISO
   endTime: string | null;
-  playerCount: number | null;
-  dogName: string | null;
+
+  /* klant/hond */
+  playerCount: number | null; // (aka playersCount)
+  playersCount?: number | null;
   customerName: string | null;
-  allergies: string | null;
-  totalAmount: number | null;        // EUR
-  depositPaidAmount: number | null;  // EUR
-  currency: string;                  // "EUR"
+  customerEmail?: string | null;
+  dogName: string | null;
+  dogAllergies?: string | null; // (aka allergies)
+  dogFears?: string | null;
+  dogTrackingLevel?: "NONE" | "BEGINNER" | "AMATEUR" | "PRO" | string | null;
+  allergies?: string | null; // legacy
+
+  /* prijs (zowel EUR als cents mogelijk; we normaliseren in helpers) */
+  currency: string; // "EUR"
+  totalAmount?: number | null;            // EUR (legacy)
+  depositPaidAmount?: number | null;      // EUR (legacy: wat betaald is)
+  totalAmountCents?: number | null;       // cents (nieuw)
+  depositAmountCents?: number | null;     // cents (nieuw: afgesproken aanbetaling)
+  depositPaidAmountCents?: number | null; // cents (nieuw: daadwerkelijk betaald)
+  discountCode?: string | null;
+  discountAmountCents?: number | null;    // cents
 };
 
-type AgendaScope = "day" | "week" | "month";
-
+/* partner lijst */
 type PartnerRow = { id: string; name: string; slug: string; city: string | null };
+type AgendaScope = "day" | "week" | "month";
 
 /* ================================
    Helpers (tijd/datum & geld)
@@ -68,14 +95,6 @@ const fmtDateNL = (iso: string) => {
   const date = new Date(y, m-1, d);
   return `${nlDaysLong[(date.getDay()+6)%7]} ${date.getDate()} ${nlMonths[date.getMonth()]}`;
 };
-const euro = (n?: number|null, ccy?: string) =>
-  new Intl.NumberFormat("nl-NL",{style:"currency",currency:ccy || "EUR"})
-    .format(typeof n === "number" ? n : 0);
-const remaining = (total?: number|null, deposit?: number|null) => {
-  const t = typeof total === "number" ? total : 0;
-  const d = typeof deposit === "number" ? deposit : 0;
-  return Math.max(0, +(t - d).toFixed(2));
-};
 const dayKeyFromISO = (iso: string) =>
   iso.includes("T") ? iso.slice(0, iso.indexOf("T")) : toYMD(new Date(iso));
 const isBeforeToday = (iso: string) => {
@@ -83,6 +102,27 @@ const isBeforeToday = (iso: string) => {
   const b = new Date();    b.setHours(0,0,0,0);
   return a.getTime() < b.getTime();
 };
+
+/* ====== Geld helpers (normalize naar cents) ====== */
+function toCents(v?: number | null): number {
+  if (typeof v !== "number" || isNaN(v)) return 0;
+  // Als API EUR levert (bv. 63.92) → naar cents
+  // Als API al cents levert (bv. 6392) en > 1000, laten we staan (edge-cases op lage bedragen vangen we met floor)
+  return v > 1000 ? Math.round(v) : Math.round(v * 100);
+}
+function eur(cents: number, ccy = "EUR") {
+  return (Number(cents || 0) / 100).toLocaleString("nl-NL", { style: "currency", currency: ccy });
+}
+
+/* ====== Row helpers uit detailpagina ====== */
+function mapTracking(level?: string | null) {
+  switch ((level || "NONE").toUpperCase()) {
+    case "BEGINNER": return "Beginner";
+    case "AMATEUR":  return "Amateur";
+    case "PRO":      return "Pro";
+    default:         return "Nee / Onbekend";
+  }
+}
 
 /* ====== Annuleren helpers (≥ 24u restitutie) ====== */
 const hoursUntil = (iso: string) => (new Date(iso).getTime() - Date.now()) / (1000 * 60 * 60);
@@ -98,12 +138,16 @@ async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
   return r.json();
 }
 
-// Alleen geboekte tijdsloten tonen → filter client-side op signalen van een bevestigde boeking
+/* Alleen geboekte tijdsloten tonen → filter client-side op signalen van een bevestigde boeking */
 function isBooked(it: AgendaItem): boolean {
+  const players = typeof it.playersCount === "number" ? it.playersCount : it.playerCount;
+  const paidEUR  = typeof it.depositPaidAmount === "number" ? it.depositPaidAmount : undefined;
+  const paidCts  = typeof it.depositPaidAmountCents === "number" ? it.depositPaidAmountCents : undefined;
+  const hasPaid  = (paidEUR && paidEUR > 0) || (paidCts && paidCts > 0);
   return Boolean(
     (it.customerName && it.customerName.trim() !== "") ||
-    (typeof it.playerCount === "number" && it.playerCount > 0) ||
-    (typeof it.depositPaidAmount === "number" && it.depositPaidAmount > 0)
+    (typeof players === "number" && players > 0) ||
+    hasPaid
   );
 }
 
@@ -172,7 +216,9 @@ export default function AgendaPage() {
     } catch (e: any) {
       setError(e?.message || "Fout bij laden van agenda.");
       setItems([]);
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }, [scope, pivotISO, partnerSlug]);
   React.useEffect(() => { load(); }, [load]);
 
@@ -315,14 +361,53 @@ function LegendDot({ className, label }: { className: string; label: string }) {
 }
 
 /* ================================
-   SHARED — Compact BookingCard (volledige kaart)
+   SHARED — UI atoms (zelfde look als detailpagina)
+   ================================ */
+function StatusBadge({ status }: { status: BookingStatus | undefined | null }) {
+  const map: Record<string, { cls: string; label: string }> = {
+    PENDING:   { cls: "border-amber-300 bg-amber-100 text-amber-800", label: "In afwachting" },
+    CONFIRMED: { cls: "border-emerald-300 bg-emerald-100 text-emerald-800", label: "Bevestigd" },
+    CANCELLED: { cls: "border-rose-300 bg-rose-100 text-rose-800", label: "Geannuleerd" },
+  };
+  const s = (status && map[status]) || map.PENDING;
+  return <span className={`rounded-full border px-3 py-1 text-[10px] font-semibold shadow-sm ${s.cls}`}>{s.label}</span>;
+}
+
+function Row({ label, value, emphasize = false }: { label: string; value: string; emphasize?: boolean }) {
+  return (
+    <div
+      className={`flex items-center justify-between rounded-lg border border-stone-100 px-2 sm:px-3 py-1.5 ${
+        emphasize ? "bg-stone-50" : "bg-stone-50/60"
+      }`}
+    >
+      <span className="text-[11px] text-stone-700">{label}</span>
+      <strong className={`text-[11px] ${emphasize ? "text-stone-900" : "text-stone-800"}`}>{value}</strong>
+    </div>
+  );
+}
+
+/* ================================
+   SHARED — Volledige BookingCard (detailpagina 1-op-1)
    ================================ */
 function BookingCard({ b, onChanged }: { b: AgendaItem; onChanged?: () => void }) {
   const started = hasStarted(b.startTime);
   const isRefund = eligibleForRefund(b.startTime);
+  const players = (typeof b.playersCount === "number" ? b.playersCount : b.playerCount) || 1;
 
-  const [busy, setBusy] = React.useState(false);
-  const [err, setErr] = React.useState<string | null>(null);
+  /* bedragen normaliseren naar cents */
+  const totalCts   = (typeof b.totalAmountCents === "number")   ? b.totalAmountCents!   : toCents(b.totalAmount);
+  const depositCts = (typeof b.depositAmountCents === "number") ? b.depositAmountCents! : 0;
+  const paidCts    = (typeof b.depositPaidAmountCents === "number")
+                      ? b.depositPaidAmountCents!
+                      : toCents(b.depositPaidAmount);
+  const discountCts = b.discountAmountCents ?? 0;
+  const restCts    = Math.max(0, totalCts - Math.max(depositCts || paidCts, 0));
+  const depositLabel = depositCts > 0
+    ? `Aanbetaling${paidCts >= depositCts ? " (betaald)" : ""}`
+    : "Aanbetaling";
+
+  const addressParts = [b.partnerAddressLine1, b.partnerPostalCode, b.partnerCity].filter(Boolean);
+  const address = addressParts.join(", ");
 
   const shortId = React.useMemo(
     () => (b.id.length > 8 ? `#${b.id.slice(-6).toUpperCase()}` : `#${b.id}`),
@@ -333,9 +418,12 @@ function BookingCard({ b, onChanged }: { b: AgendaItem; onChanged?: () => void }
     const s = new Date(b.startTime);
     const e = b.endTime ? new Date(b.endTime) : null;
     const d = s.toLocaleDateString("nl-NL", { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
-    const t = e ? `${fmtTimeNL(b.startTime)}–${fmtTimeNL(b.endTime!)}` : `${fmtTimeNL(b.startTime)}`;
+    const t = e ? `${fmtTimeNL(b.startTime)}–${fmtTimeNL(b.endTime!)}` : `${fmtTimeNL(b.startTime)}–${new Date(s.getTime()+60*60*1000).toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"})}`;
     return { d, t };
   }, [b.startTime, b.endTime]);
+
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState<string | null>(null);
 
   async function handleCancel() {
     setErr(null);
@@ -362,11 +450,14 @@ function BookingCard({ b, onChanged }: { b: AgendaItem; onChanged?: () => void }
 
   return (
     <li className="group rounded-2xl border border-stone-200 bg-white p-3 shadow-sm ring-1 ring-stone-200 transition hover:shadow-md">
-      {/* Header */}
+      {/* Header — nummer + partner + status + tijd */}
       <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-2">
         <div className="flex items-center gap-2 text-xs font-semibold text-stone-800">
-          <span className="inline-flex items-center gap-1"><span>🧾</span><span className="font-mono">{shortId}</span></span>
+          <span className="inline-flex items-center gap-1">
+            <span>🧾</span><span className="font-mono">{shortId}</span>
+          </span>
           {b.partnerName && <span className="text-stone-500">• {b.partnerName}</span>}
+          <StatusBadge status={b.status} />
         </div>
         <div className="text-left sm:text-right text-xs text-stone-700">
           <div className="flex items-center sm:justify-end gap-1"><span>⏰</span><span className="font-semibold">{dateStr.d}</span></div>
@@ -374,36 +465,61 @@ function BookingCard({ b, onChanged }: { b: AgendaItem; onChanged?: () => void }
         </div>
       </div>
 
-      {/* Info rows */}
-      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-        <div className="col-span-1 sm:col-span-2 rounded-md border border-stone-200 bg-stone-50 px-2 py-1.5">
-          <div className="flex items-center gap-1 font-medium text-stone-700"><span>👤</span><span>Naam klant</span></div>
-          <div className="mt-0.5 truncate font-semibold text-stone-900">{b.customerName ?? "—"}</div>
+      {/* Overzicht — exact als detailpagina */}
+      <section className="rounded-2xl border border-stone-200 bg-white shadow-xs">
+        <div className="px-2 sm:px-3 py-2 bg-stone-50 border-b border-stone-200">
+          <h3 className="text-[13px] font-semibold">Overzicht</h3>
         </div>
+        <div className="px-2 sm:px-3 py-2">
+          <dl className="grid grid-cols-1 gap-y-2">
+            <Row label="Hondenschool" value={b.partnerName || "—"} />
+            <Row label="Datum & tijd" value={`${dateStr.d}, ${dateStr.t}`} />
+            <Row label="Deelnemers" value={`${players} ${players === 1 ? "speler" : "spelers"}`} />
+            {address && (
+              <div className="rounded-lg border border-stone-100 bg-stone-50/60 px-2 sm:px-3 py-2">
+                <div className="text-[11px] font-semibold text-stone-700">Adres</div>
+                <div className="text-[11px]">{address}</div>
+                {b.partnerGoogleMapsUrl && (
+                  <a
+                    href={b.partnerGoogleMapsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-1 inline-block text-[11px] text-pink-700 underline"
+                  >
+                    Route in Google Maps openen
+                  </a>
+                )}
+              </div>
+            )}
+          </dl>
 
-        <div className="rounded-md border border-stone-200 bg-stone-50 px-2 py-1.5">
-          <div className="flex items-center gap-1 font-medium text-stone-700"><span>👥</span><span>Aantal spelers</span></div>
-          <div className="mt-0.5 font-semibold text-stone-900">{b.playerCount ?? "—"}</div>
+          <div className="h-px bg-stone-200 my-3" />
+
+          <dl className="grid grid-cols-1 gap-y-1.5">
+            <Row label="Totaal" value={eur(totalCts, b.currency)} emphasize />
+            <Row label={depositLabel} value={eur(depositCts || paidCts, b.currency)} />
+            <Row label="Rest op locatie" value={eur(restCts, b.currency)} />
+            {b.discountCode && (discountCts > 0) && (
+              <Row label={`Korting (${b.discountCode})`} value={`- ${eur(discountCts, b.currency)}`} />
+            )}
+          </dl>
         </div>
+      </section>
 
-        <div className="rounded-md border border-stone-200 bg-stone-50 px-2 py-1.5">
-          <div className="flex items-center gap-1 font-medium text-stone-700"><span>🐶</span><span>Naam hond</span></div>
-          <div className="mt-0.5 truncate font-semibold text-stone-900">{b.dogName ?? "—"}</div>
+      {/* Hond-gegevens — exact als detailpagina */}
+      <section className="mt-2 rounded-2xl border border-stone-200 bg-white shadow-xs">
+        <div className="px-2 sm:px-3 py-2 bg-stone-50 border-b border-stone-200">
+          <h3 className="text-[13px] font-semibold">Gegevens van je hond</h3>
         </div>
-
-        <div className="sm:col-span-2 rounded-md border border-stone-200 bg-stone-50 px-2 py-1.5">
-          <div className="flex items-center gap-1 font-medium text-stone-700"><span>💬</span><span>Allergieën / bijzonderheden</span></div>
-          <div className="mt-0.5 whitespace-pre-wrap break-words text-stone-900">{b.allergies && b.allergies.trim() !== "" ? b.allergies : "—"}</div>
+        <div className="px-2 sm:px-3 py-2 grid gap-1.5">
+          <Row label="Naam" value={b.dogName || "—"} />
+          <Row label="Ervaring speuren" value={mapTracking(b.dogTrackingLevel)} />
+          <Row label="Allergieën" value={(b.dogAllergies ?? b.allergies ?? "—") || "—"} />
+          <Row label="Bang voor" value={b.dogFears || "—"} />
         </div>
-      </dl>
+      </section>
 
-      {/* Nog te betalen */}
-      <div className="mt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 rounded-md border border-stone-200 bg-white px-2 py-2">
-        <div className="flex items-center gap-1 text-xs text-stone-700"><span>💶</span><span>Nog te betalen (op locatie)</span></div>
-        <div className="text-lg font-extrabold tracking-tight text-stone-900">{euro(remaining(b.totalAmount, b.depositPaidAmount), b.currency)}</div>
-      </div>
-
-      {/* Footer */}
+      {/* Annuleren + policy */}
       <div className="mt-2 flex flex-col items-stretch sm:flex-row sm:items-center sm:justify-between gap-2">
         <div className="text-[11px] leading-snug text-stone-600">
           {hasStarted(b.startTime) ? (
@@ -440,17 +556,24 @@ function BookingCard({ b, onChanged }: { b: AgendaItem; onChanged?: () => void }
    MINI Booking row (compacte rij + Details toggle)
    ================================ */
 function MiniBookingRow({ b, onOpenFull }:{ b:AgendaItem; onOpenFull:()=>void }) {
-  const rest = remaining(b.totalAmount, b.depositPaidAmount);
+  const players = (typeof b.playersCount === "number" ? b.playersCount : b.playerCount) || 1;
+  const totalCts   = (typeof b.totalAmountCents === "number")   ? b.totalAmountCents!   : toCents(b.totalAmount);
+  const depositCts = (typeof b.depositAmountCents === "number") ? b.depositAmountCents! : 0;
+  const paidCts    = (typeof b.depositPaidAmountCents === "number")
+                      ? b.depositPaidAmountCents!
+                      : toCents(b.depositPaidAmount);
+  const restCts = Math.max(0, totalCts - Math.max(depositCts || paidCts, 0));
+
   return (
     <li className="group flex items-center justify-between rounded-lg border border-stone-200 bg-stone-50 px-2 py-1 text-[10px] leading-tight text-stone-800 hover:bg-stone-100">
       <div className="min-w-0 flex items-center gap-2">
         <span className="shrink-0">⏰ {fmtTimeNL(b.startTime)}</span>
         <span className="truncate">👤 {b.customerName ?? "—"}</span>
         {b.dogName && <span className="hidden sm:inline truncate">• 🐶 {b.dogName}</span>}
-        {typeof b.playerCount === "number" && <span className="hidden sm:inline">• 👥 {b.playerCount}</span>}
+        <span className="hidden sm:inline">• 👥 {players}</span>
       </div>
       <div className="ml-2 flex items-center gap-2 shrink-0">
-        <span className="font-semibold text-stone-900">💶 {euro(rest, b.currency)}</span>
+        <span className="font-semibold text-stone-900">💶 {eur(restCts, b.currency)}</span>
         <button
           type="button"
           onClick={onOpenFull}

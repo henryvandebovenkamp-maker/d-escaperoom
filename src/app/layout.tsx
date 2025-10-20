@@ -3,6 +3,7 @@ import "./globals.css";
 import type { Metadata, Viewport } from "next";
 import CookieConsent from "@/components/CookieConsent";
 import Footer from "@/components/Footer";
+import SiteHoldPopup from "@/components/SiteHoldPopup"; // ➕ toevoeging
 
 // Absolute basis-URL voor og/twitter images
 const APP_ORIGIN =
@@ -79,6 +80,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         {/* Cookie consent banner */}
         <CookieConsent />
+
+        {/* ➕ Full-screen hold popup (aan/uit met NEXT_PUBLIC_SITE_POPUP) */}
+        <SiteHoldPopup />
       </body>
     </html>
   );
