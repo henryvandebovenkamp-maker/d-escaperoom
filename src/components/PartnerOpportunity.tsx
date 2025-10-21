@@ -96,7 +96,7 @@ export default function PartnerWidget({ overrides, className = "" }: Props) {
             aria-labelledby="prop-title"
           >
             <div aria-hidden className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-stone-200" />
-            <div aria-hidden className="pointer-events-none absolute -inset-px rounded-[14px] bg-gradient-to-br from-rose-50/60 via-pink-50/35 to-stone-50/25" />
+            <div aria-hidden className="pointer-events-none absolute -inset-px rounded-[14px] bg-linear-to-br from-rose-50/60 via-pink-50/35 to-stone-50/25" />
             <div className="relative z-10 space-y-3">
               <h3 id="prop-title" className="text-lg md:text-xl font-extrabold leading-tight tracking-tight text-stone-900">
                 D-EscapeRoom op jouw locatie?
@@ -161,7 +161,7 @@ export default function PartnerWidget({ overrides, className = "" }: Props) {
             aria-labelledby="provincies-tekst-title"
           >
             <div aria-hidden className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-stone-200" />
-            <div aria-hidden className="pointer-events-none absolute -inset-px rounded-[14px] bg-gradient-to-br from-stone-50/70 via-rose-50/35 to-pink-50/25" />
+            <div aria-hidden className="pointer-events-none absolute -inset-px rounded-[14px] bg-linear-to-br from-stone-50/70 via-rose-50/35 to-pink-50/25" />
             <div className="relative z-10">
               <h3 id="provincies-tekst-title" className="text-lg font-extrabold text-stone-900">
                 Beschikbaarheid per provincie

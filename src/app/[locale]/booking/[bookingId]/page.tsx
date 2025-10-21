@@ -63,7 +63,7 @@ export default async function BookingDetailPage({ params }: { params: { bookingI
 
   return (
     <main className="min-h-screen bg-stone-50 text-stone-900">
-      <div className="pointer-events-none sticky top-0 z-0 h-2 w-full bg-gradient-to-r from-rose-200 via-pink-300 to-rose-200" />
+      <div className="pointer-events-none sticky top-0 z-0 h-2 w-full bg-linear-to-r from-rose-200 via-pink-300 to-rose-200" />
       <div className="mx-auto max-w-3xl px-4 py-10">
         <header className="flex items-start justify-between gap-3">
           <div>

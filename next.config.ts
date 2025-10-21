@@ -1,8 +1,12 @@
 // PATH: next.config.ts
+import createNextIntlPlugin from "next-intl/plugin";
 import type { NextConfig } from "next";
 
+// Koppel next-intl aan jouw config-bestand
+const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
+
 const nextConfig: NextConfig = {
-  // ⛳ GEEN basePath meer
+  // ⛳ GEEN basePath
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: true },
 
@@ -25,4 +29,4 @@ const nextConfig: NextConfig = {
   // ⛳ GEEN rewrites nodig
 };
 
-export default nextConfig;
+export default withNextIntl(nextConfig);

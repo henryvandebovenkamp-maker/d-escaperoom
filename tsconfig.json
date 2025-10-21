@@ -1,32 +1,40 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["dom", "dom.iterable", "esnext"],
-    "module": "esnext",
-    "moduleResolution": "bundler",
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "verbatimModuleSyntax": true,
     "jsx": "preserve",
 
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "allowJs": true,
     "resolveJsonModule": true,
+    "allowJs": true,
     "isolatedModules": true,
     "incremental": true,
+    "forceConsistentCasingInFileNames": true,
 
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     },
 
+    "customConditions": ["react-server", "react-client"],
     "plugins": [{ "name": "next" }]
   },
   "include": [
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    ".next/types/**/*.ts"
+    ".next/types/**/*.ts",
+    "next.config.*",
+    "postcss.config.*",
+    "tailwind.config.*",
+    "middleware.ts",
+    "src/messages/**/*.json"
   ],
   "exclude": ["node_modules"]
 }

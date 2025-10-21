@@ -356,7 +356,7 @@ export default function CheckoutPage() {
   /* ===================== UI ===================== */
   if (loading) {
     return (
-      <div className="min-h-[100dvh] bg-stone-50">
+      <div className="min-h-dvh bg-stone-50">
         <div className="mx-auto max-w-6xl p-4 md:p-8">
           <HeaderSkeleton />
           <div className="mt-6 grid gap-6 md:grid-cols-3">
@@ -372,7 +372,7 @@ export default function CheckoutPage() {
   }
   if (!data) {
     return (
-      <div className="min-h-[100dvh] bg-stone-50">
+      <div className="min-h-dvh bg-stone-50">
         <div className="mx-auto max-w-6xl p-4 md:p-8">
           {/* Geen PENDING badge meer tonen */}
           <SimpleHeader title="Bevestig jouw boeking" />
@@ -385,7 +385,7 @@ export default function CheckoutPage() {
   }
 
   return (
-    <main className="min-h-[100dvh] bg-stone-50 text-stone-900">
+    <main className="min-h-dvh bg-stone-50 text-stone-900">
       <div className="mx-auto max-w-6xl p-4 md:p-8">
         {/* Statusbadge wordt NIET getoond wanneer status 'PENDING' is */}
         <SimpleHeader title="Bevestig jouw boeking" status={data.status} idLabel={data.id} />
@@ -573,7 +573,7 @@ function Card({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative overflow-hidden rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
       <div aria-hidden className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-stone-200" />
-      <div aria-hidden className="pointer-events-none absolute -inset-px rounded-[18px] bg-gradient-to-br from-rose-50/70 via-pink-50/40 to-stone-50/30" />
+      <div aria-hidden className="pointer-events-none absolute -inset-px rounded-[18px] bg-linear-to-br from-rose-50/70 via-pink-50/40 to-stone-50/30" />
       <div className="relative z-10">{children}</div>
     </div>
   );
@@ -582,7 +582,7 @@ function Card({ children }: { children: React.ReactNode }) {
 function CardTitle({ icon, title }: { icon?: React.ReactNode | string; title: string }) {
   return (
     <div className="flex items-center gap-2">
-      <div className="inline-flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-rose-100 to-pink-100 text-lg">
+      <div className="inline-flex h-7 w-7 items-center justify-center rounded-xl bg-linear-to-br from-rose-100 to-pink-100 text-lg">
         <span className="leading-none">{icon ?? "✨"}</span>
       </div>
       <h3 className="text-xl font-extrabold">{title}</h3>
@@ -686,10 +686,10 @@ function PriceCard({
 
   return (
     <div className="rounded-2xl border border-stone-200 bg-white shadow-sm md:sticky md:top-6">
-      <div className="h-2 w-full rounded-t-2xl bg-gradient-to-r from-pink-300 via-rose-300 to-pink-300" />
+      <div className="h-2 w-full rounded-t-2xl bg-linear-to-r from-pink-300 via-rose-300 to-pink-300" />
       <div className="p-5">
         <div className="flex items-center gap-2">
-          <div className="inline-flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-rose-100 to-pink-100">
+          <div className="inline-flex h-7 w-7 items-center justify-center rounded-xl bg-linear-to-br from-rose-100 to-pink-100">
             💳
           </div>
         <div className="text-sm font-extrabold tracking-tight">Prijs</div>
@@ -731,7 +731,7 @@ function PriceCard({
                 value={couponInput}
                 onChange={(e) => onCouponInput(e.target.value)}
                 placeholder="WINTER10"
-                className="h-9 w-[9.5rem] rounded-lg border border-stone-300 bg-white px-2.5 text-sm outline-none focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
+                className="h-9 w-38 rounded-lg border border-stone-300 bg-white px-2.5 text-sm outline-none focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
                 aria-label="Kortingscode"
               />
               <button

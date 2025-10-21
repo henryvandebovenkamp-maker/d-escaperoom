@@ -6,7 +6,7 @@ export const revalidate = 0;
 
 import * as React from "react";
 import { headers } from "next/headers";
-import PrintControls from "@/app/(print)/PrintControls.client";
+import PrintControls from "@/app/[locale]/(print)/PrintControls.client";
 
 /* ===== Types (matchen met /api/revenue) ===== */
 type RevenueItem = {
