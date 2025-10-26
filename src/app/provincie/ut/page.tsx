@@ -16,17 +16,16 @@ export const dynamic = "force-static";
 
 /** Next 15: themeColor hoort hier in viewport, niet in metadata */
 export const viewport: Viewport = {
-  // Kies je kleur(en); voorbeeld hieronder zet beide schema's op zwart
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#000000" },
-    { media: "(prefers-color-scheme: dark)",  color: "#000000" },
+    { media: "(prefers-color-scheme: dark)", color: "#000000" },
   ],
 };
 
 export const metadata: Metadata = {
   title: "D-EscapeRoom in Utrecht – boek bij WoofExperience",
   description:
-    "Boek de unieke D-EscapeRoom ervaring voor jou en je hond in de provincie Utrecht. Aanbetaling online, rest op locatie.",
+    "Boek de unieke D-EscapeRoom ervaring bij WoofExperience in de provincie Utrecht. Aanbetaling online, rest op locatie.",
   alternates: { canonical: "https://d-escaperoom.com/partner/provincie/ut" },
 };
 
@@ -42,10 +41,10 @@ export default function UtrechtLandingPage() {
         <div className="mx-auto w-full max-w-6xl px-4">
           <h2 id="boeken-title" className="sr-only">Boeken</h2>
           <p className="mb-3 text-sm text-stone-600">
-            Beschikbaar in <span className="font-medium">Utrecht</span>
+            Beschikbaar in <span className="font-medium">Utrecht</span> bij <span className="font-medium">WoofExperience</span>
           </p>
-          {/* 🔒 Vast op Spin en Kwispel */}
-          <BookingWidget fixedPartnerSlug="spin-en-kwispel" />
+          {/* 🔒 Vast op WoofExperience */}
+          <BookingWidget fixedPartnerSlug="woofexperience" />
         </div>
       </section>
 
@@ -59,7 +58,7 @@ export default function UtrechtLandingPage() {
       <ClientContactSection />
       <ChatbotWidget />
 
-      <Script id="view-utrecht-event" strategy="afterInteractive">
+      <Script id="view-utrecht-woofexperience-event" strategy="afterInteractive">
         {`
           (function(){
             var sent = false;
@@ -74,10 +73,10 @@ export default function UtrechtLandingPage() {
             function trySend(){
               if(sent) return;
               if(!hasConsentAnalytics()) return;
-              if (window.gtag) { window.gtag('event','view_partner_province_ut'); sent = true; sessionStorage.setItem('ev_view_ut_sent','1'); return; }
-              if (window.plausible) { window.plausible('view_partner_province_ut'); sent = true; sessionStorage.setItem('ev_view_ut_sent','1'); return; }
+              if (window.gtag) { window.gtag('event','view_partner_province_ut_woofexperience'); sent = true; sessionStorage.setItem('ev_view_ut_woofexperience_sent','1'); return; }
+              if (window.plausible) { window.plausible('view_partner_province_ut_woofexperience'); sent = true; sessionStorage.setItem('ev_view_ut_woofexperience_sent','1'); return; }
             }
-            if (sessionStorage.getItem('ev_view_ut_sent')) { sent = true; }
+            if (sessionStorage.getItem('ev_view_ut_woofexperience_sent')) { sent = true; }
             trySend();
             window.addEventListener('cookie-consent-changed', trySend);
             window.addEventListener('trackers-ready', trySend);
