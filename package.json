@@ -32,7 +32,7 @@
     "lucide-react": "0.545.0",
     "luxon": "^3.7.2",
     "mollie": "^2.0.2",
-    "next": "^15.5.3",
+    "next": "15.5.9",
     "next-intl": "^4.3.8",
     "nodemailer": "^7.0.6",
     "rate-limiter-flexible": "^7.3.0",
