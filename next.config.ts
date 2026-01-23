@@ -3,8 +3,14 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   // ⛳ GEEN basePath meer
-  eslint: { ignoreDuringBuilds: true },
-  typescript: { ignoreBuildErrors: true },
+
+  // Let op: eslint-config hoort niet meer in next.config
+  // ESLint regel je via eslint.config.mjs
+
+  // (optioneel) tijdelijk toegestaan tijdens development
+  typescript: {
+    ignoreBuildErrors: true,
+  },
 
   async redirects() {
     return [
