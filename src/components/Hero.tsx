@@ -28,7 +28,7 @@ export default function Hero() {
         </span>
 
         <p className="mt-2 text-sm font-medium text-stone-200/90">
-          Werk samen met je hond.
+          In de hondenschool
         </p>
 
         {/* Lockup (titel + korte tekst) als één afbeelding */}

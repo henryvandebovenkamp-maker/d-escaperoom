@@ -5,41 +5,80 @@ import { getSessionUser } from "@/lib/auth";
 import { resolvePartnerForRequest } from "@/lib/partner";
 import { z } from "zod";
 import type { SlotStatus } from "@prisma/client";
+import { fromZonedTime } from "date-fns-tz";
 
 /** Body:
- *  - startDate / endDate: "YYYY-MM-DD" (lokaal)
+ *  - startDate / endDate: "YYYY-MM-DD"
  *  - weekdays: JS-day nummers (0=zo..6=za), minimaal 1
  *  - times: "HH:MM" (bijv. "09:00"), minimaal 1
- *  - publish: altijd true (DB heeft alleen PUBLISHED/BOOKED)
+ *  - publish: boolean
  *  - optioneel: capacity, maxPlayers, durationMinutes
  */
 const BodySchema = z.object({
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "startDate moet YYYY-MM-DD zijn"),
-  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "endDate moet YYYY-MM-DD zijn"),
-  weekdays: z.array(z.number().int().min(0).max(6)).nonempty("Kies minimaal één weekdag"),
-  times: z.array(z.string().regex(/^\d{2}:\d{2}$/)).nonempty("Kies minimaal één tijd"),
+  startDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "startDate moet YYYY-MM-DD zijn"),
+  endDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "endDate moet YYYY-MM-DD zijn"),
+  weekdays: z
+    .array(z.number().int().min(0).max(6))
+    .nonempty("Kies minimaal één weekdag"),
+  times: z
+    .array(z.string().regex(/^\d{2}:\d{2}$/))
+    .nonempty("Kies minimaal één tijd"),
   publish: z.boolean().default(true),
   capacity: z.number().int().positive().max(99).default(1).optional(),
   maxPlayers: z.number().int().positive().max(10).default(3).optional(),
-  durationMinutes: z.number().int().positive().max(24 * 60).default(60).optional(),
+  durationMinutes: z
+    .number()
+    .int()
+    .positive()
+    .max(24 * 60)
+    .default(60)
+    .optional(),
 });
 
+const TIMEZONE = "Europe/Amsterdam";
+
 function parseYMD(ymd: string) {
-  const [y, m, d] = ymd.split("-").map(Number);
-  return { y, m, d }; // m=1..12
+  const [year, month, day] = ymd.split("-").map(Number);
+  return { year, month, day };
 }
-function makeLocalDate(y: number, m1_12: number, d: number, hh = 0, mm = 0) {
-  return new Date(y, m1_12 - 1, d, hh, mm, 0, 0); // lokale TZ
+
+function formatYMD(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
-function* eachDate(start: Date, end: Date) {
-  const cur = new Date(start);
-  cur.setHours(0, 0, 0, 0);
-  const stop = new Date(end);
-  stop.setHours(0, 0, 0, 0);
-  while (cur <= stop) {
-    yield new Date(cur);
-    cur.setDate(cur.getDate() + 1);
-  }
+
+function addDays(dateIso: string, amount: number) {
+  const { year, month, day } = parseYMD(dateIso);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + amount);
+  return formatYMD(date);
+}
+
+function getWeekday(dateIso: string) {
+  const { year, month, day } = parseYMD(dateIso);
+  return new Date(year, month - 1, day).getDay(); // 0=zo..6=za
+}
+
+function amsterdamDateTimeToUtc(dateIso: string, hhmm: string) {
+  return fromZonedTime(`${dateIso} ${hhmm}:00`, TIMEZONE);
+}
+
+function addMinutes(date: Date, mins: number) {
+  return new Date(date.getTime() + mins * 60_000);
+}
+
+function startOfDayUtc(dateIso: string) {
+  return fromZonedTime(`${dateIso} 00:00:00`, TIMEZONE);
+}
+
+function startOfNextDayUtc(dateIso: string) {
+  return fromZonedTime(`${addDays(dateIso, 1)} 00:00:00`, TIMEZONE);
 }
 
 export async function POST(
@@ -47,110 +86,149 @@ export async function POST(
   ctx: { params: Promise<{ partnerSlug: string }> }
 ) {
   try {
-    // Auth
     const user = await getSessionUser();
-    if (!user) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 });
+    if (!user) {
+      return NextResponse.json(
+        { ok: false, error: "UNAUTHORIZED" },
+        { status: 401 }
+      );
+    }
 
-    // Next.js 15: params awaiten
     const { partnerSlug } = await ctx.params;
     const partner = await resolvePartnerForRequest(user, partnerSlug);
 
-    // Body parsen/valideren
     let raw: unknown;
     try {
       raw = await req.json();
     } catch {
-      return NextResponse.json({ ok: false, error: "INVALID_JSON" }, { status: 400 });
-    }
-    const parsed = BodySchema.safeParse(raw);
-    if (!parsed.success) {
       return NextResponse.json(
-        { ok: false, error: "INVALID_BODY", details: parsed.error.flatten() },
+        { ok: false, error: "INVALID_JSON" },
         { status: 400 }
       );
     }
-    const {
-      startDate, endDate, weekdays, times, publish,
-      capacity = 1, maxPlayers = 3, durationMinutes = 60,
-    } = parsed.data;
 
-    // Datums
-    const { y: y1, m: m1, d: d1 } = parseYMD(startDate);
-    const { y: y2, m: m2, d: d2 } = parseYMD(endDate);
-    const from = makeLocalDate(y1, m1, d1, 0, 0);
-    const to = makeLocalDate(y2, m2, d2, 23, 59);
-    if (from > to) {
-      return NextResponse.json({ ok: false, error: "INVALID_RANGE", message: "startDate moet ≤ endDate zijn" }, { status: 400 });
+    const parsed = BodySchema.safeParse(raw);
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "INVALID_BODY",
+          details: parsed.error.flatten(),
+        },
+        { status: 400 }
+      );
     }
 
-    // Genereer gewenste slots (lokale tijd)
+    const {
+      startDate,
+      endDate,
+      weekdays,
+      times,
+      publish,
+      capacity = 1,
+      maxPlayers = 3,
+      durationMinutes = 60,
+    } = parsed.data;
+
+    if (startDate > endDate) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "INVALID_RANGE",
+          message: "startDate moet ≤ endDate zijn",
+        },
+        { status: 400 }
+      );
+    }
+
+    const uniqueTimes = Array.from(new Set(times)).sort();
     const wanted: Array<{ startTime: Date; endTime: Date }> = [];
-    // (kleine optimalisatie: dubbele tijden uit 'times' halen)
-    const uniqueTimes = Array.from(new Set(times));
-    for (const day of eachDate(from, to)) {
-      if (!weekdays.includes(day.getDay())) continue; // 0=zo..6=za
-      const y = day.getFullYear();
-      const m = day.getMonth() + 1;
-      const d = day.getDate();
-      for (const t of uniqueTimes) {
-        const [hh, mm] = t.split(":").map(Number);
-        const startTime = makeLocalDate(y, m, d, hh, mm);
-        const endTime = new Date(startTime.getTime() + durationMinutes * 60_000);
-        wanted.push({ startTime, endTime });
+
+    let currentDate = startDate;
+    while (currentDate <= endDate) {
+      const weekday = getWeekday(currentDate);
+
+      if (weekdays.includes(weekday)) {
+        for (const time of uniqueTimes) {
+          const startTime = amsterdamDateTimeToUtc(currentDate, time);
+          const endTime = addMinutes(startTime, durationMinutes);
+          wanted.push({ startTime, endTime });
+        }
       }
+
+      currentDate = addDays(currentDate, 1);
     }
 
     if (wanted.length === 0) {
-      return NextResponse.json({ ok: false, error: "EMPTY_SELECTION", message: "Geen datums/tijden in de gekozen range" }, { status: 400 });
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "EMPTY_SELECTION",
+          message: "Geen datums/tijden in de gekozen range",
+        },
+        { status: 400 }
+      );
     }
 
     const data = wanted.map(({ startTime, endTime }) => ({
       partnerId: partner.id,
       startTime,
       endTime,
-      status: publish ? ("PUBLISHED" as SlotStatus) : ("PUBLISHED" as SlotStatus), // DB kent geen DRAFT
+      status: publish
+        ? ("PUBLISHED" as SlotStatus)
+        : ("PUBLISHED" as SlotStatus), // laat staan zolang DB geen DRAFT kent
       capacity,
       maxPlayers,
     }));
 
-    // ===== Schrijven met deduplicatie =====
-    // Vereist in Prisma schema:
-    //   @@unique([partnerId, startTime])
-    // Dan kunnen we skipDuplicates gebruiken (stille overslag van bestaande).
     const result = await prisma.slot.createMany({
       data,
-      skipDuplicates: true, // <- belangrijkste wijziging
+      skipDuplicates: true,
     });
 
     const attempted = data.length;
-    const createdCount = result.count;
-    const skipped = attempted - createdCount;
+    const created = result.count;
+    const skipped = attempted - created;
 
-    // Actuele stand in range ophalen (DB = bron van waarheid)
+    const rangeFrom = startOfDayUtc(startDate);
+    const rangeTo = startOfNextDayUtc(endDate);
+
     const fresh = await prisma.slot.findMany({
       where: {
         partnerId: partner.id,
-        startTime: { gte: from, lte: to },
+        startTime: {
+          gte: rangeFrom,
+          lt: rangeTo,
+        },
       },
       orderBy: { startTime: "asc" },
       select: {
-        id: true, startTime: true, endTime: true, status: true, capacity: true, maxPlayers: true,
+        id: true,
+        startTime: true,
+        endTime: true,
+        status: true,
+        capacity: true,
+        maxPlayers: true,
       },
     });
 
     return NextResponse.json({
       ok: true,
       attempted,
-      created: createdCount,
+      created,
       skipped,
       range: { startDate, endDate },
       slots: fresh,
-      note: skipped > 0
-        ? "Bestaande tijden zijn overgeslagen; nieuwe tijden zijn toegevoegd."
-        : "Alle gekozen tijden zijn aangemaakt.",
+      note:
+        skipped > 0
+          ? "Bestaande tijden zijn overgeslagen; nieuwe tijden zijn toegevoegd."
+          : "Alle gekozen tijden zijn aangemaakt.",
     });
   } catch (err: any) {
     console.error("[/api/slots/[partnerSlug]/bulk] Error:", err);
-    return NextResponse.json({ ok: false, error: err?.message ?? "Internal error" }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: err?.message ?? "Internal error" },
+      { status: 500 }
+    );
   }
 }

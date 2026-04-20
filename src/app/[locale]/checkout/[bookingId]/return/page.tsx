@@ -2,6 +2,7 @@
 "use client";
 
 import * as React from "react";
+import { JSX } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 /** Kleine helpers */
