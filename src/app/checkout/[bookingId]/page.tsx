@@ -26,6 +26,7 @@ type BookingVM = {
 
 /* ===================== Helpers ===================== */
 const euro = (cents: number) => `€ ${(cents / 100).toFixed(2)}`;
+
 function fmtDateTimeNL(iso: string) {
   const d = new Date(iso);
   return d.toLocaleDateString("nl-NL", {
@@ -37,36 +38,39 @@ function fmtDateTimeNL(iso: string) {
     timeZone: "Europe/Amsterdam",
   });
 }
+
 const IconCheck = (p: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={2} {...p}>
     <path d="M5 10l3 3 7-7" />
   </svg>
 );
+
 const IconCalendar = (p: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} {...p}>
     <path d="M7 3v4M17 3v4M3 10h18M5 7h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z" />
   </svg>
 );
+
 const IconUsers = (p: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} {...p}>
     <path d="M16 11c1.657 0 3-1.79 3-4s-1.343-4-3-4-3 1.79-3 4 1.343 4 3 4zM8 13c-2.761 0-5 2.239-5 5v2h10v-2c0-2.761-2.239-5-5-5z" />
     <path d="M16 13c-1.2 0-2.284.42-3.141 1.118A5.97 5.97 0 0 1 15 18v2h7v-2c0-2.761-2.239-5-5-5z" />
   </svg>
 );
+
 const IconMail = (p: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} {...p}>
     <path d="M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z" />
     <path d="m22 8-10 7L2 8" />
   </svg>
 );
-/* Nieuw: alert-icoontje voor foutmeldingen/success */
+
 const IconAlert = (p: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} {...p}>
     <path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
   </svg>
 );
 
-/* network helper */
 async function postJSON<T>(url: string, body: any): Promise<T> {
   const r = await fetch(url, {
     method: "POST",
@@ -78,12 +82,13 @@ async function postJSON<T>(url: string, body: any): Promise<T> {
   return r.json();
 }
 
-/* small debounce hook */
 function useDebouncedCallback(fn: () => void, delay = 600, deps: any[] = []) {
   const timeoutRef = React.useRef<number | null>(null);
+
   React.useEffect(() => {
     if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
     timeoutRef.current = window.setTimeout(() => fn(), delay);
+
     return () => {
       if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
     };
@@ -94,6 +99,7 @@ function useDebouncedCallback(fn: () => void, delay = 600, deps: any[] = []) {
 /* ===================== Pagina ===================== */
 export default function CheckoutPage() {
   const params = useParams();
+
   const bookingId = React.useMemo(() => {
     const raw = (params as any)?.bookingId;
     return Array.isArray(raw) ? raw[0] : String(raw ?? "");
@@ -107,7 +113,8 @@ export default function CheckoutPage() {
   const [dogName, setDogName] = React.useState("");
   const [dogAllergies, setDogAllergies] = React.useState("");
   const [dogFears, setDogFears] = React.useState("");
-  const [dogTrackingLevel, setDogTrackingLevel] = React.useState<TrackingLevel>("NONE");
+  const [dogTrackingLevel, setDogTrackingLevel] =
+    React.useState<TrackingLevel>("NONE");
   const [savingDog, setSavingDog] = React.useState(false);
   const [savedAt, setSavedAt] = React.useState<number | null>(null);
 
@@ -129,11 +136,15 @@ export default function CheckoutPage() {
   /* ====== Data laden ====== */
   React.useEffect(() => {
     let cancelled = false;
+
     (async () => {
       if (!bookingId) return;
+
       try {
         setLoading(true);
-        const r = await fetch(`/api/booking/${encodeURIComponent(bookingId)}`, { cache: "no-store" });
+        const r = await fetch(`/api/booking/${encodeURIComponent(bookingId)}`, {
+          cache: "no-store",
+        });
         if (!r.ok) throw new Error(await r.text());
         const j = await r.json();
 
@@ -156,8 +167,13 @@ export default function CheckoutPage() {
             restCents: j.restAmountCents,
           },
           discount:
-            (typeof j.discountAmountCents === "number" && j.discountAmountCents > 0) || j.discountCode
-              ? { code: j.discountCode?.code ?? null, amountCents: Math.max(0, j.discountAmountCents ?? 0) }
+            (typeof j.discountAmountCents === "number" &&
+              j.discountAmountCents > 0) ||
+            j.discountCode
+              ? {
+                  code: j.discountCode?.code ?? null,
+                  amountCents: Math.max(0, j.discountAmountCents ?? 0),
+                }
               : null,
         };
 
@@ -178,6 +194,7 @@ export default function CheckoutPage() {
         if (!cancelled) setLoading(false);
       }
     })();
+
     return () => {
       cancelled = true;
     };
@@ -195,12 +212,15 @@ export default function CheckoutPage() {
   useDebouncedCallback(
     async () => {
       if (!data) return;
+
       const err = validateEmail(customerEmail);
       setEmailError(err);
       if (err) return;
+
       try {
         setEmailSaving(true);
         setEmailSavedAt(null);
+
         let resp: any;
         try {
           resp = await postJSON("/api/booking/update-customer-email", {
@@ -213,8 +233,14 @@ export default function CheckoutPage() {
             customer: { email: customerEmail.trim() },
           });
         }
-        if (!resp?.ok && !resp?.booking) throw new Error(resp?.error || "Opslaan mislukt");
-        setData((d) => (d ? { ...d, customerEmail: customerEmail.trim() } as BookingVM : d));
+
+        if (!resp?.ok && !resp?.booking) {
+          throw new Error(resp?.error || "Opslaan mislukt");
+        }
+
+        setData((d) =>
+          d ? ({ ...d, customerEmail: customerEmail.trim() } as BookingVM) : d
+        );
         setEmailSavedAt(Date.now());
       } catch {
         setEmailError("Opslaan mislukt. Probeer opnieuw.");
@@ -230,9 +256,11 @@ export default function CheckoutPage() {
   useDebouncedCallback(
     async () => {
       if (!data) return;
+
       try {
         setSavingDog(true);
         setSavedAt(null);
+
         const r = await fetch("/api/booking/update-dog", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -245,6 +273,7 @@ export default function CheckoutPage() {
             dogTrackingLevel,
           }),
         });
+
         if (!r.ok) throw new Error(await r.text());
         setSavedAt(Date.now());
       } catch (e: any) {
@@ -260,8 +289,10 @@ export default function CheckoutPage() {
   /* ====== Kortingscode ====== */
   async function applyDiscount(codeRaw: string | null) {
     if (!data) return;
+
     setApplying(true);
     setDiscountMsg(null);
+
     try {
       const code = codeRaw?.trim() || null;
 
@@ -269,10 +300,13 @@ export default function CheckoutPage() {
         postJSON<any>("/api/booking/apply-discount", { bookingId: data.id, code });
 
       const tryAlt = async () =>
-        postJSON<any>(code ? "/api/booking/discount/apply" : "/api/booking/discount/clear", {
-          bookingId: data.id,
-          code,
-        });
+        postJSON<any>(
+          code ? "/api/booking/discount/apply" : "/api/booking/discount/clear",
+          {
+            bookingId: data.id,
+            code,
+          }
+        );
 
       let resp: any;
       try {
@@ -281,7 +315,10 @@ export default function CheckoutPage() {
         resp = await tryAlt();
       }
 
-      if (!resp?.ok || !resp?.booking) throw new Error(resp?.error || "Kon kortingscode niet toepassen");
+      if (!resp?.ok || !resp?.booking) {
+        throw new Error(resp?.error || "Kon kortingscode niet toepassen");
+      }
+
       const b = resp.booking;
 
       const vm: BookingVM = {
@@ -303,20 +340,24 @@ export default function CheckoutPage() {
           restCents: b.restAmountCents,
         },
         discount:
-          (typeof b.discountAmountCents === "number" && b.discountAmountCents > 0) || b.discountCode
-            ? { code: b.discountCode?.code ?? null, amountCents: Math.max(0, b.discountAmountCents ?? 0) }
+          (typeof b.discountAmountCents === "number" &&
+            b.discountAmountCents > 0) ||
+          b.discountCode
+            ? {
+                code: b.discountCode?.code ?? null,
+                amountCents: Math.max(0, b.discountAmountCents ?? 0),
+              }
             : null,
       };
 
       setData(vm);
       setCouponInput(vm.discount?.code ?? "");
       setDiscountMsg(code ? "Kortingscode toegepast ✔️" : "Kortingscode verwijderd");
-    } catch (e: any) {
+    } catch {
       const typed = (couponInput || "").trim().toUpperCase();
-      const pretty =
-        typed
-          ? `De kortingscode ‘${typed}’ is ongeldig of niet van toepassing op deze boeking. Controleer de spelling (hoofdletters), of vraag bij de hondenschool naar een geldige/actieve code.`
-          : "Deze kortingscode is ongeldig of niet van toepassing op deze boeking.";
+      const pretty = typed
+        ? `De kortingscode ‘${typed}’ is ongeldig of niet van toepassing op deze boeking. Controleer de spelling of vraag bij de hondenschool naar een geldige code.`
+        : "Deze kortingscode is ongeldig of niet van toepassing op deze boeking.";
       setDiscountMsg(pretty);
     } finally {
       setApplying(false);
@@ -336,15 +377,19 @@ export default function CheckoutPage() {
       if (err) return;
 
       setPayLoading(true);
+
       const res = await fetch("/api/payments/mollie/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
         body: JSON.stringify({ bookingId: id }),
       });
+
       if (!res.ok) throw new Error(await res.text());
+
       const j = await res.json();
       if (!j?.url) throw new Error("Geen Mollie URL ontvangen");
+
       window.location.assign(j.url as string);
     } catch (err) {
       console.error("Betaling starten mislukt", err);
@@ -356,27 +401,36 @@ export default function CheckoutPage() {
   /* ===================== UI ===================== */
   if (loading) {
     return (
-      <div className="min-h-[100dvh] bg-stone-50">
-        <div className="mx-auto max-w-6xl p-4 md:p-8">
+      <div className="min-h-[100dvh] bg-stone-950 text-white">
+        <div aria-hidden className="absolute inset-0">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.07),transparent_35%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(28,25,23,0.96)_0%,rgba(12,10,9,1)_100%)]" />
+          <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:12px_12px]" />
+        </div>
+
+        <div className="relative mx-auto max-w-6xl p-4 md:p-8">
           <HeaderSkeleton />
           <div className="mt-6 grid gap-6 md:grid-cols-3">
-            <div className="md:col-span-2 space-y-6">
-              <div className="h-40 rounded-2xl bg-stone-100 shadow-sm animate-pulse" />
-              <div className="h-72 rounded-2xl bg-stone-100 shadow-sm animate-pulse" />
+            <div className="space-y-6 md:col-span-2">
+              <div className="h-40 animate-pulse rounded-[1.75rem] border border-white/10 bg-white/[0.05]" />
+              <div className="h-72 animate-pulse rounded-[1.75rem] border border-white/10 bg-white/[0.05]" />
             </div>
-            <div className="h-56 rounded-2xl bg-stone-100 shadow-sm animate-pulse" />
+            <div className="h-56 animate-pulse rounded-[1.75rem] border border-white/10 bg-white/[0.05]" />
           </div>
         </div>
       </div>
     );
   }
+
   if (!data) {
     return (
-      <div className="min-h-[100dvh] bg-stone-50">
-        <div className="mx-auto max-w-6xl p-4 md:p-8">
-          {/* Geen PENDING badge meer tonen */}
+      <div className="min-h-[100dvh] bg-stone-950 text-white">
+        <div className="relative mx-auto max-w-6xl p-4 md:p-8">
           <SimpleHeader title="Bevestig jouw boeking" />
-          <div className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-800 shadow-sm" role="alert">
+          <div
+            className="mt-6 rounded-[1.5rem] border border-rose-400/20 bg-rose-500/10 p-4 text-rose-100 shadow-sm"
+            role="alert"
+          >
             Boekingsnummer onbekend of verlopen.
           </div>
         </div>
@@ -385,19 +439,28 @@ export default function CheckoutPage() {
   }
 
   return (
-    <main className="min-h-[100dvh] bg-stone-50 text-stone-900">
+    <main className="min-h-[100dvh] bg-stone-950 text-white">
+      <div aria-hidden className="fixed inset-0 -z-10">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.07),transparent_35%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(28,25,23,0.96)_0%,rgba(12,10,9,1)_100%)]" />
+        <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:12px_12px]" />
+      </div>
+
       <div className="mx-auto max-w-6xl p-4 md:p-8">
-        {/* Statusbadge wordt NIET getoond wanneer status 'PENDING' is */}
-        <SimpleHeader title="Bevestig jouw boeking" status={data.status} idLabel={data.id} />
+        <SimpleHeader
+          title="Bevestig jouw boeking"
+          status={data.status}
+          idLabel={data.id}
+        />
 
         <div className="mt-6 grid gap-6 md:grid-cols-3">
           {/* Linker kolom */}
-          <section className="md:col-span-2 space-y-6">
+          <section className="space-y-6 md:col-span-2">
             <Card>
               <CardTitle icon="📅" title="Overzicht" />
-              <div className="mt-3 space-y-4">
+              <div className="mt-4 space-y-4">
                 <InfoRow label="Hondenschool" icon={<span aria-hidden>🏫</span>}>
-                  <span className="font-medium">{data.partnerName}</span>
+                  <span className="font-medium text-white">{data.partnerName}</span>
                 </InfoRow>
 
                 <InfoRow label="Datum & tijd" icon={<IconCalendar className="h-4 w-4" />}>
@@ -413,7 +476,7 @@ export default function CheckoutPage() {
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
                     placeholder="Jouw naam"
-                    className="mt-1 h-10 w-full rounded-xl border border-stone-300 bg-white px-3 text-sm outline-none focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
+                    className="mt-1 h-11 w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 text-sm text-white outline-none placeholder:text-stone-400 focus:border-rose-300/60 focus:ring-2 focus:ring-rose-300/40"
                     aria-label="Naam klant"
                     autoComplete="name"
                   />
@@ -428,21 +491,23 @@ export default function CheckoutPage() {
                       onChange={(e) => setCustomerEmail(e.target.value)}
                       placeholder="bijv. naam@voorbeeld.nl"
                       className={[
-                        "mt-1 h-10 w-full rounded-xl border bg-white px-3 text-sm outline-none transition",
+                        "mt-1 h-11 w-full rounded-xl border bg-white/[0.06] px-3 text-sm text-white outline-none placeholder:text-stone-400 transition",
                         emailError
-                          ? "border-rose-400 focus:border-rose-500 focus:ring-2 focus:ring-rose-200"
-                          : "border-stone-300 focus:border-pink-600 focus:ring-2 focus:ring-pink-300",
+                          ? "border-rose-400/60 focus:border-rose-400 focus:ring-2 focus:ring-rose-300/30"
+                          : "border-white/10 focus:border-rose-300/60 focus:ring-2 focus:ring-rose-300/40",
                       ].join(" ")}
                       aria-invalid={Boolean(emailError)}
                       aria-describedby="email-help"
                       autoComplete="email"
                     />
+
                     <div id="email-help" className="min-h-[18px]" aria-live="polite">
-                      {emailError && <p className="text-[12px] text-rose-700">{emailError}</p>}
-                      {emailSaving && !emailError && (
-                        <p className="text-[12px] text-stone-600">Opslaan…</p>
+                      {emailError && (
+                        <p className="text-[12px] text-rose-300">{emailError}</p>
                       )}
-                      {/* ✅ Succesmelding (vinkje/tekst) NIET meer tonen */}
+                      {emailSaving && !emailError && (
+                        <p className="text-[12px] text-stone-400">Opslaan…</p>
+                      )}
                       {emailSavedAt && !emailError && !emailSaving && null}
                     </div>
                   </div>
@@ -453,28 +518,38 @@ export default function CheckoutPage() {
             {/* Gegevens van je hond — autosave */}
             <Card>
               <CardTitle icon="🐾" title="Gegevens van je hond" />
-              <div className="mt-3 space-y-4">
+              <div className="mt-4 space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
                   <Field label="Naam hond">
                     <input
                       value={dogName}
                       onChange={(e) => setDogName(e.target.value)}
                       placeholder="bijv. Sam"
-                      className="mt-1 h-10 w-full rounded-xl border border-stone-300 bg-white px-3 text-sm outline-none focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
+                      className="mt-1 h-11 w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 text-sm text-white outline-none placeholder:text-stone-400 focus:border-rose-300/60 focus:ring-2 focus:ring-rose-300/40"
                       autoComplete="off"
                     />
                   </Field>
 
-                  <Field label="Ervaringen met speuren">
+                  <Field label="Hond is sociaal tegen andere mensen">
                     <select
                       value={dogTrackingLevel}
-                      onChange={(e) => setDogTrackingLevel(e.target.value as TrackingLevel)}
-                      className="mt-1 h-10 w-full rounded-xl border border-stone-300 bg-white px-2 text-sm outline-none focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
+                      onChange={(e) =>
+                        setDogTrackingLevel(e.target.value as TrackingLevel)
+                      }
+                      className="mt-1 h-11 w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 text-sm text-white outline-none focus:border-rose-300/60 focus:ring-2 focus:ring-rose-300/40"
                     >
-                      <option value="NONE">Nee</option>
-                      <option value="BEGINNER">Beginner</option>
-                      <option value="AMATEUR">Amateur</option>
-                      <option value="PRO">Pro</option>
+                      <option value="NONE" className="text-stone-900">
+                        Nee
+                      </option>
+                      <option value="BEGINNER" className="text-stone-900">
+                        Een beetje
+                      </option>
+                      <option value="AMATEUR" className="text-stone-900">
+                        Meestal wel
+                      </option>
+                      <option value="PRO" className="text-stone-900">
+                        Ja
+                      </option>
                     </select>
                   </Field>
                 </div>
@@ -485,7 +560,7 @@ export default function CheckoutPage() {
                     onChange={(e) => setDogAllergies(e.target.value)}
                     placeholder="Bijv. kip, rund, granen…"
                     rows={2}
-                    className="mt-1 w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
+                    className="mt-1 w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none placeholder:text-stone-400 focus:border-rose-300/60 focus:ring-2 focus:ring-rose-300/40"
                   />
                 </Field>
 
@@ -495,15 +570,14 @@ export default function CheckoutPage() {
                     onChange={(e) => setDogFears(e.target.value)}
                     placeholder="Bijv. harde geluiden, onbekende ruimtes…"
                     rows={2}
-                    className="mt-1 w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
+                    className="mt-1 w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none placeholder:text-stone-400 focus:border-rose-300/60 focus:ring-2 focus:ring-rose-300/40"
                   />
                 </Field>
 
                 <div className="min-h-[18px]" aria-live="polite">
-                  {savingDog && <p className="text-[12px] text-stone-600">Opslaan…</p>}
-                  {/* ✅ Succesmelding (vinkje/‘Opgeslagen’) NIET meer tonen */}
+                  {savingDog && <p className="text-[12px] text-stone-400">Opslaan…</p>}
                   {savedAt && !savingDog && null}
-                  {msg && <span className="text-[12px] text-rose-700">{msg}</span>}
+                  {msg && <span className="text-[12px] text-rose-300">{msg}</span>}
                 </div>
               </div>
             </Card>
@@ -548,17 +622,27 @@ function SimpleHeader({
   idLabel?: string;
 }) {
   return (
-    <header className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <header className="relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.05] p-5 shadow-xl shadow-black/15 backdrop-blur-md">
+      <div
+        aria-hidden
+        className="absolute inset-0 bg-[linear-gradient(135deg,rgba(244,114,182,0.08),rgba(251,191,36,0.05)_45%,rgba(255,255,255,0.02)_100%)]"
+      />
+      <div className="relative flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-extrabold text-stone-900">{title}</h1>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-amber-200/90">
+            CHECKOUT
+          </p>
+          <h1 className="mt-2 text-2xl font-black tracking-tight text-white">
+            {title}
+          </h1>
           {idLabel && (
-            <p className="mt-0.5 text-xs text-stone-600">
-              Boekingsnummer: <span className="font-semibold text-stone-900">{idLabel}</span>
+            <p className="mt-1 text-xs text-stone-400">
+              Boekingsnummer:{" "}
+              <span className="font-semibold text-stone-200">{idLabel}</span>
             </p>
           )}
         </div>
-        {/* ❌ Geen 'PENDING' badge meer tonen */}
+
         {status && status !== "PENDING" && <StatusBadge status={status} />}
       </div>
     </header>
@@ -566,26 +650,36 @@ function SimpleHeader({
 }
 
 function HeaderSkeleton() {
-  return <div className="h-10 w-full animate-pulse rounded-2xl bg-stone-100 shadow" />;
+  return (
+    <div className="h-16 w-full animate-pulse rounded-[1.75rem] border border-white/10 bg-white/[0.05]" />
+  );
 }
 
 function Card({ children }: { children: React.ReactNode }) {
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-      <div aria-hidden className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-stone-200" />
-      <div aria-hidden className="pointer-events-none absolute -inset-px rounded-[18px] bg-gradient-to-br from-rose-50/70 via-pink-50/40 to-stone-50/30" />
+    <div className="relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.05] p-5 shadow-xl shadow-black/15 backdrop-blur-md">
+      <div
+        aria-hidden
+        className="absolute inset-0 bg-[linear-gradient(135deg,rgba(244,114,182,0.06),rgba(251,191,36,0.04)_45%,rgba(255,255,255,0.02)_100%)]"
+      />
       <div className="relative z-10">{children}</div>
     </div>
   );
 }
 
-function CardTitle({ icon, title }: { icon?: React.ReactNode | string; title: string }) {
+function CardTitle({
+  icon,
+  title,
+}: {
+  icon?: React.ReactNode | string;
+  title: string;
+}) {
   return (
     <div className="flex items-center gap-2">
-      <div className="inline-flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-rose-100 to-pink-100 text-lg">
+      <div className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/[0.08] text-lg">
         <span className="leading-none">{icon ?? "✨"}</span>
       </div>
-      <h3 className="text-xl font-extrabold">{title}</h3>
+      <h3 className="text-xl font-extrabold text-white">{title}</h3>
     </div>
   );
 }
@@ -600,48 +694,75 @@ function InfoRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="grid grid-cols-1 gap-2 rounded-xl border border-stone-100 bg-stone-50/60 p-3 md:grid-cols-[170px_1fr] md:items-start md:gap-3">
-      <div className="flex items-center gap-2 text-sm font-semibold text-stone-700">
-        {icon && <span className="text-stone-500">{icon}</span>}
+    <div className="grid grid-cols-1 gap-2 rounded-xl border border-white/10 bg-white/[0.04] p-3 md:grid-cols-[170px_1fr] md:items-start md:gap-3">
+      <div className="flex items-center gap-2 text-sm font-semibold text-stone-300">
+        {icon && <span className="text-stone-400">{icon}</span>}
         {label}
       </div>
-      <div className="text-stone-900">{children}</div>
+      <div className="text-stone-100">{children}</div>
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
-    <label className="block text-sm font-semibold text-stone-800">
+    <label className="block text-sm font-semibold text-stone-200">
       {label}
-      <div className="text-sm font-normal text-stone-900">{children}</div>
+      <div className="text-sm font-normal text-stone-100">{children}</div>
     </label>
   );
 }
 
 function StatusBadge({ status }: { status: BookingVM["status"] }) {
   const map: Record<BookingVM["status"], { cls: string; label: string }> = {
-    PENDING: { cls: "border-amber-300 bg-amber-100 text-amber-800", label: "PENDING" },
-    CONFIRMED: { cls: "border-emerald-300 bg-emerald-100 text-emerald-800", label: "CONFIRMED" },
-    CANCELLED: { cls: "border-rose-300 bg-rose-100 text-rose-800", label: "CANCELLED" },
+    PENDING: {
+      cls: "border-amber-400/25 bg-amber-500/12 text-amber-100",
+      label: "PENDING",
+    },
+    CONFIRMED: {
+      cls: "border-emerald-400/25 bg-emerald-500/12 text-emerald-100",
+      label: "CONFIRMED",
+    },
+    CANCELLED: {
+      cls: "border-rose-400/25 bg-rose-500/12 text-rose-100",
+      label: "CANCELLED",
+    },
   };
+
   const s = map[status];
+
   return (
-    <span className={`rounded-full border px-3 py-1 text-xs font-semibold shadow-sm ${s.cls}`}>
+    <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${s.cls}`}>
       {s.label}
     </span>
   );
 }
 
-function Row({ label, value, emphasize = false }: { label: string; value: string; emphasize?: boolean }) {
+function Row({
+  label,
+  value,
+  emphasize = false,
+}: {
+  label: string;
+  value: string;
+  emphasize?: boolean;
+}) {
   return (
     <div
-      className={`flex items-center justify-between rounded-lg border border-stone-100 px-3 py-2 ${
-        emphasize ? "bg-stone-50" : "bg-stone-50/60"
+      className={`flex items-center justify-between rounded-xl border border-white/10 px-3 py-2.5 ${
+        emphasize ? "bg-white/[0.08]" : "bg-white/[0.04]"
       }`}
     >
-      <span>{label}</span>
-      <strong className={emphasize ? "text-stone-900" : ""}>{value}</strong>
+      <span className="text-stone-300">{label}</span>
+      <strong className={emphasize ? "text-white" : "text-stone-100"}>
+        {value}
+      </strong>
     </div>
   );
 }
@@ -662,7 +783,6 @@ function PriceCard({
   onPay,
   canPay,
   payLoading,
-  bookingId,
 }: {
   total: number;
   deposit: number;
@@ -682,45 +802,59 @@ function PriceCard({
   bookingId: string;
 }) {
   const hasDiscount = discountCents > 0;
-  const isSuccess = message ? (message.includes("✔") || message.toLowerCase().startsWith("ok")) : false;
+  const isSuccess = message
+    ? message.includes("✔") || message.toLowerCase().startsWith("ok")
+    : false;
 
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white shadow-sm md:sticky md:top-6">
-      <div className="h-2 w-full rounded-t-2xl bg-gradient-to-r from-pink-300 via-rose-300 to-pink-300" />
+    <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.05] shadow-xl shadow-black/15 backdrop-blur-md md:sticky md:top-6">
+      <div className="h-2 w-full rounded-t-[1.75rem] bg-gradient-to-r from-pink-400 via-rose-300 to-amber-200" />
       <div className="p-5">
         <div className="flex items-center gap-2">
-          <div className="inline-flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-rose-100 to-pink-100">
+          <div className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/[0.08]">
             💳
           </div>
-        <div className="text-sm font-extrabold tracking-tight">Prijs</div>
+          <div className="text-base font-extrabold tracking-tight text-white">
+            Prijs
+          </div>
         </div>
 
-        <div className="mt-3 space-y-2 text-sm">
+        <div className="mt-4 space-y-2 text-sm">
           <Row label="Totaal" value={euro(total)} emphasize />
-          {hasDiscount && <Row label="Korting" value={`- ${euro(discountCents)}`} />}
-          <Row label={`Aanbetaling (${feePercent}%)`} value={euro(deposit)} />
+          {hasDiscount && (
+            <Row label="Korting" value={`- ${euro(discountCents)}`} />
+          )}
+          <Row
+            label={`Aanbetaling (${feePercent}%)`}
+            value={euro(deposit)}
+          />
           <Row label="Rest op locatie" value={euro(rest)} />
         </div>
 
-        {/* Kortingscode */}
-        <div className="mt-4 rounded-xl border border-stone-200 bg-stone-50/60 p-3">
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-stone-700">Kortingscode</div>
+        <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.04] p-3">
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-amber-200/90">
+            Kortingscode
+          </div>
 
           {hasDiscount && discountCode ? (
-            <div className="flex items-center justify-between rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm">
+            <div className="flex items-center justify-between rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-sm">
               <div className="flex items-center gap-2">
-                <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600">
+                <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500">
                   <IconCheck className="h-3 w-3 text-white" />
                 </span>
-                <span className="font-semibold text-emerald-800">
-                  Toegepast: <span className="underline decoration-dotted">{discountCode}</span>
+                <span className="font-semibold text-emerald-100">
+                  Toegepast:{" "}
+                  <span className="underline decoration-dotted">
+                    {discountCode}
+                  </span>
                 </span>
               </div>
+
               <button
                 type="button"
                 onClick={onClear}
                 disabled={applying}
-                className="rounded-md border border-rose-300 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-rose-200"
+                className="rounded-lg border border-rose-400/25 bg-rose-500/10 px-2.5 py-1 text-xs font-semibold text-rose-100 hover:bg-rose-500/15 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-rose-300/30"
               >
                 Verwijderen
               </button>
@@ -731,29 +865,28 @@ function PriceCard({
                 value={couponInput}
                 onChange={(e) => onCouponInput(e.target.value)}
                 placeholder="WINTER10"
-                className="h-9 w-[9.5rem] rounded-lg border border-stone-300 bg-white px-2.5 text-sm outline-none focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
+                className="h-10 w-[9.5rem] rounded-xl border border-white/10 bg-white/[0.06] px-3 text-sm text-white outline-none placeholder:text-stone-400 focus:border-rose-300/60 focus:ring-2 focus:ring-rose-300/40"
                 aria-label="Kortingscode"
               />
               <button
                 type="button"
                 onClick={onApply}
                 disabled={!couponInput.trim() || applying}
-                className="h-9 rounded-lg bg-pink-600 px-3 text-sm font-semibold text-white shadow hover:bg-pink-700 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-pink-300"
+                className="h-10 rounded-xl bg-pink-600 px-3 text-sm font-semibold text-white shadow hover:bg-pink-700 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-pink-300/40"
               >
                 {applying ? "Bezig…" : "Pas toe"}
               </button>
             </div>
           )}
 
-          {/* 🔔 Nette fout/succes melding (role=alert) */}
           {message && (
             <div
               role="alert"
               className={[
-                "mt-2 flex items-start gap-2 rounded-lg border px-3 py-2 text-[12px]",
+                "mt-2 flex items-start gap-2 rounded-xl border px-3 py-2 text-[12px]",
                 isSuccess
-                  ? "border-emerald-300 bg-emerald-50 text-emerald-800"
-                  : "border-rose-300 bg-rose-50 text-rose-800",
+                  ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100"
+                  : "border-rose-400/25 bg-rose-500/10 text-rose-100",
               ].join(" ")}
             >
               <IconAlert className="mt-[2px] h-4 w-4 shrink-0" />
@@ -762,30 +895,26 @@ function PriceCard({
           )}
 
           {!message && !hasDiscount && (
-            <p className="mt-2 text-[11px] text-stone-600">
-              Korting wordt over het hele bedrag  berekend.
+            <p className="mt-2 text-[11px] text-stone-400">
+              Korting wordt over het hele bedrag berekend.
             </p>
           )}
         </div>
 
-        {/* Simpele 'Betalen' knop direct onder kortingscode */}
-        <div className="mt-4">
+        <div className="mt-5">
           <button
             type="button"
             onClick={onPay}
             disabled={payLoading || !canPay}
             aria-busy={payLoading}
-            className="w-full rounded-full bg-pink-600 px-4 py-2.5 text-sm font-semibold text-white shadow hover:bg-pink-700 disabled:opacity-60 focus:outline-none focus:ring-4 focus:ring-pink-300"
+            className="w-full rounded-2xl bg-pink-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-pink-950/30 transition hover:bg-pink-700 disabled:opacity-60 focus:outline-none focus:ring-4 focus:ring-pink-300/40"
           >
             {payLoading ? "Bezig…" : "Betalen"}
           </button>
-          <p className="mt-2 text-[11px] text-stone-600">
-            Je betaalt nu de aanbetaling; het restant betaal je bij de hondenschool.
-          </p>
-          <p className="mt-2 text-[11px] text-stone-600">
-            {" "}
-            <a className="underline" href={`/checkout/${bookingId}/return`}></a>
-            .
+
+          <p className="mt-3 text-[11px] leading-6 text-stone-400">
+            Je betaalt nu de aanbetaling; het restant betaal je bij de
+            hondenschool.
           </p>
         </div>
       </div>

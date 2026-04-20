@@ -5,41 +5,61 @@ import Script from "next/script";
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
 import Skills from "@/components/Skills";
-import Pricing from "@/components/Pricing";
 import BookingWidget from "@/components/BookingWidget";
 import PartnerOpportunity from "@/components/PartnerOpportunity";
 import ChatbotWidget from "@/components/ChatbotWidget";
-import ClientContactSection from "@/components/ClientContactSection"; // ← client wrapper
+import ClientContactSection from "@/components/ClientContactSection";
 
 export default function HomePage() {
   return (
-    <main id="main" className="bg-stone-50 text-stone-900">
+    <main id="main" className="bg-stone-950 text-white">
       <Header />
-      <Hero />
-      <Skills />
-      <Pricing />
 
-      <section id="boeken" aria-labelledby="boeken-title" className="bg-stone-50 py-16">
-        <div className="mx-auto w-full max-w-6xl px-4">
-          <h2 id="boeken-title" className="sr-only">Boeken</h2>
+      <div className="bg-stone-950 pt-24 sm:pt-28 lg:pt-32">
+        <Hero />
+      </div>
+
+      <Skills />
+
+      <section
+        id="boeken"
+        aria-labelledby="boeken-title"
+        className="relative overflow-hidden bg-stone-950 py-16 text-white sm:py-20"
+      >
+        <div aria-hidden className="absolute inset-0">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.06),transparent_35%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(28,25,23,0.94)_0%,rgba(12,10,9,1)_100%)]" />
+          <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(rgba(255,255,255,0.10)_1px,transparent_1px)] [background-size:12px_12px]" />
+        </div>
+
+        <div className="relative mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
+          <h2 id="boeken-title" className="sr-only">
+            Boeken
+          </h2>
           <BookingWidget />
         </div>
       </section>
 
-      <section id="partner" aria-labelledby="partner-title" className="bg-stone-50 py-16">
-        <div className="mx-auto w-full max-w-6xl px-4">
-          <h2
-            id="partner-title"
-            className="mb-8 text-center text-3xl font-extrabold tracking-tight text-stone-900"
-          />
+      <section
+        id="partner"
+        aria-labelledby="partner-title"
+        className="relative overflow-hidden bg-stone-950 py-16 text-white sm:py-20"
+      >
+        <div aria-hidden className="absolute inset-0">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.05),transparent_35%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(12,10,9,1)_0%,rgba(28,25,23,0.96)_100%)]" />
+          <div className="absolute inset-0 opacity-15 [background-image:radial-gradient(rgba(255,255,255,0.10)_1px,transparent_1px)] [background-size:12px_12px]" />
+        </div>
+
+        <div className="relative mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
+          <h2 id="partner-title" className="sr-only">
+            Partner worden
+          </h2>
           <PartnerOpportunity />
         </div>
       </section>
 
-      {/* CONTACT — client-only via wrapper */}
       <ClientContactSection />
-
-      {/* Subtiele chatbot, zonder taalprops */}
       <ChatbotWidget />
 
       <Script id="view-home-event" strategy="afterInteractive">

@@ -2,7 +2,6 @@
 "use client";
 
 import * as React from "react";
-import { JSX } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 /** Kleine helpers */
@@ -113,58 +112,80 @@ export default function ReturnPage() {
   const paymentStatus = last?.payment?.status?.toUpperCase();
 
   return (
-    <main className="min-h-screen bg-stone-50 text-stone-900">
-      <div className="pointer-events-none sticky top-0 z-0 h-2 w-full bg-gradient-to-r from-rose-200 via-pink-300 to-rose-200" />
+    <main className="relative min-h-screen overflow-hidden bg-stone-950 text-white">
+      <div aria-hidden className="absolute inset-0">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_35%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(28,25,23,0.78)_0%,rgba(12,10,9,0.96)_100%)]" />
+        <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(rgba(255,255,255,0.10)_1px,transparent_1px)] [background-size:12px_12px]" />
+      </div>
 
-      <div className="mx-auto max-w-xl px-4 py-10">
-        <h1 className="text-3xl font-extrabold tracking-tight">
-          Betaling afronden
-        </h1>
+      <div className="relative mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8 lg:py-16">
+        <div className="mx-auto max-w-3xl">
+          <div className="text-center">
+            <span className="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-semibold tracking-[0.24em] text-stone-100/90 backdrop-blur-sm">
+              BETALING & BOEKING
+            </span>
 
-        <p className="mt-1 text-stone-700">
-          We halen de status van je betaling op. Dit kan een paar seconden duren.
-        </p>
+            <p className="mt-5 text-sm font-medium uppercase tracking-[0.18em] text-amber-200/90">
+              The Missing Snack
+            </p>
 
-        {/* Statuskaart */}
-        <div className="mt-6 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-          {status === "CONFIRMED" ? (
-            <Success />
-          ) : status === "CANCELLED" ? (
-            <Cancelled bookingId={bookingId} />
-          ) : (
-            <Pending
-              bookingId={bookingId}
-              isTimedOut={isTimedOut}
-              paymentStatus={paymentStatus}
-              onRetry={checkNow}
-              retryLoading={manualLoading}
-              error={error}
-              router={router}
-            />
-          )}
-        </div>
+            <h1 className="mt-3 text-4xl font-black leading-[0.95] tracking-tight sm:text-5xl">
+              Betaling
+              <span className="block">afronden</span>
+            </h1>
 
-        {/* Meta / debug light */}
-        <div className="mt-4 text-xs text-stone-600">
-          <div>
-            Booking: <span className="font-mono">{bookingId}</span>
+            <p className="mx-auto mt-6 max-w-2xl text-sm leading-7 text-stone-200/90 sm:text-base">
+              We halen de status van je betaling op. Dit kan een paar seconden
+              duren.
+            </p>
           </div>
 
-          {last?.payment?.providerPaymentId && (
-            <div>
-              Provider ID:{" "}
-              <span className="font-mono">
-                {last.payment.providerPaymentId}
-              </span>
+          <div className="mt-8 rounded-[2rem] border border-white/10 bg-white/5 p-4 shadow-2xl shadow-black/30 backdrop-blur-sm sm:p-5">
+            <div className="rounded-[1.5rem] border border-white/10 bg-black/30 p-5 sm:p-6">
+              {status === "CONFIRMED" ? (
+                <Success />
+              ) : status === "CANCELLED" ? (
+                <Cancelled bookingId={bookingId} />
+              ) : (
+                <Pending
+                  bookingId={bookingId}
+                  isTimedOut={isTimedOut}
+                  paymentStatus={paymentStatus}
+                  onRetry={checkNow}
+                  retryLoading={manualLoading}
+                  error={error}
+                  router={router}
+                />
+              )}
             </div>
-          )}
+          </div>
 
-          {paymentStatus && (
-            <div>
-              Laatste paymentstatus:{" "}
-              <span className="font-semibold">{paymentStatus}</span>
+          <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4 text-xs text-stone-300/90 backdrop-blur-sm">
+            <div className="flex flex-col gap-2">
+              <div>
+                Booking: <span className="font-mono text-stone-100">{bookingId}</span>
+              </div>
+
+              {last?.payment?.providerPaymentId && (
+                <div>
+                  Provider ID:{" "}
+                  <span className="font-mono text-stone-100">
+                    {last.payment.providerPaymentId}
+                  </span>
+                </div>
+              )}
+
+              {paymentStatus && (
+                <div>
+                  Laatste paymentstatus:{" "}
+                  <span className="font-semibold text-stone-100">
+                    {paymentStatus}
+                  </span>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
     </main>
@@ -174,10 +195,10 @@ export default function ReturnPage() {
 function Success() {
   return (
     <div className="text-center">
-      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100">
+      <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-emerald-300/20 bg-emerald-400/15">
         <svg
           viewBox="0 0 20 20"
-          className="h-7 w-7 text-emerald-700"
+          className="h-8 w-8 text-emerald-300"
           fill="none"
           stroke="currentColor"
           strokeWidth={2}
@@ -186,20 +207,26 @@ function Success() {
         </svg>
       </div>
 
-      <h2 className="text-xl font-extrabold">
+      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-200/90">
+        Bevestigd
+      </p>
+
+      <h2 className="mt-3 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
         Gelukt! Je aanbetaling is ontvangen.
       </h2>
 
-      <p className="mt-1 text-stone-700">Je boeking is bevestigd.</p>
+      <p className="mt-3 text-sm leading-7 text-stone-200/90 sm:text-base">
+        Je boeking is bevestigd.
+      </p>
 
-      <p className="mt-4 text-sm text-stone-600">
+      <p className="mt-4 text-sm leading-7 text-stone-300/85">
         Bevestiging is per mail verstuurd, check ook even je spam folder.
       </p>
 
-      <div className="mt-5">
+      <div className="mt-7">
         <a
           href="/"
-          className="inline-flex items-center justify-center rounded-full bg-pink-600 px-6 py-2.5 text-sm font-semibold text-white shadow hover:bg-pink-700 focus:outline-none focus:ring-4 focus:ring-pink-300"
+          className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-pink-600 px-6 py-3 text-base font-semibold text-white shadow-lg shadow-pink-950/30 transition hover:bg-pink-700 focus:outline-none focus:ring-4 focus:ring-pink-300"
         >
           Naar homepage
         </a>
@@ -211,10 +238,10 @@ function Success() {
 function Cancelled({ bookingId }: { bookingId: string }) {
   return (
     <div className="text-center">
-      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-rose-100">
+      <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-rose-300/20 bg-rose-400/15">
         <svg
           viewBox="0 0 24 24"
-          className="h-7 w-7 text-rose-700"
+          className="h-8 w-8 text-rose-300"
           fill="none"
           stroke="currentColor"
           strokeWidth={1.8}
@@ -223,24 +250,30 @@ function Cancelled({ bookingId }: { bookingId: string }) {
         </svg>
       </div>
 
-      <h2 className="text-xl font-extrabold">Betaling geannuleerd</h2>
+      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-200/90">
+        Niet afgerond
+      </p>
 
-      <p className="mt-1 text-stone-700">
+      <h2 className="mt-3 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
+        Betaling geannuleerd
+      </h2>
+
+      <p className="mt-3 text-sm leading-7 text-stone-200/90 sm:text-base">
         Je kunt het opnieuw proberen; je boeking blijft nog even voor je
         gereserveerd.
       </p>
 
-      <div className="mt-4 flex flex-col items-center gap-2">
+      <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
         <a
           href={`/checkout/${bookingId}`}
-          className="inline-flex items-center justify-center rounded-full bg-pink-600 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-pink-700 focus:outline-none focus:ring-4 focus:ring-pink-300"
+          className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-pink-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-pink-950/30 transition hover:bg-pink-700 focus:outline-none focus:ring-4 focus:ring-pink-300"
         >
           Terug naar betaling
         </a>
 
         <a
           href={`/booking/${bookingId}`}
-          className="text-sm text-stone-700 underline"
+          className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-6 py-3 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/15 focus:outline-none focus:ring-4 focus:ring-white/30"
         >
           Bekijk je boeking
         </a>
@@ -268,49 +301,57 @@ function Pending({
 }) {
   return (
     <div className="text-center">
-      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-stone-100">
-        <Spinner className="h-6 w-6 text-stone-700" />
+      <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-white/10 bg-white/10">
+        <Spinner className="h-7 w-7 text-stone-100" />
       </div>
 
-      <h2 className="text-xl font-extrabold">We verwerken je betaling…</h2>
+      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-200/90">
+        Even geduld
+      </p>
 
-      <p className="mt-1 text-stone-700">
+      <h2 className="mt-3 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
+        We verwerken je betaling…
+      </h2>
+
+      <p className="mt-3 text-sm leading-7 text-stone-200/90 sm:text-base">
         Dit duurt meestal maar een paar seconden. Deze pagina ververst
         automatisch.
       </p>
 
-      <div className="mt-4 space-y-2 text-sm text-stone-700" aria-live="polite">
+      <div className="mt-5 space-y-3 text-sm text-stone-200/90" aria-live="polite">
         {paymentStatus && (
-          <div>
-            Mollie status: <strong>{paymentStatus}</strong>
+          <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+            Mollie status: <strong className="text-white">{paymentStatus}</strong>
           </div>
         )}
 
         {error && (
-          <div className="text-rose-700">Fout bij ophalen status: {error}</div>
+          <div className="rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-rose-200">
+            Fout bij ophalen status: {error}
+          </div>
         )}
 
         {isTimedOut && (
-          <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2">
+          <div className="rounded-2xl border border-amber-300/30 bg-amber-400/10 px-4 py-3 text-amber-100">
             Het lijkt wat langer te duren. Je kunt het handmatig opnieuw
             proberen of terug naar de checkout gaan.
           </div>
         )}
       </div>
 
-      <div className="mt-4 flex items-center justify-center gap-3">
+      <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row sm:flex-wrap">
         <button
           type="button"
           onClick={onRetry}
           disabled={retryLoading}
-          className="rounded-full bg-pink-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-pink-700 disabled:opacity-60 focus:outline-none focus:ring-4 focus:ring-pink-300"
+          className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-pink-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-pink-950/30 transition hover:bg-pink-700 disabled:opacity-60 focus:outline-none focus:ring-4 focus:ring-pink-300"
         >
           {retryLoading ? "Bezig…" : "Status opnieuw controleren"}
         </button>
 
         <a
           href={`/checkout/${bookingId}`}
-          className="text-sm text-stone-700 underline underline-offset-2"
+          className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-6 py-3 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/15 focus:outline-none focus:ring-4 focus:ring-white/30"
         >
           Terug naar checkout
         </a>
@@ -318,13 +359,13 @@ function Pending({
         <button
           type="button"
           onClick={() => router.refresh()}
-          className="text-sm text-stone-700 underline underline-offset-2"
+          className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-white/10 bg-transparent px-6 py-3 text-sm font-semibold text-stone-200 transition hover:bg-white/5 focus:outline-none focus:ring-4 focus:ring-white/20"
         >
           Vernieuw pagina
         </button>
       </div>
 
-      <p className="mt-3 text-xs text-stone-600">
+      <p className="mt-5 text-xs leading-6 text-stone-400">
         Blijft dit scherm hangen terwijl je wél hebt betaald? Je krijgt ook een
         e-mail zodra je boeking is bevestigd.
       </p>
@@ -347,6 +388,7 @@ function Spinner({ className = "h-5 w-5" }: { className?: string }) {
         r="10"
         stroke="currentColor"
         strokeWidth="4"
+        fill="none"
       />
       <path
         className="opacity-90"

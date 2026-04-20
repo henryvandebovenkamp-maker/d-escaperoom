@@ -1,45 +1,27 @@
 // PATH: src/components/ClientContactSection.tsx
 "use client";
 
-import * as React from "react";
-import dynamic from "next/dynamic";
-
-// ContactWidget client-only (voorkomt SSR/hydration issues door extensies)
-const ContactWidget = dynamic(() => import("@/components/ContactWidget"), {
-  ssr: false,
-  loading: () => <ContactSkeleton />,
-});
+import ContactWidget from "@/components/ContactWidget";
 
 export default function ClientContactSection() {
   return (
-    <section id="contact" aria-labelledby="contact-title" className="bg-stone-100 py-16">
-      <div className="mx-auto w-full max-w-6xl px-4">
-        <h2 id="contact-title" className="sr-only">Contact</h2>
-        <ContactWidget
-          variant="consumer"
-          title="Neem contact op"
-          subtitle="Stel je vraag of plan direct een belmoment. We reageren meestal binnen één werkdag."
-        />
+    <section
+      className="relative overflow-hidden bg-stone-950 py-16 text-white sm:py-20"
+      aria-labelledby="contact-section-title"
+    >
+      <div aria-hidden className="absolute inset-0">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.07),transparent_40%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(28,25,23,0.96)_0%,rgba(12,10,9,1)_100%)]" />
+        <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(rgba(255,255,255,0.10)_1px,transparent_1px)] [background-size:12px_12px]" />
       </div>
-    </section>
-  );
-}
 
-/** Skeleton om layout shift te voorkomen totdat ContactWidget geladen is */
-function ContactSkeleton() {
-  return (
-    <section aria-label="Contactformulier laden…" className="space-y-4 mt-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="h-10 rounded-lg bg-stone-200 border border-stone-300 animate-pulse" />
-        <div className="h-10 rounded-lg bg-stone-200 border border-stone-300 animate-pulse" />
+      <div className="relative mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+        <h2 id="contact-section-title" className="sr-only">
+          Contact
+        </h2>
+
+        <ContactWidget className="py-0" />
       </div>
-      <div className="h-10 rounded-lg bg-stone-200 border border-stone-300 animate-pulse" />
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="h-10 rounded-lg bg-stone-200 border border-stone-300 animate-pulse" />
-        <div className="h-10 rounded-lg bg-stone-200 border border-stone-300 animate-pulse" />
-      </div>
-      <div className="h-24 rounded-lg bg-stone-200 border border-stone-300 animate-pulse" />
-      <div className="h-10 w-40 rounded-2xl bg-stone-300 border border-stone-400 animate-pulse" />
     </section>
   );
 }

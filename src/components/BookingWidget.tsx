@@ -430,6 +430,39 @@ async function fetchDaySlots(
   };
 }
 
+function Panel({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={[
+        "rounded-[1.35rem] border border-white/10 bg-black/22 p-4 shadow-xl shadow-black/15 backdrop-blur-md",
+        className,
+      ].join(" ")}
+    >
+      {children}
+    </div>
+  );
+}
+
+function FieldLabel({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <span className={["mb-1.5 block text-[11px] font-medium text-stone-200", className].join(" ")}>
+      {children}
+    </span>
+  );
+}
+
 export default function BookingWidget({
   defaultPartnerSlug = "",
   fixedPartnerSlug,
@@ -448,7 +481,7 @@ export default function BookingWidget({
 
   const [partners, setPartners] = React.useState<PartnerOption[]>([]);
   const [partnerSlug, setPartnerSlug] = React.useState<string>(
-    fixedPartnerSlug ?? defaultPartnerSlug
+    fixedPartnerSlug ?? defaultPartnerSlug ?? ""
   );
 
   const [viewMonth, setViewMonth] = React.useState<Date>(startOfMonth(new Date()));
@@ -514,8 +547,11 @@ export default function BookingWidget({
           list.find((p) => p.slug === defaultPartnerSlug)
         ) {
           setPartnerSlug(defaultPartnerSlug);
-        } else if (!list.find((p) => p.slug === partnerSlug)) {
-          setPartnerSlug(list[0]?.slug ?? "");
+          return;
+        }
+
+        if (partnerSlug && !list.find((p) => p.slug === partnerSlug)) {
+          setPartnerSlug("");
         }
       } catch (err: any) {
         if (!isAbortError(err)) {
@@ -568,7 +604,11 @@ export default function BookingWidget({
     setSlotId("");
     setPrice(null);
     setMsg(null);
-    if (!partnerSlug || !selectedDayISO) return;
+
+    if (!partnerSlug || !selectedDayISO) {
+      setSlots([]);
+      return;
+    }
 
     setLoadingSlots(true);
     const ac = new AbortController();
@@ -652,7 +692,7 @@ export default function BookingWidget({
       const startTimeISO = slot?.startTime;
 
       if (!partnerId || !startTimeISO) {
-        throw new Error("Kan partner/slot niet bepalen. Probeer opnieuw.");
+        throw new Error("Kan partner of tijdslot niet bepalen. Probeer opnieuw.");
       }
 
       const slotIdNum = Number.isFinite(Number(slotId))
@@ -703,18 +743,18 @@ export default function BookingWidget({
   const availabilityBadge =
     availableCount > 3
       ? {
-          cls: "bg-emerald-100 text-emerald-800 border-emerald-300",
-          label: "Groen — meer dan 3 boekbaar",
+          cls: "border-emerald-400/25 bg-emerald-500/12 text-emerald-100",
+          label: "Groen +2",
         }
       : availableCount === 1
       ? {
-          cls: "bg-orange-100 text-orange-800 border-orange-300",
-          label: "Oranje — nog maar 1 boekbaar",
+          cls: "border-orange-400/25 bg-orange-500/12 text-orange-100",
+          label: "Oranje 1 boekbaar",
         }
       : availableCount === 0
       ? {
-          cls: "bg-stone-100 text-stone-700 border-stone-300",
-          label: "Grijs — geen tijdsloten beschikbaar",
+          cls: "border-white/10 bg-white/[0.05] text-stone-300",
+          label: "Geen tijdsloten",
         }
       : null;
 
@@ -724,72 +764,123 @@ export default function BookingWidget({
   ): { cls: string; label: string; hideDot?: boolean } {
     if (d && isPastDay(d)) return { cls: "bg-transparent", label: "", hideDot: true };
     const c = counts;
-    if (!c || c.total === 0) return { cls: "bg-stone-500", label: "Geen tijdsloten (grijs)" };
-    if (c.published === 1) return { cls: "bg-orange-500", label: "Nog 1 tijdslot (oranje)" };
-    if (c.published >= 2) return { cls: "bg-emerald-600", label: "Beschikbaar (groen)" };
-    return { cls: "bg-stone-500", label: "Geen tijdsloten (grijs)" };
+    if (!c || c.total === 0) return { cls: "bg-stone-500", label: "Geen tijdsloten" };
+    if (c.published === 1) return { cls: "bg-orange-400", label: "Nog 1 tijdslot" };
+    if (c.published >= 2) return { cls: "bg-emerald-400", label: "Beschikbaar" };
+    return { cls: "bg-stone-500", label: "Geen tijdsloten" };
   }
 
   function dayTintForDay(counts?: DayCounts, d?: Date) {
-    if (d && isPastDay(d)) return { bg: "bg-stone-50", border: "border-stone-200" };
+    if (d && isPastDay(d)) {
+      return {
+        bg: "bg-white/[0.03]",
+        border: "border-white/5",
+        text: "text-stone-500",
+      };
+    }
     const c = counts;
-    if (!c || c.total === 0) return { bg: "bg-stone-50", border: "border-stone-300" };
-    if (c.published === 1) return { bg: "bg-orange-50", border: "border-orange-200" };
-    if (c.published >= 2) return { bg: "bg-emerald-50", border: "border-emerald-200" };
-    return { bg: "bg-stone-50", border: "border-stone-300" };
+    if (!c || c.total === 0) {
+      return {
+        bg: "bg-white/[0.03]",
+        border: "border-white/10",
+        text: "text-stone-300",
+      };
+    }
+    if (c.published === 1) {
+      return {
+        bg: "bg-orange-500/10",
+        border: "border-orange-400/30",
+        text: "text-orange-100",
+      };
+    }
+    if (c.published >= 2) {
+      return {
+        bg: "bg-emerald-500/10",
+        border: "border-emerald-400/30",
+        text: "text-emerald-100",
+      };
+    }
+    return {
+      bg: "bg-white/[0.03]",
+      border: "border-white/10",
+      text: "text-stone-300",
+    };
   }
 
   if (!mounted) {
     return (
       <section
         aria-label="Boekingswidget"
-        className="space-y-4 rounded-2xl border border-stone-200 bg-white/90 p-4 shadow-md backdrop-blur-sm"
+        className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06] p-4 text-white shadow-2xl shadow-black/25 backdrop-blur-sm sm:p-6"
       >
-        <div className="relative w-full overflow-hidden h-14 sm:h-16 lg:h-20">
-          <div className="flex h-full w-full items-start justify-center pt-4 sm:pt-5">
-            <img
-              src="/images/booking-header.png"
-              alt=""
-              width={2304}
-              height={224}
-              className="h-[95%] w-auto object-contain"
-            />
-          </div>
-          <h2 className="sr-only">Boek nu</h2>
+        <div aria-hidden className="absolute inset-0">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.07),transparent_40%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(244,114,182,0.08),rgba(251,191,36,0.05)_40%,rgba(255,255,255,0.02)_100%)]" />
         </div>
 
-        <div className="relative overflow-hidden rounded-2xl border border-stone-200">
-          <div className="h-40 w-full animate-pulse bg-stone-100" />
-        </div>
+        <div className="relative text-center">
+          <span className="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-semibold tracking-[0.24em] text-stone-100/90">
+            BOEK JULLIE MOMENT
+          </span>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div className="rounded-xl border border-stone-200 bg-white p-3 shadow-sm">
-            <div className="mb-3 h-5 w-28 animate-pulse rounded bg-stone-100" />
-            <div className="grid grid-cols-7 gap-1.5">
-              {Array.from({ length: 42 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-11 animate-pulse rounded-lg bg-stone-100"
-                />
-              ))}
-            </div>
-          </div>
+          <h2 className="mt-4 text-3xl font-black tracking-tight text-white sm:text-4xl">
+            Kies jullie locatie,
+            <span className="block text-rose-300">prik een tijdslot en reserveer</span>
+          </h2>
 
-          <div className="rounded-xl border border-stone-200 bg-white p-3 shadow-sm">
-            <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-9 animate-pulse rounded-md bg-stone-100"
-                />
-              ))}
-            </div>
-            <div className="space-y-2">
-              <div className="h-10 animate-pulse rounded-md bg-stone-100" />
-              <div className="h-10 animate-pulse rounded-md bg-stone-100" />
-              <div className="h-10 animate-pulse rounded-md bg-stone-100" />
-              <div className="h-10 animate-pulse rounded-md bg-stone-100" />
-            </div>
+          <p className="mx-auto mt-3 max-w-2xl text-sm leading-7 text-stone-200/80 sm:text-base">
+            Boek eenvoudig jullie western avontuur. Je betaalt nu alleen de
+            aanbetaling; het restant betaal je op locatie bij de hondenschool.
+          </p>
+
+          <div className="mt-7 grid grid-cols-1 gap-4 lg:grid-cols-[1.02fr_0.98fr]">
+            <Panel>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-white">Agenda</span>
+                  <span className="rounded-full border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[11px] text-stone-200">
+                    {monthLabel(viewMonth)}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="h-9 w-9 animate-pulse rounded-xl bg-white/10" />
+                  <div className="h-9 w-9 animate-pulse rounded-xl bg-white/10" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-7 gap-1.5 text-center text-[10px] font-semibold tracking-[0.18em] text-stone-400">
+                {NL_DAYS.map((d) => (
+                  <div key={d} className="py-1">
+                    {d.toUpperCase()}
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-1.5">
+                {Array.from({ length: 42 }).map((_, i) => (
+                  <div key={i} className="h-11 animate-pulse rounded-xl bg-white/10" />
+                ))}
+              </div>
+            </Panel>
+
+            <Panel className="text-left">
+              <div className="space-y-4">
+                <div className="h-11 animate-pulse rounded-xl bg-white/10" />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="h-11 animate-pulse rounded-xl bg-white/10" />
+                  <div className="h-11 animate-pulse rounded-xl bg-white/10" />
+                </div>
+                <div className="h-11 animate-pulse rounded-xl bg-white/10" />
+                <div className="h-11 animate-pulse rounded-xl bg-white/10" />
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="h-10 animate-pulse rounded-xl bg-white/10" />
+                  ))}
+                </div>
+                <div className="h-12 animate-pulse rounded-2xl bg-white/10" />
+              </div>
+            </Panel>
           </div>
         </div>
       </section>
@@ -799,344 +890,339 @@ export default function BookingWidget({
   return (
     <section
       aria-label="Boekingswidget"
-      className="space-y-4 rounded-2xl border border-stone-200 bg-white/90 p-4 shadow-md backdrop-blur-sm"
+      className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06] p-4 text-white shadow-2xl shadow-black/25 backdrop-blur-sm sm:p-6"
     >
-      <div className="relative w-full overflow-hidden h-14 sm:h-16 lg:h-20">
-        <div className="flex h-full w-full items-start justify-center pt-4 sm:pt-5">
-          <img
-            src="/images/booking-header.png"
-            alt=""
-            width={2304}
-            height={224}
-            className="h-[95%] w-auto object-contain"
-          />
-        </div>
-        <h2 className="sr-only">Boek nu</h2>
+      <div aria-hidden className="absolute inset-0">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.07),transparent_40%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(244,114,182,0.08),rgba(251,191,36,0.05)_40%,rgba(255,255,255,0.02)_100%)]" />
       </div>
 
-      <div className="relative overflow-visible rounded-2xl border border-stone-200">
-        <img
-          src="/images/header-foto.png"
-          alt=""
-          className="pointer-events-none absolute inset-0 h-full w-full rounded-2xl object-cover opacity-80"
-          aria-hidden
-        />
-        <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-r from-rose-50/60 via-pink-50/50 to-stone-50/60" />
+      <div className="relative text-center">
+        <span className="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-semibold tracking-[0.24em] text-stone-100/90 backdrop-blur-sm">
+          BOEK JULLIE MOMENT
+        </span>
 
-        <div className="relative z-10 grid items-center gap-3 p-3 md:grid-cols-12">
-          <div className="md:col-span-3">
-            <div className="rounded-xl border border-stone-200/80 bg-white/80 p-2.5 shadow-sm backdrop-blur">
-              <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-stone-700">
-                Zo boek je
+        <h2 className="mt-4 text-3xl font-black tracking-tight text-white sm:text-4xl">
+          Kies jullie locatie,
+          <span className="block text-rose-300">prik een tijdslot en reserveer</span>
+        </h2>
+
+        <p className="mx-auto mt-3 max-w-2xl text-sm leading-7 text-stone-200/80 sm:text-base">
+          Boek eenvoudig jullie western avontuur. Je betaalt nu alleen de
+          aanbetaling; het restant betaal je op locatie bij de hondenschool.
+        </p>
+
+        <div className="mt-7 grid grid-cols-1 gap-4 lg:grid-cols-[1.02fr_0.98fr]">
+          <Panel>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-white">Agenda</span>
+                <span className="rounded-full border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[11px] text-stone-200">
+                  {monthLabel(viewMonth)}
+                </span>
               </div>
-              <ol className="space-y-0.5 text-[11px] text-stone-800">
-                <li><strong>1:</strong> Selecteer locatie</li>
-                <li><strong>2:</strong> Datum &amp; tijd prikken</li>
-                <li><strong>3:</strong> Reserveren</li>
-              </ol>
-            </div>
-          </div>
 
-          <div className="md:col-span-6 text-center">
-            <h3 className="text-lg font-extrabold leading-tight tracking-tight text-stone-900 md:text-xl"></h3>
-          </div>
-
-          <div className="relative z-20 md:col-span-3">
-            <label className="mb-1 block text-[11px] font-medium text-stone-700">
-              Locatie
-            </label>
-
-            {locked ? (
-              <div className="h-9 w-full select-none rounded-lg border border-stone-300 bg-stone-50 px-2 text-xs text-stone-700">
-                <div className="flex h-full items-center justify-between">
-                  <span className="truncate">
-                    {selectedPartner?.name ?? partnerSlug}
-                    {selectedPartner?.city ? ` — ${selectedPartner.city}` : ""}
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <select
-                value={partnerSlug}
-                onChange={(e) => setPartnerSlug(e.target.value)}
-                className="h-9 w-full rounded-lg border border-stone-300 bg-white px-2 text-xs outline-none transition focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
-                aria-label="Kies locatie"
-              >
-                {partners.length === 0 ? (
-                  <option value="">{msg ? "Kon niet laden" : "Laden…"}</option>
-                ) : (
-                  <>
-                    <option value="">Kies locatie</option>
-                    {partners.map((p) => (
-                      <option key={p.slug} value={p.slug}>
-                        {p.name}
-                        {p.city ? ` — ${p.city}` : ""}
-                      </option>
-                    ))}
-                  </>
-                )}
-              </select>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="rounded-xl border border-stone-200 bg-white p-3 shadow-sm">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-stone-800">Agenda</span>
-              <span className="rounded-md bg-stone-100 px-2 py-0.5 text-[11px] text-stone-700">
-                {monthLabel(viewMonth)}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setViewMonth((m) => addMonths(m, -1))}
-                className="h-8 rounded-lg border border-stone-300 px-2 text-xs font-medium text-stone-800 hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-pink-300"
-                aria-label="Vorige maand"
-                title="Vorige maand"
-              >
-                ←
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMonth((m) => addMonths(m, 1))}
-                className="h-8 rounded-lg border border-stone-300 px-2 text-xs font-medium text-stone-800 hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-pink-300"
-                aria-label="Volgende maand"
-                title="Volgende maand"
-              >
-                →
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-7 gap-1.5 text-center text-[10px] font-semibold tracking-wide text-stone-600">
-            {NL_DAYS.map((d) => (
-              <div key={d} className="py-1">
-                {d.toUpperCase()}
-              </div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-7 gap-1.5">
-            {calendarDays.map((day) => {
-              const iso = toDayISO(day);
-              const isSelected = isSameDay(day, selectedDate);
-              const muted = day.getMonth() !== viewMonth.getMonth();
-              const todayFlag = isToday(day);
-              const counts = dayStats[iso];
-              const dot = dotClassForDay(counts, day);
-              const tint = dayTintForDay(counts, day);
-              const past = isPastDay(day);
-
-              return (
+              <div className="flex items-center gap-2">
                 <button
-                  key={iso}
                   type="button"
-                  onClick={() => !past && setSelectedDayISO(iso)}
-                  disabled={past}
-                  tabIndex={past ? -1 : 0}
-                  aria-disabled={past || undefined}
-                  className={[
-                    "relative h-11 w-full rounded-lg border text-[11px] leading-none transition",
-                    past
-                      ? "cursor-default pointer-events-none border-stone-200 bg-stone-50 text-stone-400 opacity-70"
-                      : isSelected
-                      ? "border-pink-600 bg-pink-50 text-pink-700 shadow-[inset_0_0_0_1px_rgba(236,72,153,0.3)]"
-                      : muted
-                      ? "border-stone-200 bg-stone-50 text-stone-400 hover:opacity-95"
-                      : `${tint.border} ${tint.bg} text-stone-800 hover:opacity-95`,
-                    todayFlag && !isSelected && !past ? "ring-1 ring-stone-300" : "",
-                  ].join(" ")}
-                  aria-pressed={isSelected}
-                  aria-current={todayFlag && !past ? "date" : undefined}
-                  title={!past && counts ? `${iso} • ${dot.label}` : iso}
+                  onClick={() => setViewMonth((m) => addMonths(m, -1))}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.06] text-sm font-medium text-white transition hover:bg-white/[0.10] focus:outline-none focus:ring-2 focus:ring-rose-300/40"
+                  aria-label="Vorige maand"
+                  title="Vorige maand"
                 >
-                  {day.getDate()}
-                  {!past && !dot.hideDot && (
-                    <span
-                      className={`pointer-events-none absolute inset-x-0 bottom-1 mx-auto block h-1.5 w-1.5 rounded-full ${dot.cls}`}
-                      aria-hidden
-                    />
-                  )}
+                  ←
                 </button>
-              );
-            })}
-          </div>
-
-          {loadingCalendar && (
-            <p className="mt-2 text-[11px] text-stone-500">
-              Kalenderstatus laden…
-            </p>
-          )}
-
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-100 px-2 py-1 text-[11px] font-medium text-stone-800">
-              <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" aria-hidden />
-              Groen +2
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-orange-300 bg-orange-100 px-2 py-1 text-[11px] font-medium text-stone-800">
-              <span className="inline-block h-2 w-2 rounded-full bg-orange-500" aria-hidden />
-              Oranje 1 boekbaar
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-stone-300 bg-stone-100 px-2 py-1 text-[11px] font-medium text-stone-800">
-              <span className="inline-block h-2 w-2 rounded-full bg-stone-500" aria-hidden />
-              Grijs = Geen tijdsloten beschikbaar
-            </span>
-          </div>
-        </div>
-
-        <div ref={timesRef} className="rounded-xl border border-stone-200 bg-white p-3 shadow-sm">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="text-sm font-semibold text-stone-800">
-              {(() => {
-                const date = parseISODateOnly(selectedDayISO);
-                const weekday = date.toLocaleDateString("nl-NL", { weekday: "long" });
-                const day = date.toLocaleDateString("nl-NL", { day: "numeric" });
-                const month = date.toLocaleDateString("nl-NL", { month: "long" });
-                return `Beschikbare tijdsloten op ${weekday} ${day} ${month}`;
-              })()}
+                <button
+                  type="button"
+                  onClick={() => setViewMonth((m) => addMonths(m, 1))}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.06] text-sm font-medium text-white transition hover:bg-white/[0.10] focus:outline-none focus:ring-2 focus:ring-rose-300/40"
+                  aria-label="Volgende maand"
+                  title="Volgende maand"
+                >
+                  →
+                </button>
+              </div>
             </div>
 
-            {availabilityBadge && (
-              <span
-                className={`hidden md:inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-medium ${availabilityBadge.cls}`}
-              >
-                {availabilityBadge.label}
-              </span>
-            )}
-          </div>
-
-          {!partnerSlug ? (
-            <div className="rounded-lg border border-stone-200 bg-stone-50 p-2 text-xs text-stone-600">
-              Selecteer eerst een hondenschool om beschikbare tijdsloten te zien.
-            </div>
-          ) : loadingSlots ? (
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-4" aria-live="polite">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="h-9 animate-pulse rounded-md bg-stone-100" />
+            <div className="grid grid-cols-7 gap-1.5 text-center text-[10px] font-semibold tracking-[0.18em] text-stone-400">
+              {NL_DAYS.map((d) => (
+                <div key={d} className="py-1">
+                  {d.toUpperCase()}
+                </div>
               ))}
             </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-              {filteredSlots.length === 0 ? (
-                <div className="col-span-2 rounded-lg border border-stone-200 bg-stone-50 p-2 text-xs text-stone-600 md:col-span-4">
-                  Geen tijdsloten beschikbaar.
+
+            <div className="grid grid-cols-7 gap-1.5">
+              {calendarDays.map((day) => {
+                const iso = toDayISO(day);
+                const isSelected = isSameDay(day, selectedDate);
+                const muted = day.getMonth() !== viewMonth.getMonth();
+                const todayFlag = isToday(day);
+                const counts = dayStats[iso];
+                const dot = dotClassForDay(counts, day);
+                const tint = dayTintForDay(counts, day);
+                const past = isPastDay(day);
+
+                return (
+                  <button
+                    key={iso}
+                    type="button"
+                    onClick={() => !past && setSelectedDayISO(iso)}
+                    disabled={past}
+                    tabIndex={past ? -1 : 0}
+                    aria-disabled={past || undefined}
+                    className={[
+                      "relative h-11 w-full rounded-xl border text-[11px] leading-none transition",
+                      past
+                        ? "pointer-events-none cursor-default border-white/5 bg-white/[0.03] text-stone-500 opacity-70"
+                        : isSelected
+                        ? "border-rose-300/60 bg-rose-500/12 text-rose-100 shadow-[inset_0_0_0_1px_rgba(244,114,182,0.25)]"
+                        : muted
+                        ? "border-white/5 bg-white/[0.03] text-stone-500 hover:opacity-95"
+                        : `${tint.border} ${tint.bg} ${tint.text} hover:opacity-95`,
+                      todayFlag && !isSelected && !past ? "ring-1 ring-white/15" : "",
+                    ].join(" ")}
+                    aria-pressed={isSelected}
+                    aria-current={todayFlag && !past ? "date" : undefined}
+                    title={!past && counts ? `${iso} • ${dot.label}` : iso}
+                  >
+                    {day.getDate()}
+                    {!past && !dot.hideDot && (
+                      <span
+                        className={`pointer-events-none absolute inset-x-0 bottom-1 mx-auto block h-1.5 w-1.5 rounded-full ${dot.cls}`}
+                        aria-hidden
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/25 bg-emerald-500/12 px-2.5 py-1 text-[11px] font-medium text-emerald-100">
+                <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" aria-hidden />
+                Groen +2
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-orange-400/25 bg-orange-500/12 px-2.5 py-1 text-[11px] font-medium text-orange-100">
+                <span className="inline-block h-2 w-2 rounded-full bg-orange-400" aria-hidden />
+                Oranje 1 boekbaar
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[11px] font-medium text-stone-200">
+                <span className="inline-block h-2 w-2 rounded-full bg-stone-400" aria-hidden />
+                Geen tijdsloten
+              </span>
+            </div>
+
+            <div className="mt-5 rounded-[1rem] border border-white/10 bg-white/[0.04] p-3 text-left">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div className="text-sm font-semibold text-white">
+                  {(() => {
+                    const date = parseISODateOnly(selectedDayISO);
+                    const weekday = date.toLocaleDateString("nl-NL", { weekday: "long" });
+                    const day = date.toLocaleDateString("nl-NL", { day: "numeric" });
+                    const month = date.toLocaleDateString("nl-NL", { month: "long" });
+                    return `Beschikbare tijdsloten op ${weekday} ${day} ${month}`;
+                  })()}
+                </div>
+
+                {availabilityBadge && (
+                  <span
+                    className={`hidden md:inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium ${availabilityBadge.cls}`}
+                  >
+                    {availabilityBadge.label}
+                  </span>
+                )}
+              </div>
+
+              {!partnerSlug ? (
+                <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3 text-sm text-stone-300">
+                  Kies eerst een locatie om beschikbare tijdsloten te zien.
+                </div>
+              ) : loadingSlots ? (
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="h-10 animate-pulse rounded-xl bg-white/10" />
+                  ))}
                 </div>
               ) : (
-                filteredSlots.map((slot) => {
-                  const selected = slotId === slot.id;
-                  const cls = selected
-                    ? "border-pink-600 bg-pink-50 text-pink-700 focus:ring-pink-300"
-                    : "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 focus:ring-emerald-300";
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+                  {filteredSlots.length === 0 ? (
+                    <div className="col-span-2 rounded-xl border border-white/10 bg-white/[0.04] p-3 text-sm text-stone-300 md:col-span-3">
+                      Geen tijdsloten beschikbaar.
+                    </div>
+                  ) : (
+                    filteredSlots.map((slot) => {
+                      const selected = slotId === slot.id;
+                      const cls = selected
+                        ? "border-rose-300/60 bg-rose-500/12 text-rose-100 focus:ring-rose-300/40"
+                        : "border-emerald-400/25 bg-emerald-500/10 text-emerald-100 hover:bg-emerald-500/16 focus:ring-emerald-300/30";
 
-                  return (
-                    <button
-                      key={slot.id}
-                      type="button"
-                      onClick={() => setSlotId(slot.id)}
-                      className={`relative h-9 rounded-lg border px-2 text-xs font-medium transition focus:outline-none focus:ring-2 ${cls}`}
-                      aria-pressed={selected}
-                      aria-label={`Tijdslot ${formatTime(slot.startTime)} (boekbaar)`}
-                      title={formatTime(slot.startTime)}
-                    >
-                      {formatTime(slot.startTime)}
-                      {selected && (
-                        <span className="pointer-events-none absolute right-1 top-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/90">
-                          <svg viewBox="0 0 20 20" className="h-3 w-3 fill-white" aria-hidden>
-                            <path d="M7.629 13.233 3.9 9.504l1.414-1.414 2.315 2.315 6.057-6.057 1.414 1.414z" />
-                          </svg>
-                        </span>
-                      )}
-                    </button>
-                  );
-                })
+                      return (
+                        <button
+                          key={slot.id}
+                          type="button"
+                          onClick={() => setSlotId(slot.id)}
+                          className={`relative h-10 rounded-xl border px-3 text-sm font-medium transition focus:outline-none focus:ring-2 ${cls}`}
+                          aria-pressed={selected}
+                          aria-label={`Tijdslot ${formatTime(slot.startTime)} (boekbaar)`}
+                          title={formatTime(slot.startTime)}
+                        >
+                          {formatTime(slot.startTime)}
+                          {selected && (
+                            <span className="pointer-events-none absolute right-1.5 top-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/90">
+                              <svg viewBox="0 0 20 20" className="h-3 w-3 fill-white" aria-hidden>
+                                <path d="M7.629 13.233 3.9 9.504l1.414-1.414 2.315 2.315 6.057-6.057 1.414 1.414z" />
+                              </svg>
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
               )}
             </div>
-          )}
+          </Panel>
 
-          <form onSubmit={onReserve} className="mt-3 space-y-3" aria-label="Reserveringsformulier">
-            <div className="flex flex-nowrap items-start gap-2">
-              <label className="w-28 shrink-0 text-xs font-medium text-stone-800">
-                Aantal spelers
-                <select
-                  value={players}
-                  onChange={(e) => setPlayers(Number(e.target.value))}
-                  className="mt-1 h-10 w-full rounded-lg border border-stone-300 bg-white px-2 text-sm outline-none transition focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
-                >
-                  <option value={1}>1</option>
-                  <option value={2}>2</option>
-                  <option value={3}>3</option>
-                </select>
-              </label>
+          <Panel className="text-left">
+            <div ref={timesRef}>
+              <div className="grid gap-4">
+                <label>
+                  <FieldLabel>Locatie</FieldLabel>
+                  {locked ? (
+                    <div className="flex h-11 w-full items-center rounded-xl border border-white/10 bg-white/[0.06] px-3 text-sm text-stone-100">
+                      <span className="truncate">
+                        {selectedPartner?.name ?? partnerSlug}
+                        {selectedPartner?.city ? ` — ${selectedPartner.city}` : ""}
+                      </span>
+                    </div>
+                  ) : (
+                    <select
+                      value={partnerSlug}
+                      onChange={(e) => setPartnerSlug(e.target.value)}
+                      className="h-11 w-full rounded-xl border border-rose-300/40 bg-white/[0.06] px-3 text-sm text-white outline-none transition focus:border-rose-300/60 focus:ring-2 focus:ring-rose-300/40"
+                      aria-label="Kies locatie"
+                    >
+                      <option value="" className="text-stone-900">
+                        Kies locatie
+                      </option>
+                      {partners.map((p) => (
+                        <option key={p.slug} value={p.slug} className="text-stone-900">
+                          {p.name}
+                          {p.city ? ` — ${p.city}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </label>
 
-              <label className="min-w-0 flex-1 text-xs font-medium text-stone-800">
-                Naam hond
-                <input
-                  value={dogName}
-                  onChange={(e) => setDogName(e.target.value)}
-                  placeholder="bijv. Sam"
-                  className="mt-1 h-10 w-full min-w-0 rounded-lg border border-stone-300 bg-white px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
-                />
-              </label>
-            </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label>
+                    <FieldLabel>Aantal spelers</FieldLabel>
+                    <select
+                      value={players}
+                      onChange={(e) => setPlayers(Number(e.target.value))}
+                      className="h-11 w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 text-sm text-white outline-none transition focus:border-rose-300/60 focus:ring-2 focus:ring-rose-300/40"
+                    >
+                      <option value={1} className="text-stone-900">
+                        1
+                      </option>
+                      <option value={2} className="text-stone-900">
+                        2
+                      </option>
+                      <option value={3} className="text-stone-900">
+                        3
+                      </option>
+                    </select>
+                  </label>
 
-            <label className="block text-xs font-medium text-stone-800">
-              Jouw naam
-              <input
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="bijv. Jamie de Vries"
-                className="mt-1 h-10 w-full rounded-lg border border-stone-300 bg-white px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
-              />
-            </label>
+                  <label>
+                    <FieldLabel>Naam hond</FieldLabel>
+                    <input
+                      value={dogName}
+                      onChange={(e) => setDogName(e.target.value)}
+                      placeholder="bijv. Sam"
+                      className="h-11 w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 text-sm text-white outline-none transition placeholder:text-stone-400 focus:border-rose-300/60 focus:ring-2 focus:ring-rose-300/40"
+                    />
+                  </label>
+                </div>
 
-            <label className="block text-xs font-medium text-stone-800">
-              E-mailadres
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="jij@example.com"
-                className="mt-1 h-10 w-full rounded-lg border border-stone-300 bg-white px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
-              />
-            </label>
+                <label>
+                  <FieldLabel>Jouw naam</FieldLabel>
+                  <input
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="bijv. Jamie de Vries"
+                    className="h-11 w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 text-sm text-white outline-none transition placeholder:text-stone-400 focus:border-rose-300/60 focus:ring-2 focus:ring-rose-300/40"
+                  />
+                </label>
 
-            {price && (
-              <div className="rounded-xl border border-stone-200 bg-stone-50 p-3 text-xs">
-                <div className="mb-1 text-[11px] font-semibold text-stone-700">Prijs</div>
-                <div className="flex items-center justify-between"><span>Totaal</span><strong>€ {price.total.toFixed(2)}</strong></div>
-                <div className="flex items-center justify-between"><span>Aanbetaling ({price.feePercent}%)</span><strong>€ {price.deposit.toFixed(2)}</strong></div>
-                <div className="flex items-center justify-between"><span>Rest op locatie</span><strong>€ {price.rest.toFixed(2)}</strong></div>
+                <label>
+                  <FieldLabel>E-mailadres</FieldLabel>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="jij@example.com"
+                    className="h-11 w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 text-sm text-white outline-none transition placeholder:text-stone-400 focus:border-rose-300/60 focus:ring-2 focus:ring-rose-300/40"
+                  />
+                </label>
               </div>
-            )}
 
-            {msg && (
-              <p className="rounded-md bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700">
-                {msg}
-              </p>
-            )}
+              <form
+                onSubmit={onReserve}
+                className="mt-5 space-y-4"
+                aria-label="Reserveringsformulier"
+              >
+                {price && (
+                  <div className="rounded-[1.2rem] border border-white/10 bg-black/20 p-4 text-sm">
+                    <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-200/90">
+                      Prijs
+                    </div>
 
-            <button
-              type="submit"
-              disabled={submitting || !slotId}
-              className="w-full rounded-2xl bg-pink-600 px-4 py-2.5 text-sm font-semibold text-white shadow hover:bg-pink-700 focus:outline-none focus:ring-4 focus:ring-pink-300 disabled:opacity-60"
-            >
-              {submitting ? "Reserveren…" : "Reserveer nu"}
-            </button>
+                    <div className="space-y-2 text-stone-200">
+                      <div className="flex items-center justify-between gap-4">
+                        <span>Totaal</span>
+                        <strong className="text-white">€ {price.total.toFixed(2)}</strong>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <span>Aanbetaling ({price.feePercent}%)</span>
+                        <strong className="text-white">€ {price.deposit.toFixed(2)}</strong>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <span>Rest op locatie</span>
+                        <strong className="text-white">€ {price.rest.toFixed(2)}</strong>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
-            {!slotId && (
-              <p className="text-[11px] text-stone-500">
-                Kies eerst een tijdslot hierboven om door te gaan naar de checkout.
-              </p>
-            )}
-            <p className="text-[11px] text-stone-500">
-              Je betaalt nu de aanbetaling; het restant betaal je bij de hondenschool.
-            </p>
-          </form>
+                {msg && (
+                  <p className="rounded-xl border border-rose-400/20 bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-100">
+                    {msg}
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={submitting || !slotId}
+                  className="w-full rounded-2xl bg-pink-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-pink-950/30 transition hover:bg-pink-700 focus:outline-none focus:ring-4 focus:ring-pink-300/40 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {submitting ? "Reserveren…" : "Reserveer nu"}
+                </button>
+
+                {!slotId && (
+                  <p className="text-xs text-stone-400">
+                    Kies eerst een tijdslot hierboven om door te gaan naar de checkout.
+                  </p>
+                )}
+
+                <p className="text-xs leading-6 text-stone-400">
+                  Je betaalt nu de aanbetaling; het restant betaal je bij de hondenschool.
+                </p>
+              </form>
+            </div>
+          </Panel>
         </div>
       </div>
     </section>

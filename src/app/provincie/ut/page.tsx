@@ -6,7 +6,6 @@ import Script from "next/script";
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
 import Skills from "@/components/Skills";
-import Pricing from "@/components/Pricing";
 import BookingWidget from "@/components/BookingWidget";
 import PartnerOpportunity from "@/components/PartnerOpportunity";
 import ChatbotWidget from "@/components/ChatbotWidget";
@@ -31,26 +30,45 @@ export const metadata: Metadata = {
 
 export default function UtrechtLandingPage() {
   return (
-    <main id="main" className="bg-stone-50 text-stone-900">
+    <main id="main" className="bg-stone-950 text-white">
       <Header />
-      <Hero />
-      <Skills />
-      <Pricing />
 
-      <section id="boeken" aria-labelledby="boeken-title" className="bg-stone-50 py-16">
+      {/* HERO NAAR BENEDEN + DONKERE ACHTERGROND */}
+      <div className="bg-stone-950 pt-24 sm:pt-28 lg:pt-32">
+        <Hero />
+      </div>
+
+      <Skills />
+
+      <section
+        id="boeken"
+        aria-labelledby="boeken-title"
+        className="bg-stone-950 py-16"
+      >
         <div className="mx-auto w-full max-w-6xl px-4">
-          <h2 id="boeken-title" className="sr-only">Boeken</h2>
-          <p className="mb-3 text-sm text-stone-600">
-            Beschikbaar in <span className="font-medium">Utrecht</span> bij <span className="font-medium">WoofExperience</span>
+          <h2 id="boeken-title" className="sr-only">
+            Boeken
+          </h2>
+
+          <p className="mb-3 text-sm text-stone-300">
+            Beschikbaar in <span className="font-medium text-white">Utrecht</span> bij{" "}
+            <span className="font-medium text-white">WoofExperience</span>
           </p>
-          {/* 🔒 Vast op WoofExperience */}
+
           <BookingWidget fixedPartnerSlug="woofexperience" />
         </div>
       </section>
 
-      <section id="partner" aria-labelledby="partner-title" className="bg-stone-50 py-16">
+      <section
+        id="partner"
+        aria-labelledby="partner-title"
+        className="bg-stone-950 py-16"
+      >
         <div className="mx-auto w-full max-w-6xl px-4">
-          <h2 id="partner-title" className="mb-8 text-center text-3xl font-extrabold tracking-tight text-stone-900" />
+          <h2
+            id="partner-title"
+            className="mb-8 text-center text-3xl font-extrabold tracking-tight text-white"
+          />
           <PartnerOpportunity />
         </div>
       </section>
