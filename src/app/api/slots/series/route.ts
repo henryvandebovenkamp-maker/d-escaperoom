@@ -4,9 +4,10 @@ import prisma from "@/lib/prisma";
 import { z } from "zod";
 import { getSessionUser } from "@/lib/auth";
 import { resolvePartnerForRequest } from "@/lib/partner";
+import { fromZonedTime } from "date-fns-tz";
 
 const BodySchema = z.object({
-  partnerSlug: z.string().optional(),     // ADMIN levert dit aan
+  partnerSlug: z.string().optional(),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   weekdays: z.array(z.number().int().min(0).max(6)).optional(),
@@ -15,6 +16,43 @@ const BodySchema = z.object({
 
 const FIRST_HOUR = 9;
 const LAST_HOUR = 20;
+const TIMEZONE = "Europe/Amsterdam";
+
+function parseIsoDate(iso: string) {
+  const [year, month, day] = iso.split("-").map(Number);
+
+  return { year, month, day };
+}
+
+function formatIsoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function addDays(dateIso: string, amount: number) {
+  const { year, month, day } = parseIsoDate(dateIso);
+  const date = new Date(year, month - 1, day);
+
+  date.setDate(date.getDate() + amount);
+
+  return formatIsoDate(date);
+}
+
+function getWeekday(dateIso: string) {
+  const { year, month, day } = parseIsoDate(dateIso);
+
+  return new Date(year, month - 1, day).getDay();
+}
+
+function toUtcSlotDate(dateIso: string, hour: number, minute = 0) {
+  const hh = String(hour).padStart(2, "0");
+  const mm = String(minute).padStart(2, "0");
+
+  return fromZonedTime(`${dateIso} ${hh}:${mm}:00`, TIMEZONE);
+}
 
 export async function POST(req: Request) {
   try {
@@ -22,47 +60,63 @@ export async function POST(req: Request) {
     const body = BodySchema.parse(await req.json());
 
     const partner = await resolvePartnerForRequest(user, body.partnerSlug);
-    const weekdays = body.weekdays ?? [1,2,3,4,5,6,0];
+    const weekdays = body.weekdays ?? [1, 2, 3, 4, 5, 6, 0];
 
-    const toUTC = (iso: string) => {
-      const [y,m,d] = iso.split("-").map(Number);
-      return new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
-    };
-
-    const start = toUTC(body.startDate);
-    const end = toUTC(body.endDate);
-
-    let created = 0, skippedExisting = 0;
-
-    for (let t = start.getTime(); t <= end.getTime(); t += 86_400_000) {
-      const day = new Date(t);
-      if (!weekdays.includes(day.getUTCDay())) continue;
-
-      for (let h = FIRST_HOUR; h <= LAST_HOUR; h++) {
-        const startTime = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), h, 0, 0));
-        const endTime = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), h + 1, 0, 0));
-
-        const exists = await prisma.slot.findFirst({
-          where: { partnerId: partner.id, startTime },
-          select: { id: true },
-        });
-        if (exists) { skippedExisting++; continue; }
-
-        await prisma.slot.create({
-          data: {
-            partnerId: partner.id,
-            startTime,
-            endTime,
-            status: body.publish ? "PUBLISHED" : "DRAFT",
-            capacity: 1,
-            maxPlayers: 3,
-          },
-        });
-        created++;
-      }
+    if (body.startDate > body.endDate) {
+      return NextResponse.json(
+        { error: "startDate mag niet na endDate liggen." },
+        { status: 400 }
+      );
     }
 
-    return NextResponse.json({ ok: true, created, skippedExisting });
+    let created = 0;
+    let skippedExisting = 0;
+    let currentDate = body.startDate;
+
+    while (currentDate <= body.endDate) {
+      const weekday = getWeekday(currentDate);
+
+      if (weekdays.includes(weekday)) {
+        for (let hour = FIRST_HOUR; hour <= LAST_HOUR; hour++) {
+          const startTime = toUtcSlotDate(currentDate, hour, 0);
+          const endTime = toUtcSlotDate(currentDate, hour + 1, 0);
+
+          const exists = await prisma.slot.findFirst({
+            where: {
+              partnerId: partner.id,
+              startTime,
+            },
+            select: { id: true },
+          });
+
+          if (exists) {
+            skippedExisting++;
+            continue;
+          }
+
+          await prisma.slot.create({
+            data: {
+              partnerId: partner.id,
+              startTime,
+              endTime,
+              status: body.publish ? "PUBLISHED" : "DRAFT",
+              capacity: 1,
+              maxPlayers: 3,
+            },
+          });
+
+          created++;
+        }
+      }
+
+      currentDate = addDays(currentDate, 1);
+    }
+
+    return NextResponse.json({
+      ok: true,
+      created,
+      skippedExisting,
+    });
   } catch (err: any) {
     return NextResponse.json(
       { error: err?.message ?? "Internal Server Error" },
