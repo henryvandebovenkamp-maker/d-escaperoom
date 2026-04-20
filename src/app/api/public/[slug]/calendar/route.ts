@@ -1,103 +1,147 @@
+// PATH: src/app/api/public/slots/[slug]/calendar/route.ts
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import prisma from "@/lib/prisma";
+import { fromZonedTime, formatInTimeZone } from "date-fns-tz";
 
 const QSchema = z.object({
   start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  tz: z.string().min(1).optional(), // bv. Europe/Amsterdam
+  tz: z.string().min(1).optional(),
 });
 
-// Bepaal tz-offset voor een gegeven UTC-datum
-function getOffsetMs(utcDate: Date, timeZone: string) {
-  const dtf = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
-  const parts = Object.fromEntries(
-    dtf.formatToParts(utcDate).map((p) => [p.type, p.value])
-  ) as Record<string, string>;
-  const asUTC = Date.UTC(
-    Number(parts.year),
-    Number(parts.month) - 1,
-    Number(parts.day),
-    Number(parts.hour),
-    Number(parts.minute),
-    Number(parts.second)
-  );
-  return asUTC - utcDate.getTime();
+const DEFAULT_TIMEZONE = "Europe/Amsterdam";
+
+function parseIsoDate(iso: string) {
+  const [year, month, day] = iso.split("-").map(Number);
+  return { year, month, day };
 }
 
-// 00:00 in opgegeven tz -> UTC Date
-function zonedStartOfDayUTC(dayISO: string, tz: string) {
-  const [y, m, d] = dayISO.split("-").map(Number);
-  const utcMidnight = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
-  const offset = getOffsetMs(utcMidnight, tz);
-  return new Date(utcMidnight.getTime() - offset);
+function formatIsoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
-// YYYY-MM-DD in opgegeven tz
-function dayISOInTZ(date: Date, tz: string) {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: tz,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date); // en-CA => YYYY-MM-DD
+function addDays(dayIso: string, amount: number) {
+  const { year, month, day } = parseIsoDate(dayIso);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + amount);
+  return formatIsoDate(date);
 }
 
-export async function GET(req: Request, { params }: { params: { slug: string } }) {
+function startOfDayUtc(dayIso: string, timeZone: string) {
+  return fromZonedTime(`${dayIso} 00:00:00`, timeZone);
+}
+
+function dayISOInTimeZone(date: Date, timeZone: string) {
+  return formatInTimeZone(date, timeZone, "yyyy-MM-dd");
+}
+
+export async function GET(
+  req: Request,
+  ctx: { params: Promise<{ slug: string }> }
+) {
   try {
     const url = new URL(req.url);
+
     const parsed = QSchema.safeParse({
       start: url.searchParams.get("start") || "",
       end: url.searchParams.get("end") || "",
       tz: url.searchParams.get("tz") || undefined,
     });
+
     if (!parsed.success) {
-      return NextResponse.json({ error: "Ongeldige query parameters" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Ongeldige query parameters" },
+        { status: 400 }
+      );
     }
 
-    const { start, end, tz = "Europe/Amsterdam" } = parsed.data;
+    const { start, end, tz = DEFAULT_TIMEZONE } = parsed.data;
+    const { slug } = await ctx.params;
+
+    if (start > end) {
+      return NextResponse.json(
+        { error: "start mag niet na end liggen" },
+        { status: 400 }
+      );
+    }
 
     const partner = await prisma.partner.findUnique({
-      where: { slug: params.slug },
+      where: { slug },
       select: { id: true },
     });
-    if (!partner) return NextResponse.json({ error: "Partner niet gevonden" }, { status: 404 });
 
-    const startUTC = zonedStartOfDayUTC(start, tz);
-    const endUTC = zonedStartOfDayUTC(end, tz); // exclusief
+    if (!partner) {
+      return NextResponse.json(
+        { error: "Partner niet gevonden" },
+        { status: 404 }
+      );
+    }
+
+    const startUtc = startOfDayUtc(start, tz);
+    const endExclusiveUtc = startOfDayUtc(addDays(end, 1), tz);
 
     const rows = await prisma.slot.findMany({
       where: {
         partnerId: partner.id,
-        startTime: { gte: startUTC, lt: endUTC },
-        status: { in: ["PUBLISHED", "BOOKED"] },
+        startTime: {
+          gte: startUtc,
+          lt: endExclusiveUtc,
+        },
+        status: {
+          in: ["PUBLISHED", "BOOKED"],
+        },
       },
-      select: { startTime: true, status: true },
+      select: {
+        startTime: true,
+        status: true,
+      },
       orderBy: { startTime: "asc" },
     });
 
-    const map = new Map<string, { published: number; booked: number; total: number }>();
-    for (const r of rows) {
-      const key = dayISOInTZ(new Date(r.startTime), tz);
-      const cur = map.get(key) || { published: 0, booked: 0, total: 0 };
-      if (r.status === "PUBLISHED") cur.published++;
-      else if (r.status === "BOOKED") cur.booked++;
-      cur.total++;
-      map.set(key, cur);
+    const map = new Map<
+      string,
+      { published: number; booked: number; total: number }
+    >();
+
+    for (const row of rows) {
+      const key = dayISOInTimeZone(new Date(row.startTime), tz);
+      const current = map.get(key) || {
+        published: 0,
+        booked: 0,
+        total: 0,
+      };
+
+      if (row.status === "PUBLISHED") {
+        current.published++;
+      } else if (row.status === "BOOKED") {
+        current.booked++;
+      }
+
+      current.total++;
+      map.set(key, current);
     }
 
-    const items = Array.from(map.entries()).map(([dayISO, counts]) => ({ dayISO, counts }));
-    return NextResponse.json({ items }, { headers: { "Cache-Control": "no-store" } });
+    const items = Array.from(map.entries()).map(([dayISO, counts]) => ({
+      dayISO,
+      counts,
+    }));
+
+    return NextResponse.json(
+      { items },
+      {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      }
+    );
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message || "Serverfout" }, { status: 500 });
+    return NextResponse.json(
+      { error: err?.message || "Serverfout" },
+      { status: 500 }
+    );
   }
 }
