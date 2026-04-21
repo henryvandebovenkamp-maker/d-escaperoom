@@ -25,7 +25,16 @@
 /* -----------------------------
    BASE
    ----------------------------- */
-html { scroll-behavior: smooth; }
+html {
+  scroll-behavior: smooth;
+  font-size: 15px;
+}
+
+@media (min-width: 1024px) {
+  html {
+    font-size: 12.8px; /* circa 20% kleiner op desktop */
+  }
+}
 
 body {
   background: var(--background);

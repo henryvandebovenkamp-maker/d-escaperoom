@@ -31,7 +31,7 @@ export default function Header() {
               D-Escaperoom
             </div>
             <div className="text-[9px] uppercase tracking-[0.34em] text-white/55 sm:text-[10px]">
-              SAMEN OPLOSSEN
+              PUZZELEN EN SNUFFELEN
             </div>
           </div>
         </Link>

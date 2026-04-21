@@ -23,10 +23,10 @@ export default function Footer() {
               itemScope
               itemType="https://schema.org/PostalAddress"
             >
-              <div itemProp="streetAddress">Lakerveld 84</div>
+              <div itemProp="streetAddress">Nijverheidsweg Noord 42</div>
               <div>
-                <span itemProp="postalCode">4128LK</span>{" "}
-                <span itemProp="addressLocality">Lexmond</span>
+                <span itemProp="postalCode">3812 PM</span>{" "}
+                <span itemProp="addressLocality">Amersfoort</span>
               </div>
               <div itemProp="addressCountry">Nederland</div>
             </address>
