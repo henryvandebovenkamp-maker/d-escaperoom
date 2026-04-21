@@ -44,7 +44,7 @@ export default function Hero() {
     >
       <div aria-hidden className="absolute inset-0">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_35%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(28,25,23,0.72)_0%,rgba(12,10,9,0.96)_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(28,25,23,0.60)_0%,rgba(12,10,9,0.92)_100%)]" />
         <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(rgba(255,255,255,0.10)_1px,transparent_1px)] [background-size:12px_12px]" />
       </div>
 
@@ -126,7 +126,7 @@ export default function Hero() {
                       <div
                         className={[
                           "absolute inset-0 transition",
-                          active ? "bg-black/10" : "bg-black/30",
+                          active ? "bg-black/8" : "bg-black/22",
                         ].join(" ")}
                       />
                     </div>
@@ -156,10 +156,10 @@ export default function Hero() {
                   />
                 ))}
 
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/28 to-black/12" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/62 via-black/18 to-black/8" />
 
                 <div className="absolute inset-x-0 bottom-0 p-6">
-                  <div className="rounded-2xl border border-white/10 bg-black/35 p-5 backdrop-blur-md">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.08] p-5 backdrop-blur-md">
                     <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-200/90">
                       D-escaperoom
                     </p>
@@ -178,7 +178,7 @@ export default function Hero() {
         {/* MOBIEL */}
         <div className="lg:hidden">
           <div className="relative overflow-hidden rounded-[1.9rem] border border-white/10 bg-white/5 shadow-2xl shadow-black/30">
-            <div className="relative aspect-[0.82] w-full min-h-[520px] sm:aspect-[0.92]">
+            <div className="relative aspect-[0.84] min-h-[520px] w-full sm:aspect-[0.92]">
               {HERO_IMAGES.map((image, index) => (
                 <Image
                   key={image.src}
@@ -196,27 +196,29 @@ export default function Hero() {
                 />
               ))}
 
-              <div className="absolute inset-0 bg-gradient-to-t from-black/88 via-black/35 to-black/16" />
+              {/* lichtere overlay zodat foto beter zichtbaar blijft */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/56 via-black/16 to-black/8" />
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(255,120,120,0.10),transparent_45%)]" />
 
               <div className="absolute inset-x-0 top-0 p-4 sm:p-5">
-                <div className="inline-flex max-w-full rounded-full border border-white/15 bg-black/40 px-3 py-1.5 text-[9px] font-semibold tracking-[0.22em] text-stone-100/90 backdrop-blur-md sm:text-[10px]">
+                <div className="inline-flex max-w-full rounded-full border border-white/20 bg-black/18 px-3 py-1.5 text-[9px] font-semibold tracking-[0.22em] text-stone-100/95 backdrop-blur-md sm:text-[10px]">
                   UNIEKE ESCAPEROOM ERVARING IN EEN HONDENSCHOOL
                 </div>
               </div>
 
               <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5">
-                <div className="max-w-[21rem] rounded-[1.6rem] border border-white/10 bg-black/50 p-4 backdrop-blur-xl sm:max-w-[24rem] sm:p-5">
+                <div className="max-w-[21rem] rounded-[1.7rem] border border-white/15 bg-black/26 p-4 shadow-[0_10px_40px_rgba(0,0,0,0.22)] backdrop-blur-lg sm:max-w-[24rem] sm:p-5">
                   <h1
                     id="hero-title"
-                    className="text-[2rem] font-black leading-[0.92] tracking-tight text-rose-300 sm:text-[2.35rem]"
+                    className="text-[2rem] font-black leading-[0.92] tracking-tight sm:text-[2.35rem]"
                   >
-                    <span className="block">Baas en hond</span>
+                    <span className="block text-rose-300">Baas en hond</span>
                     <span className="block text-white">
                       lossen samen het mysterie op
                     </span>
                   </h1>
 
-                  <p className="mt-3 max-w-[30ch] text-[13px] leading-6 text-stone-100/90 sm:text-sm sm:leading-6">
+                  <p className="mt-3 max-w-[30ch] text-[13px] leading-6 text-stone-100/92 sm:text-sm sm:leading-6">
                     In The Missing Snack worden jullie als team uitgedaagd om
                     puzzels op te lossen en samen het mysterie te ontrafelen.
                   </p>
@@ -234,7 +236,7 @@ export default function Hero() {
                     {FEATURE_CHIPS.map((label) => (
                       <li
                         key={label}
-                        className="rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-[10px] font-medium text-stone-100/90 sm:text-[11px]"
+                        className="rounded-full border border-white/15 bg-black/24 px-3 py-1.5 text-[10px] font-medium text-stone-100/95 backdrop-blur-sm sm:text-[11px]"
                       >
                         {label}
                       </li>
