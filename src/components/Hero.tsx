@@ -27,7 +27,7 @@ const FEATURE_CHIPS = [
 ];
 
 export default function Hero() {
-  const [activeIndex, setActiveIndex] = React.useState(0);
+  const [activeIndex, setActiveIndex] = React.useState(1);
 
   React.useEffect(() => {
     const timer = window.setInterval(() => {
@@ -140,7 +140,7 @@ export default function Hero() {
                     src={image.src}
                     alt={image.alt}
                     fill
-                    priority={index === 0}
+                    priority={index === 1}
                     sizes="(max-width:1024px) 100vw, 50vw"
                     className={[
                       "object-cover transition-all duration-700",
@@ -172,41 +172,72 @@ export default function Hero() {
 
         {/* MOBIEL / TABLET */}
         <div className="lg:hidden">
-          <div className="relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/5 shadow-2xl shadow-black/30">
-            <div className="relative aspect-[4/5] min-h-[500px] w-full sm:aspect-[16/10] sm:min-h-[520px]">
+          <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-stone-950/80 shadow-2xl shadow-black/40">
+            <div className="relative min-h-[720px] w-full sm:min-h-[680px]">
               {HERO_IMAGES.map((image, index) => (
                 <Image
                   key={image.src}
                   src={image.src}
                   alt={image.alt}
                   fill
-                  priority={index === 0}
+                  priority={index === 1}
                   sizes="100vw"
                   className={[
                     "object-cover transition-all duration-700",
                     index === activeIndex
                       ? "opacity-100 scale-100"
                       : "opacity-0 scale-[1.03]",
+                    index === 0
+                      ? "object-[48%_18%]"
+                      : index === 1
+                        ? "object-[52%_12%]"
+                        : "object-[50%_20%]",
                   ].join(" ")}
                 />
               ))}
 
-              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/10" />
+              <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/8 to-black/88" />
+              <div className="absolute inset-0 bg-gradient-to-r from-black/18 via-transparent to-black/10" />
 
-              <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5">
-                <div className="rounded-[1.5rem] border border-white/10 bg-black/58 p-5 shadow-2xl backdrop-blur-xl sm:max-w-xl sm:p-6">
-                  <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-amber-100/85">
-                    Western escaperoom met je hond
+              <div className="absolute left-4 right-4 top-4 z-20 flex items-start justify-between gap-3">
+                <span className="max-w-[17rem] rounded-full border border-white/15 bg-black/45 px-4 py-2 text-[9px] font-bold uppercase leading-4 tracking-[0.26em] text-stone-100/90 shadow-xl backdrop-blur-md">
+                  Unieke escaperoom ervaring in een hondenschool
+                </span>
+
+                <div className="flex shrink-0 gap-1.5 rounded-full border border-white/10 bg-black/35 px-2.5 py-2 backdrop-blur-md">
+                  {HERO_IMAGES.map((image, index) => {
+                    const active = index === activeIndex;
+
+                    return (
+                      <button
+                        key={image.src}
+                        type="button"
+                        onClick={() => setActiveIndex(index)}
+                        aria-label={`Toon foto ${index + 1}`}
+                        className={[
+                          "h-2.5 rounded-full transition",
+                          active ? "w-7 bg-rose-300" : "w-2.5 bg-white/55",
+                        ].join(" ")}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="absolute inset-x-0 bottom-0 z-10 p-4 sm:p-5">
+                <div className="rounded-[1.6rem] border border-white/10 bg-black/62 p-5 shadow-2xl backdrop-blur-md sm:max-w-xl sm:p-6">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.38em] text-amber-200">
+                    D-Escaperoom
                   </p>
 
                   <h1
                     id="hero-title"
-                    className="mt-3 text-[2.55rem] font-black leading-[0.9] tracking-tight text-rose-300 sm:text-5xl"
+                    className="mt-3 max-w-[9ch] text-[2.9rem] font-black leading-[0.86] tracking-tight text-rose-300 sm:max-w-none sm:text-5xl"
                   >
                     Samenwerken met je hond
                   </h1>
 
-                  <p className="mt-4 max-w-[34ch] text-sm leading-6 text-stone-100/90 sm:text-base sm:leading-7">
+                  <p className="mt-4 max-w-[34ch] text-[14px] leading-6 text-stone-100/92 sm:text-base sm:leading-7">
                     In The Stolen Snack worden jullie als team uitgedaagd om
                     puzzels op te lossen en samen het mysterie te ontrafelen.
                   </p>
@@ -214,7 +245,7 @@ export default function Hero() {
                   <div className="mt-5">
                     <Link
                       href="#boeken"
-                      className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-pink-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-pink-950/30 transition hover:bg-pink-700 focus:outline-none focus:ring-4 focus:ring-pink-300"
+                      className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-pink-600 px-6 py-3 text-base font-bold text-white shadow-lg shadow-pink-950/30 transition hover:bg-pink-700 focus:outline-none focus:ring-4 focus:ring-pink-300"
                     >
                       Boek nu
                     </Link>
@@ -231,25 +262,6 @@ export default function Hero() {
                     ))}
                   </ul>
                 </div>
-              </div>
-
-              <div className="absolute right-4 top-4 flex gap-1.5">
-                {HERO_IMAGES.map((image, index) => {
-                  const active = index === activeIndex;
-
-                  return (
-                    <button
-                      key={image.src}
-                      type="button"
-                      onClick={() => setActiveIndex(index)}
-                      aria-label={`Toon foto ${index + 1}`}
-                      className={[
-                        "h-2.5 rounded-full transition",
-                        active ? "w-7 bg-rose-300" : "w-2.5 bg-white/45",
-                      ].join(" ")}
-                    />
-                  );
-                })}
               </div>
             </div>
           </div>
