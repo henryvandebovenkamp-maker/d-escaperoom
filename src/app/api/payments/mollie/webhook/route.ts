@@ -2,9 +2,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
 import createMollieClient from "@mollie/api-client";
-import { PaymentStatus, PaymentProvider, PaymentType, SlotStatus, BookingStatus } from "@prisma/client";
+import {
+  PaymentStatus,
+  PaymentProvider,
+  PaymentType,
+  SlotStatus,
+  BookingStatus,
+} from "@prisma/client";
 
-// ✅ Gebruik de named export met options (includePartner)
 import { sendBookingEmails } from "@/lib/events/booking-confirmed";
 
 export const runtime = "nodejs";
@@ -12,121 +17,192 @@ export const runtime = "nodejs";
 function mollie() {
   const apiKey = process.env.MOLLIE_API_KEY;
   if (!apiKey) throw new Error("MOLLIE_API_KEY ontbreekt");
+
   return createMollieClient({ apiKey });
 }
 
-function mapStatus(s?: string): PaymentStatus {
-  switch (s) {
+function mapStatus(status?: string): PaymentStatus {
+  switch (status) {
     case "open":
-    case "pending": return PaymentStatus.PENDING;
-    case "paid": return PaymentStatus.PAID;
-    case "failed": return PaymentStatus.FAILED;
-    case "canceled": return PaymentStatus.CANCELED;
+    case "pending":
+      return PaymentStatus.PENDING;
+
+    case "paid":
+      return PaymentStatus.PAID;
+
+    case "failed":
+      return PaymentStatus.FAILED;
+
+    case "canceled":
+      return PaymentStatus.CANCELED;
+
     case "refunded":
-    case "charged_back": return PaymentStatus.REFUNDED;
+    case "charged_back":
+      return PaymentStatus.REFUNDED;
+
     case "expired":
-    default: return PaymentStatus.FAILED;
+    default:
+      return PaymentStatus.FAILED;
   }
+}
+
+async function getMolliePaymentId(req: NextRequest) {
+  const contentType = (req.headers.get("content-type") || "").toLowerCase();
+
+  if (contentType.includes("application/x-www-form-urlencoded")) {
+    const text = await req.text();
+    return (new URLSearchParams(text).get("id") || "").trim();
+  }
+
+  if (contentType.includes("application/json")) {
+    const body = await req.json();
+    return (body?.id || body?.paymentId || body?.payment_id || "")
+      .toString()
+      .trim();
+  }
+
+  const formData = await req.formData();
+  return (formData.get("id") || "").toString().trim();
 }
 
 export async function POST(req: NextRequest) {
   try {
-    // Mollie post x-www-form-urlencoded met id=<paymentId>
-    const ct = (req.headers.get("content-type") || "").toLowerCase();
-    let paymentId = "";
+    const paymentId = await getMolliePaymentId(req);
 
-    if (ct.includes("application/x-www-form-urlencoded")) {
-      const txt = await req.text();
-      paymentId = (new URLSearchParams(txt).get("id") || "").trim();
-    } else if (ct.includes("application/json")) {
-      const j = await req.json();
-      paymentId = (j?.id || j?.paymentId || j?.payment_id || "").toString();
-    } else {
-      const fd = await req.formData();
-      paymentId = (fd.get("id") || "").toString();
+    if (!paymentId) {
+      return NextResponse.json({ ok: true }, { status: 200 });
     }
 
-    if (!paymentId) return NextResponse.json({ ok: true }, { status: 200 });
+    const molliePayment = await mollie().payments.get(paymentId);
 
-    const mp = await mollie().payments.get(paymentId);
-    const bookingId = (mp.metadata as any)?.bookingId as string | undefined;
-    const mapped = mapStatus(mp.status);
-    const paidAt = (mp as any)?.paidAt ? new Date((mp as any).paidAt) : undefined;
-    const amountCents = mp.amount?.value ? Math.round(Number(mp.amount.value) * 100) : 0;
-    const currency = mp.amount?.currency ?? "EUR";
+    const bookingId = (molliePayment.metadata as any)?.bookingId as
+      | string
+      | undefined;
 
-    // Upsert payment
-    const raw = JSON.parse(JSON.stringify(mp)); // serialize
+    const mappedStatus = mapStatus(molliePayment.status);
+
+    const paidAt = (molliePayment as any)?.paidAt
+      ? new Date((molliePayment as any).paidAt)
+      : undefined;
+
+    const amountCents = molliePayment.amount?.value
+      ? Math.round(Number(molliePayment.amount.value) * 100)
+      : 0;
+
+    const currency = molliePayment.amount?.currency ?? "EUR";
+    const rawPayload = JSON.parse(JSON.stringify(molliePayment));
+
+    if (!bookingId) {
+      console.warn("[mollie/webhook] payment zonder bookingId metadata", {
+        paymentId: molliePayment.id,
+        status: molliePayment.status,
+      });
+
+      return NextResponse.json({ ok: true }, { status: 200 });
+    }
+
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: {
+        id: true,
+        status: true,
+        slotId: true,
+      },
+    });
+
+    if (!booking) {
+      console.warn("[mollie/webhook] booking niet gevonden", {
+        bookingId,
+        paymentId: molliePayment.id,
+      });
+
+      return NextResponse.json({ ok: true }, { status: 200 });
+    }
+
     await prisma.payment.upsert({
-      where: { providerPaymentId: mp.id },
+      where: { providerPaymentId: molliePayment.id },
       create: {
-        bookingId: bookingId ?? "",
+        bookingId: booking.id,
         provider: PaymentProvider.MOLLIE,
         type: PaymentType.DEPOSIT,
-        status: mapped,
-        providerPaymentId: mp.id,
-        method: (mp as any)?.method ?? undefined,
-        rawPayload: raw,
+        status: mappedStatus,
+        providerPaymentId: molliePayment.id,
+        method: (molliePayment as any)?.method ?? undefined,
+        rawPayload,
         currency,
         amountCents,
         paidAt,
       },
       update: {
-        status: mapped,
-        method: (mp as any)?.method ?? undefined,
-        rawPayload: raw,
+        bookingId: booking.id,
+        status: mappedStatus,
+        method: (molliePayment as any)?.method ?? undefined,
+        rawPayload,
         currency,
         amountCents,
         paidAt,
       },
     });
 
-    if (!bookingId) return NextResponse.json({ ok: true }, { status: 200 });
+    if (molliePayment.status !== "paid") {
+      return NextResponse.json({ ok: true }, { status: 200 });
+    }
 
-    // Bevestig booking en slot als betaald
-    if (mp.status === "paid") {
-      const b = await prisma.booking.findUnique({
-        where: { id: bookingId },
-        include: { slot: true },
+    let justConfirmed = false;
+
+    await prisma.$transaction(async (tx) => {
+      const freshBooking = await tx.booking.findUnique({
+        where: { id: booking.id },
+        select: {
+          id: true,
+          status: true,
+          slotId: true,
+          slot: {
+            select: {
+              id: true,
+              status: true,
+            },
+          },
+        },
       });
 
-      if (b) {
-        let justConfirmed = false;
+      if (!freshBooking) return;
 
-        await prisma.$transaction(async (tx) => {
-          // Booking → CONFIRMED
-          if (b.status !== "CONFIRMED") {
-            await tx.booking.update({
-              where: { id: b.id },
-              data: {
-                status: BookingStatus.CONFIRMED,
-                confirmedAt: new Date(),
-                depositPaidAt: paidAt ?? new Date(),
-              },
-            });
-            justConfirmed = true;
-          }
-
-          // Slot → BOOKED
-          if (b.slot && b.slot.status !== "BOOKED") {
-            await tx.slot.update({
-              where: { id: b.slot.id },
-              data: { status: SlotStatus.BOOKED, bookedAt: new Date() },
-            });
-          }
+      if (freshBooking.status !== BookingStatus.CONFIRMED) {
+        await tx.booking.update({
+          where: { id: freshBooking.id },
+          data: {
+            status: BookingStatus.CONFIRMED,
+            confirmedAt: new Date(),
+            depositPaidAt: paidAt ?? new Date(),
+          },
         });
 
-        // ✅ Verstuur BEIDE mails direct (alleen bij net bevestigde boeking)
-        if (justConfirmed) {
-          await sendBookingEmails(b.id, { includePartner: true }); // ⬅️ belangrijk
-        }
+        justConfirmed = true;
       }
+
+      if (
+        freshBooking.slot &&
+        freshBooking.slot.status !== SlotStatus.BOOKED
+      ) {
+        await tx.slot.update({
+          where: { id: freshBooking.slot.id },
+          data: {
+            status: SlotStatus.BOOKED,
+            bookedAt: new Date(),
+          },
+        });
+      }
+    });
+
+    if (justConfirmed) {
+      await sendBookingEmails(booking.id, { includePartner: true });
     }
 
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err) {
     console.error("[mollie/webhook] error", err);
-    // Altijd 200 teruggeven, anders blijft Mollie retrypen
+
     return NextResponse.json({ ok: true }, { status: 200 });
   }
 }

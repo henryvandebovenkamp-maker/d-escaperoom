@@ -5,8 +5,6 @@ import * as React from "react";
 import { useParams } from "next/navigation";
 
 /* ===================== Types ===================== */
-type TrackingLevel = "NONE" | "BEGINNER" | "AMATEUR" | "PRO";
-
 type BookingVM = {
   id: string;
   status: "PENDING" | "CONFIRMED" | "CANCELLED";
@@ -17,7 +15,7 @@ type BookingVM = {
   dogName?: string | null;
   dogAllergies?: string | null;
   dogFears?: string | null;
-  dogTrackingLevel?: TrackingLevel | null;
+  dogSocialWithPeople?: boolean | null;
   customerName?: string | null;
   customerEmail: string;
   price: { totalCents: number; depositCents: number; restCents: number };
@@ -107,7 +105,7 @@ export default function CheckoutPage() {
   const [dogName, setDogName] = React.useState("");
   const [dogAllergies, setDogAllergies] = React.useState("");
   const [dogFears, setDogFears] = React.useState("");
-  const [dogTrackingLevel, setDogTrackingLevel] = React.useState<TrackingLevel>("NONE");
+  const [dogSocialWithPeople, setDogSocialWithPeople] = React.useState<"YES" | "NO" | "">("");
   const [savingDog, setSavingDog] = React.useState(false);
   const [savedAt, setSavedAt] = React.useState<number | null>(null);
 
@@ -147,7 +145,7 @@ export default function CheckoutPage() {
           dogName: j.dogName ?? null,
           dogAllergies: j.dogAllergies ?? null,
           dogFears: j.dogFears ?? null,
-          dogTrackingLevel: j.dogTrackingLevel ?? "NONE",
+          dogSocialWithPeople: j.dogSocialWithPeople ?? null,
           customerName: j.customer?.name ?? null,
           customerEmail: j.customer?.email ?? "",
           price: {
@@ -166,7 +164,9 @@ export default function CheckoutPage() {
           setDogName(vm.dogName ?? "");
           setDogAllergies(vm.dogAllergies ?? "");
           setDogFears(vm.dogFears ?? "");
-          setDogTrackingLevel((vm.dogTrackingLevel as any) || "NONE");
+          setDogSocialWithPeople(
+            vm.dogSocialWithPeople === true ? "YES" : vm.dogSocialWithPeople === false ? "NO" : ""
+          );
           setCustomerName(vm.customerName ?? "");
           setCustomerEmail(vm.customerEmail ?? "");
           setCouponInput(vm.discount?.code ?? "");
@@ -214,7 +214,7 @@ export default function CheckoutPage() {
           });
         }
         if (!resp?.ok && !resp?.booking) throw new Error(resp?.error || "Opslaan mislukt");
-        setData((d) => (d ? { ...d, customerEmail: customerEmail.trim() } as BookingVM : d));
+        setData((d) => (d ? ({ ...d, customerEmail: customerEmail.trim() } as BookingVM) : d));
         setEmailSavedAt(Date.now());
       } catch {
         setEmailError("Opslaan mislukt. Probeer opnieuw.");
@@ -242,7 +242,8 @@ export default function CheckoutPage() {
             dogName: dogName.trim() || null,
             dogAllergies: dogAllergies.trim() || null,
             dogFears: dogFears.trim() || null,
-            dogTrackingLevel,
+            dogSocialWithPeople:
+              dogSocialWithPeople === "" ? null : dogSocialWithPeople === "YES",
           }),
         });
         if (!r.ok) throw new Error(await r.text());
@@ -254,7 +255,7 @@ export default function CheckoutPage() {
       }
     },
     800,
-    [dogName, dogAllergies, dogFears, dogTrackingLevel, bookingId, data?.id]
+    [dogName, dogAllergies, dogFears, dogSocialWithPeople, bookingId, data?.id]
   );
 
   /* ====== Kortingscode ====== */
@@ -294,7 +295,7 @@ export default function CheckoutPage() {
         dogName: b.dogName ?? data.dogName,
         dogAllergies: b.dogAllergies ?? data.dogAllergies,
         dogFears: b.dogFears ?? data.dogFears,
-        dogTrackingLevel: b.dogTrackingLevel ?? data.dogTrackingLevel,
+        dogSocialWithPeople: b.dogSocialWithPeople ?? data.dogSocialWithPeople,
         customerName: b.customer?.name ?? data.customerName,
         customerEmail: b.customer?.email ?? data.customerEmail,
         price: {
@@ -465,16 +466,15 @@ export default function CheckoutPage() {
                     />
                   </Field>
 
-                  <Field label="Ervaringen met speuren">
+                  <Field label="Is je hond sociaal tegen andere mensen?">
                     <select
-                      value={dogTrackingLevel}
-                      onChange={(e) => setDogTrackingLevel(e.target.value as TrackingLevel)}
+                      value={dogSocialWithPeople}
+                      onChange={(e) => setDogSocialWithPeople(e.target.value as "YES" | "NO" | "")}
                       className="mt-1 h-10 w-full rounded-xl border border-stone-300 bg-white px-2 text-sm outline-none focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
                     >
-                      <option value="NONE">Nee</option>
-                      <option value="BEGINNER">Beginner</option>
-                      <option value="AMATEUR">Amateur</option>
-                      <option value="PRO">Pro</option>
+                      <option value="">Kies ja of nee</option>
+                      <option value="YES">Ja</option>
+                      <option value="NO">Nee</option>
                     </select>
                   </Field>
                 </div>
@@ -682,7 +682,7 @@ function PriceCard({
   bookingId: string;
 }) {
   const hasDiscount = discountCents > 0;
-  const isSuccess = message ? (message.includes("✔") || message.toLowerCase().startsWith("ok")) : false;
+  const isSuccess = message ? message.includes("✔") || message.toLowerCase().startsWith("ok") : false;
 
   return (
     <div className="rounded-2xl border border-stone-200 bg-white shadow-sm md:sticky md:top-6">
@@ -692,7 +692,7 @@ function PriceCard({
           <div className="inline-flex h-7 w-7 items-center justify-center rounded-xl bg-linear-to-br from-rose-100 to-pink-100">
             💳
           </div>
-        <div className="text-sm font-extrabold tracking-tight">Prijs</div>
+          <div className="text-sm font-extrabold tracking-tight">Prijs</div>
         </div>
 
         <div className="mt-3 space-y-2 text-sm">
@@ -763,7 +763,7 @@ function PriceCard({
 
           {!message && !hasDiscount && (
             <p className="mt-2 text-[11px] text-stone-600">
-              Korting wordt over het hele bedrag  berekend.
+              Korting wordt over het hele bedrag berekend.
             </p>
           )}
         </div>

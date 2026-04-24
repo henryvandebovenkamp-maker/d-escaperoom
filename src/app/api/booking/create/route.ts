@@ -22,14 +22,29 @@ function json(data: any, status = 200, extraHeaders?: Record<string, string>) {
 
 function computePriceCents(params: {
   players: number;
-  partner: { price1PaxCents: number; price2PlusCents: number; feePercent: number };
+  partner: {
+    price1PaxCents: number;
+    price2PlusCents: number;
+    feePercent: number;
+  };
 }) {
   const { players, partner } = params;
-  const base = players <= 1 ? partner.price1PaxCents : players * partner.price2PlusCents;
+
+  const base =
+    players <= 1
+      ? partner.price1PaxCents
+      : players * partner.price2PlusCents;
+
   const total = base;
   const deposit = Math.round((total * partner.feePercent) / 100);
   const rest = total - deposit;
-  return { totalCents: total, depositCents: deposit, restCents: rest, currency: "EUR" as const };
+
+  return {
+    totalCents: total,
+    depositCents: deposit,
+    restCents: rest,
+    currency: "EUR" as const,
+  };
 }
 
 const PriceSchema = z.object({
@@ -44,14 +59,16 @@ const CreateBookingSchema = z
     partnerSlug: z.string().min(1, "partnerSlug is verplicht"),
     slotId: z.string().min(1).optional(),
     startTimeISO: z.string().datetime().optional(),
-    // accepteer number of string → coerce
+
     players: z.coerce.number().int().min(1).max(3),
+
     customer: z.object({
       name: z.string().min(2, "naam te kort"),
       email: z.string().email("ongeldig e-mailadres"),
       phone: z.string().optional(),
       locale: z.enum(["nl", "en", "de", "es"]).optional(),
     }),
+
     dog: z
       .object({
         name: z.string().min(1).optional(),
@@ -60,7 +77,7 @@ const CreateBookingSchema = z
         trackingLevel: z.enum(["NONE", "BEGINNER", "AMATEUR", "PRO"]).optional(),
       })
       .optional(),
-    // client mag price meesturen; zo niet → we rekenen zelf
+
     price: PriceSchema.optional(),
   })
   .superRefine((val, ctx) => {
@@ -87,6 +104,7 @@ export async function OPTIONS() {
 export async function POST(req: NextRequest) {
   try {
     const ctype = req.headers.get("content-type") || "";
+
     if (!ctype.includes("application/json")) {
       return json(
         {
@@ -95,7 +113,8 @@ export async function POST(req: NextRequest) {
           details: [
             {
               path: ["headers.Content-Type"],
-              message: "Gebruik Content-Type: application/json en stuur een JSON body.",
+              message:
+                "Gebruik Content-Type: application/json en stuur een JSON body.",
             },
           ],
         },
@@ -105,17 +124,21 @@ export async function POST(req: NextRequest) {
 
     const raw = await req.json();
 
-    // --- Normalisatie: accepteer oudere keys uit UI ---
     const normalized = {
       partnerSlug: raw.partnerSlug,
       slotId: raw.slotId,
       startTimeISO: raw.startTimeISO,
-      // players of playersCount
+
       players: raw.players ?? raw.playersCount ?? undefined,
+
       customer: raw.customer,
+
       dog:
         raw.dog ??
-        (raw.dogName || raw.dogAllergies || raw.dogFears || raw.dogTrackingLevel
+        (raw.dogName ||
+        raw.dogAllergies ||
+        raw.dogFears ||
+        raw.dogTrackingLevel
           ? {
               name: raw.dogName,
               allergies: raw.dogAllergies,
@@ -123,10 +146,12 @@ export async function POST(req: NextRequest) {
               trackingLevel: raw.dogTrackingLevel,
             }
           : undefined),
-      // price object of losse bedragen
+
       price:
         raw.price ??
-        (raw.totalCents != null && raw.depositCents != null && raw.restCents != null
+        (raw.totalCents != null &&
+        raw.depositCents != null &&
+        raw.restCents != null
           ? {
               totalCents: raw.totalCents,
               depositCents: raw.depositCents,
@@ -138,7 +163,7 @@ export async function POST(req: NextRequest) {
 
     const data = CreateBookingSchema.parse(normalized);
 
-    // 1) Partner + prijzen (nodig voor fallback-berekening)
+    // 1) Partner ophalen
     const partner = await prisma.partner.findUnique({
       where: { slug: data.partnerSlug },
       select: {
@@ -148,26 +173,56 @@ export async function POST(req: NextRequest) {
         price2PlusCents: true,
       },
     });
-    if (!partner) return json({ ok: false, error: "Partner niet gevonden" }, 404);
 
-    // 2) Slot resolven
-    const slot =
-      data.slotId
-        ? await prisma.slot.findFirst({
-            where: { id: data.slotId, partnerId: partner.id },
-            select: { id: true, status: true, startTime: true },
-          })
-        : data.startTimeISO
-        ? await prisma.slot.findFirst({
-            where: { partnerId: partner.id, startTime: new Date(data.startTimeISO) },
-            select: { id: true, status: true, startTime: true },
-          })
-        : null;
+    if (!partner) {
+      return json({ ok: false, error: "Partner niet gevonden" }, 404);
+    }
 
-    if (!slot) return json({ ok: false, error: "Tijdslot niet gevonden" }, 404);
-    if (slot.status === "BOOKED") return json({ ok: false, error: "Tijdslot is al geboekt" }, 409);
+    // 2) Slot ophalen
+    const slot = data.slotId
+      ? await prisma.slot.findFirst({
+          where: {
+            id: data.slotId,
+            partnerId: partner.id,
+          },
+          select: {
+            id: true,
+            status: true,
+            startTime: true,
+          },
+        })
+      : data.startTimeISO
+      ? await prisma.slot.findFirst({
+          where: {
+            partnerId: partner.id,
+            startTime: new Date(data.startTimeISO),
+          },
+          select: {
+            id: true,
+            status: true,
+            startTime: true,
+          },
+        })
+      : null;
 
-    // 3) Customer (meerdere per email toegestaan)  ⬅️ ENIGE INHOUDELIJKE WIJZIGING
+    if (!slot) {
+      return json({ ok: false, error: "Tijdslot niet gevonden" }, 404);
+    }
+
+    if (slot.status !== "PUBLISHED") {
+      return json(
+        {
+          ok: false,
+          error:
+            slot.status === "BOOKED"
+              ? "Tijdslot is al geboekt"
+              : "Tijdslot is niet beschikbaar",
+        },
+        409
+      );
+    }
+
+    // 3) Customer ophalen of aanmaken
     const normalizedEmail = data.customer.email.trim().toLowerCase();
 
     let customer = await prisma.customer.findFirst({
@@ -199,7 +254,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 4) Prijs (client price of fallback)
+    // 4) Prijs berekenen
     const price =
       data.price ??
       computePriceCents({
@@ -211,94 +266,122 @@ export async function POST(req: NextRequest) {
         },
       });
 
-    // 4b) Pre-check: bestaat er al een booking voor dit slot?
+    // 5) Check dubbele booking
     const existing = await prisma.booking.findUnique({
-      where: { slotId: slot.id }, // slotId is @unique in jouw schema
-      select: { id: true, status: true },
+      where: { slotId: slot.id },
+      select: {
+        id: true,
+        status: true,
+      },
     });
+
     if (existing) {
       return json(
         {
           ok: false,
           error: "Tijdslot net geboekt of dubbele aanvraag",
-          details: [{ path: ["slotId"], message: "Er bestaat al een booking voor dit tijdslot." }],
+          details: [
+            {
+              path: ["slotId"],
+              message: "Er bestaat al een booking voor dit tijdslot.",
+            },
+          ],
           booking: existing,
         },
         409
       );
     }
 
-    // 5) Booking aanmaken + slot direct locken (in één transactie)
+    // 6) Booking aanmaken als PENDING
+    // LET OP:
+    // Het slot blijft PUBLISHED.
+    // Pas de Mollie webhook mag het slot op BOOKED zetten na payment.status === "paid".
     try {
-      const [booking, updatedSlot] = await prisma.$transaction([
-        prisma.booking.create({
-          data: {
-            partnerId: partner.id,
-            slotId: slot.id,
-            customerId: customer.id,
+      const booking = await prisma.booking.create({
+        data: {
+          partnerId: partner.id,
+          slotId: slot.id,
+          customerId: customer.id,
 
-            status: "PENDING",
-            currency: price.currency,
-            totalAmountCents: price.totalCents,
-            depositAmountCents: price.depositCents,
-            restAmountCents: price.restCents,
+          status: "PENDING",
 
-            playersCount: data.players,
-            dogName: data.dog?.name ?? null,
-            dogAllergies: data.dog?.allergies ?? null,
-            dogFears: data.dog?.fears ?? null,
-            dogTrackingLevel: (data.dog?.trackingLevel as string | undefined) ?? null,
-          },
-          select: { id: true, status: true },
-        }),
-        prisma.slot.update({
-          where: { id: slot.id },
-          data: { status: "BOOKED", bookedAt: new Date() },
-          select: { id: true, status: true },
-        }),
-      ]);
+          currency: price.currency,
+          totalAmountCents: price.totalCents,
+          depositAmountCents: price.depositCents,
+          restAmountCents: price.restCents,
 
-      // Succes: backwards compatible én rijk object
+          playersCount: data.players,
+
+          dogName: data.dog?.name ?? null,
+          dogAllergies: data.dog?.allergies ?? null,
+          dogFears: data.dog?.fears ?? null,
+          dogTrackingLevel:
+            (data.dog?.trackingLevel as string | undefined) ?? null,
+        },
+        select: {
+          id: true,
+          status: true,
+          slotId: true,
+        },
+      });
+
       return json(
         {
           ok: true,
-          bookingId: booking.id, // top-level voor oude clients
+          bookingId: booking.id,
           status: booking.status,
-          booking: { id: booking.id, status: booking.status, slotId: slot.id },
-          slot: { id: updatedSlot.id, status: updatedSlot.status },
+          booking: {
+            id: booking.id,
+            status: booking.status,
+            slotId: booking.slotId,
+          },
+          slot: {
+            id: slot.id,
+            status: slot.status,
+          },
         },
         201,
         { Location: `/api/booking/${booking.id}` }
       );
     } catch (e: any) {
       if (e?.code === "P2002") {
-        // unique constraint (dubbel submit / race)
         return json(
           {
             ok: false,
             error: "Tijdslot net geboekt of dubbele aanvraag",
-            details: [{ path: ["slotId"], message: "Er bestaat al een booking voor dit tijdslot." }],
+            details: [
+              {
+                path: ["slotId"],
+                message: "Er bestaat al een booking voor dit tijdslot.",
+              },
+            ],
           },
           409
         );
       }
-      // P2025: slot.update faalde (bijv. intussen door andere flow op BOOKED gezet)
-      if (e?.code === "P2025") {
-        return json(
-          {
-            ok: true,
-            warning: "Slotstatus kon niet meer worden bijgewerkt (was al gewijzigd).",
-          },
-          201
-        );
-      }
+
       throw e;
     }
   } catch (err: any) {
     if (err?.name === "ZodError") {
-      return json({ ok: false, error: "Validatie fout", details: err.issues }, 400);
+      return json(
+        {
+          ok: false,
+          error: "Validatie fout",
+          details: err.issues,
+        },
+        400
+      );
     }
+
     console.error("Booking create error:", err);
-    return json({ ok: false, error: "Interne fout" }, 500);
+
+    return json(
+      {
+        ok: false,
+        error: "Interne fout",
+      },
+      500
+    );
   }
 }

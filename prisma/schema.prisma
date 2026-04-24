@@ -232,6 +232,8 @@ model Booking {
   dogAllergies         String?
   dogFears             String?
   dogTrackingLevel     String?        // values: "NONE" | "BEGINNER" | "AMATEUR" | "PRO"
+  dogSocialWithPeople Boolean?
+
 
   // ---- Giftcard-registratie (optioneel) ----
   giftCardId           String?
