@@ -13,6 +13,7 @@ import {
 import { sendBookingEmails } from "@/lib/events/booking-confirmed";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 function mollie() {
   const apiKey = process.env.MOLLIE_API_KEY;
@@ -26,20 +27,15 @@ function mapStatus(status?: string): PaymentStatus {
     case "open":
     case "pending":
       return PaymentStatus.PENDING;
-
     case "paid":
       return PaymentStatus.PAID;
-
     case "failed":
       return PaymentStatus.FAILED;
-
     case "canceled":
       return PaymentStatus.CANCELED;
-
     case "refunded":
     case "charged_back":
       return PaymentStatus.REFUNDED;
-
     case "expired":
     default:
       return PaymentStatus.FAILED;
@@ -168,31 +164,61 @@ export async function POST(req: NextRequest) {
 
       if (!freshBooking) return;
 
-      if (freshBooking.status !== BookingStatus.CONFIRMED) {
-        await tx.booking.update({
-          where: { id: freshBooking.id },
-          data: {
-            status: BookingStatus.CONFIRMED,
-            confirmedAt: new Date(),
-            depositPaidAt: paidAt ?? new Date(),
-          },
-        });
-
-        justConfirmed = true;
+      // Al bevestigd? Dan niets opnieuw doen.
+      if (freshBooking.status === BookingStatus.CONFIRMED) {
+        return;
       }
 
-      if (
-        freshBooking.slot &&
-        freshBooking.slot.status !== SlotStatus.BOOKED
-      ) {
-        await tx.slot.update({
-          where: { id: freshBooking.slot.id },
-          data: {
-            status: SlotStatus.BOOKED,
-            bookedAt: new Date(),
-          },
+      // Belangrijk:
+      // Alleen PENDING bookings mogen naar CONFIRMED.
+      // CANCELLED/EXPIRED/andere statussen niet alsnog bevestigen.
+      if (freshBooking.status !== BookingStatus.PENDING) {
+        console.warn("[mollie/webhook] paid payment voor niet-PENDING booking", {
+          bookingId: freshBooking.id,
+          bookingStatus: freshBooking.status,
+          paymentId: molliePayment.id,
         });
+
+        return;
       }
+
+      if (!freshBooking.slot) {
+        console.warn("[mollie/webhook] booking zonder slot", {
+          bookingId: freshBooking.id,
+          paymentId: molliePayment.id,
+        });
+
+        return;
+      }
+
+      if (freshBooking.slot.status === SlotStatus.BOOKED) {
+        console.warn("[mollie/webhook] slot is al BOOKED", {
+          bookingId: freshBooking.id,
+          slotId: freshBooking.slot.id,
+          paymentId: molliePayment.id,
+        });
+
+        return;
+      }
+
+      await tx.booking.update({
+        where: { id: freshBooking.id },
+        data: {
+          status: BookingStatus.CONFIRMED,
+          confirmedAt: new Date(),
+          depositPaidAt: paidAt ?? new Date(),
+        },
+      });
+
+      await tx.slot.update({
+        where: { id: freshBooking.slot.id },
+        data: {
+          status: SlotStatus.BOOKED,
+          bookedAt: new Date(),
+        },
+      });
+
+      justConfirmed = true;
     });
 
     if (justConfirmed) {

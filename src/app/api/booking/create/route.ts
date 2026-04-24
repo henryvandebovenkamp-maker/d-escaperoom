@@ -7,7 +7,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-// ---------- Helpers ----------
+const FIXED_TOTAL_CENTS = 7995;
+const PENDING_BOOKING_TTL_MINUTES = 15;
+
 function json(data: any, status = 200, extraHeaders?: Record<string, string>) {
   return new NextResponse(JSON.stringify(data), {
     status,
@@ -20,23 +22,9 @@ function json(data: any, status = 200, extraHeaders?: Record<string, string>) {
   });
 }
 
-function computePriceCents(params: {
-  players: number;
-  partner: {
-    price1PaxCents: number;
-    price2PlusCents: number;
-    feePercent: number;
-  };
-}) {
-  const { players, partner } = params;
-
-  const base =
-    players <= 1
-      ? partner.price1PaxCents
-      : players * partner.price2PlusCents;
-
-  const total = base;
-  const deposit = Math.round((total * partner.feePercent) / 100);
+function computePriceCents(params: { feePercent: number }) {
+  const total = FIXED_TOTAL_CENTS;
+  const deposit = Math.round((total * params.feePercent) / 100);
   const rest = total - deposit;
 
   return {
@@ -47,12 +35,17 @@ function computePriceCents(params: {
   };
 }
 
-const PriceSchema = z.object({
-  totalCents: z.coerce.number().int().nonnegative(),
-  depositCents: z.coerce.number().int().nonnegative(),
-  restCents: z.coerce.number().int().nonnegative(),
-  currency: z.string().length(3).default("EUR"),
-});
+function isExpiredPendingBooking(booking: {
+  status: string;
+  createdAt: Date;
+}) {
+  if (booking.status !== "PENDING") return false;
+
+  const expiresAt =
+    booking.createdAt.getTime() + PENDING_BOOKING_TTL_MINUTES * 60 * 1000;
+
+  return Date.now() > expiresAt;
+}
 
 const CreateBookingSchema = z
   .object({
@@ -77,8 +70,6 @@ const CreateBookingSchema = z
         trackingLevel: z.enum(["NONE", "BEGINNER", "AMATEUR", "PRO"]).optional(),
       })
       .optional(),
-
-    price: PriceSchema.optional(),
   })
   .superRefine((val, ctx) => {
     if (!val.slotId && !val.startTimeISO) {
@@ -128,9 +119,7 @@ export async function POST(req: NextRequest) {
       partnerSlug: raw.partnerSlug,
       slotId: raw.slotId,
       startTimeISO: raw.startTimeISO,
-
       players: raw.players ?? raw.playersCount ?? undefined,
-
       customer: raw.customer,
 
       dog:
@@ -146,31 +135,15 @@ export async function POST(req: NextRequest) {
               trackingLevel: raw.dogTrackingLevel,
             }
           : undefined),
-
-      price:
-        raw.price ??
-        (raw.totalCents != null &&
-        raw.depositCents != null &&
-        raw.restCents != null
-          ? {
-              totalCents: raw.totalCents,
-              depositCents: raw.depositCents,
-              restCents: raw.restCents,
-              currency: raw.currency ?? "EUR",
-            }
-          : undefined),
     };
 
     const data = CreateBookingSchema.parse(normalized);
 
-    // 1) Partner ophalen
     const partner = await prisma.partner.findUnique({
       where: { slug: data.partnerSlug },
       select: {
         id: true,
         feePercent: true,
-        price1PaxCents: true,
-        price2PlusCents: true,
       },
     });
 
@@ -178,7 +151,6 @@ export async function POST(req: NextRequest) {
       return json({ ok: false, error: "Partner niet gevonden" }, 404);
     }
 
-    // 2) Slot ophalen
     const slot = data.slotId
       ? await prisma.slot.findFirst({
           where: {
@@ -222,7 +194,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3) Customer ophalen of aanmaken
     const normalizedEmail = data.customer.email.trim().toLowerCase();
 
     let customer = await prisma.customer.findFirst({
@@ -254,48 +225,52 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 4) Prijs berekenen
-    const price =
-      data.price ??
-      computePriceCents({
-        players: data.players,
-        partner: {
-          feePercent: partner.feePercent,
-          price1PaxCents: partner.price1PaxCents,
-          price2PlusCents: partner.price2PlusCents,
-        },
-      });
+    const price = computePriceCents({
+      feePercent: partner.feePercent,
+    });
 
-    // 5) Check dubbele booking
     const existing = await prisma.booking.findUnique({
       where: { slotId: slot.id },
       select: {
         id: true,
         status: true,
+        createdAt: true,
       },
     });
 
     if (existing) {
-      return json(
-        {
-          ok: false,
-          error: "Tijdslot net geboekt of dubbele aanvraag",
-          details: [
-            {
-              path: ["slotId"],
-              message: "Er bestaat al een booking voor dit tijdslot.",
+      if (isExpiredPendingBooking(existing)) {
+        await prisma.booking.update({
+          where: { id: existing.id },
+          data: {
+            status: "CANCELLED",
+            cancelledAt: new Date(),
+          },
+        });
+      } else {
+        return json(
+          {
+            ok: false,
+            error: "Tijdslot is tijdelijk gereserveerd of al geboekt",
+            details: [
+              {
+                path: ["slotId"],
+                message:
+                  existing.status === "PENDING"
+                    ? "Dit tijdslot is tijdelijk gereserveerd. Probeer het over enkele minuten opnieuw."
+                    : "Er bestaat al een booking voor dit tijdslot.",
+              },
+            ],
+            booking: {
+              id: existing.id,
+              status: existing.status,
             },
-          ],
-          booking: existing,
-        },
-        409
-      );
+          },
+          409
+        );
+      }
     }
 
-    // 6) Booking aanmaken als PENDING
-    // LET OP:
-    // Het slot blijft PUBLISHED.
-    // Pas de Mollie webhook mag het slot op BOOKED zetten na payment.status === "paid".
     try {
       const booking = await prisma.booking.create({
         data: {
@@ -339,6 +314,7 @@ export async function POST(req: NextRequest) {
             id: slot.id,
             status: slot.status,
           },
+          expiresInMinutes: PENDING_BOOKING_TTL_MINUTES,
         },
         201,
         { Location: `/api/booking/${booking.id}` }
@@ -352,7 +328,7 @@ export async function POST(req: NextRequest) {
             details: [
               {
                 path: ["slotId"],
-                message: "Er bestaat al een booking voor dit tijdslot.",
+                message: "Er bestaat al een actieve booking voor dit tijdslot.",
               },
             ],
           },
