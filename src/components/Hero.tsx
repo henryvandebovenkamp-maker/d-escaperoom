@@ -12,11 +12,11 @@ const HERO_IMAGES = [
   },
   {
     src: "/images/hero/IMG_1049.jpg",
-    alt: "Familie met hond tijdens de testdag van The Missing Snack",
+    alt: "Familie met hond tijdens de testdag van The Stolen Snack",
   },
   {
     src: "/images/hero/IMG_1029.jpg",
-    alt: "Spelers met hond in western sfeer tijdens The Missing Snack",
+    alt: "Spelers met hond in western sfeer tijdens The Stolen Snack",
   },
 ];
 
@@ -31,10 +31,9 @@ export default function Hero() {
 
   React.useEffect(() => {
     const timer = window.setInterval(() => {
-      setActiveIndex((current) => {
-        const next = current + 1;
-        return next >= HERO_IMAGES.length ? 0 : next;
-      });
+      setActiveIndex((current) =>
+        current + 1 >= HERO_IMAGES.length ? 0 : current + 1
+      );
     }, 3500);
 
     return () => window.clearInterval(timer);
@@ -64,27 +63,22 @@ export default function Hero() {
               className="mt-5 text-6xl font-black leading-[0.92] tracking-tight"
             >
               <span className="block text-rose-300">Baas en hond</span>
-              <span className="block text-rose-300">werken samen en lossen het mysterie op</span>
+              <span className="block text-rose-300">
+                werken samen en lossen het mysterie op
+              </span>
             </h1>
 
             <p className="mt-6 max-w-xl text-base leading-8 text-stone-200/90">
-              In The Missing Snack worden jullie als team uitgedaagd om puzzels
+              In The Stolen Snack worden jullie als team uitgedaagd om puzzels
               op te lossen en samen het mysterie te ontrafelen.
             </p>
 
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="mt-8">
               <Link
                 href="#boeken"
                 className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-pink-600 px-6 py-3 text-base font-semibold text-white shadow-lg shadow-pink-950/30 transition hover:bg-pink-700 focus:outline-none focus:ring-4 focus:ring-pink-300"
               >
                 Boek nu
-              </Link>
-
-              <Link
-                href="#skills"
-                className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-6 py-3 text-base font-semibold text-white backdrop-blur-sm transition hover:bg-white/15 focus:outline-none focus:ring-4 focus:ring-white/30"
-              >
-                Bekijk de ervaring
               </Link>
             </div>
 
@@ -178,118 +172,85 @@ export default function Hero() {
 
         {/* MOBIEL / TABLET */}
         <div className="lg:hidden">
-          <div className="grid grid-cols-[minmax(0,1.9fr)_minmax(92px,0.95fr)] gap-3 sm:grid-cols-[minmax(0,2fr)_150px] sm:gap-4">
-            <div className="relative min-w-0">
-              <div className="relative overflow-hidden rounded-[1.8rem] border border-white/10 bg-white/5 shadow-2xl shadow-black/30">
-                <div className="relative aspect-[0.82] w-full sm:aspect-[0.9]">
-                  {HERO_IMAGES.map((image, index) => (
-                    <Image
-                      key={image.src}
-                      src={image.src}
-                      alt={image.alt}
-                      fill
-                      priority={index === 0}
-                      sizes="(max-width: 640px) 68vw, (max-width: 1024px) 60vw, 50vw"
-                      className={[
-                        "object-cover transition-all duration-700",
-                        index === activeIndex
-                          ? "opacity-100 scale-100"
-                          : "opacity-0 scale-[1.03]",
-                      ].join(" ")}
-                    />
-                  ))}
+          <div className="relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/5 shadow-2xl shadow-black/30">
+            <div className="relative aspect-[4/5] min-h-[500px] w-full sm:aspect-[16/10] sm:min-h-[520px]">
+              {HERO_IMAGES.map((image, index) => (
+                <Image
+                  key={image.src}
+                  src={image.src}
+                  alt={image.alt}
+                  fill
+                  priority={index === 0}
+                  sizes="100vw"
+                  className={[
+                    "object-cover transition-all duration-700",
+                    index === activeIndex
+                      ? "opacity-100 scale-100"
+                      : "opacity-0 scale-[1.03]",
+                  ].join(" ")}
+                />
+              ))}
 
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/88 via-black/18 to-black/10" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/10" />
 
-                  <div className="absolute left-3 right-3 top-3 sm:left-4 sm:right-4 sm:top-4">
-                    <div className="inline-flex max-w-full rounded-[1.1rem] border border-white/15 bg-black/45 px-4 py-2 text-[8.5px] font-semibold tracking-[0.24em] text-stone-100/90 backdrop-blur-md sm:text-[9px]">
-                      UNIEKE ESCAPEROOM ERVARING IN EEN HONDENSCHOOL
-                    </div>
+              <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5">
+                <div className="rounded-[1.5rem] border border-white/10 bg-black/58 p-5 shadow-2xl backdrop-blur-xl sm:max-w-xl sm:p-6">
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-amber-100/85">
+                    Western escaperoom met je hond
+                  </p>
+
+                  <h1
+                    id="hero-title"
+                    className="mt-3 text-[2.55rem] font-black leading-[0.9] tracking-tight text-rose-300 sm:text-5xl"
+                  >
+                    Samenwerken met je hond
+                  </h1>
+
+                  <p className="mt-4 max-w-[34ch] text-sm leading-6 text-stone-100/90 sm:text-base sm:leading-7">
+                    In The Stolen Snack worden jullie als team uitgedaagd om
+                    puzzels op te lossen en samen het mysterie te ontrafelen.
+                  </p>
+
+                  <div className="mt-5">
+                    <Link
+                      href="#boeken"
+                      className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-pink-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-pink-950/30 transition hover:bg-pink-700 focus:outline-none focus:ring-4 focus:ring-pink-300"
+                    >
+                      Boek nu
+                    </Link>
                   </div>
 
-                  <div className="absolute bottom-3 left-3 right-3 sm:bottom-4 sm:left-4 sm:right-4">
-                    <div className="max-w-[20.5rem] rounded-[1.35rem] border border-white/10 bg-black/56 px-3.5 py-3.5 shadow-2xl backdrop-blur-xl sm:max-w-[23rem] sm:px-4 sm:py-4">
-                      <h1
-                        id="hero-title"
-                        className="max-w-[10.5ch] text-[1.95rem] font-black leading-[0.9] tracking-tight text-rose-300 sm:text-[2.25rem]"
+                  <ul className="mt-4 flex flex-wrap gap-2">
+                    {FEATURE_CHIPS.map((label) => (
+                      <li
+                        key={label}
+                        className="rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-[11px] font-medium text-stone-100/90"
                       >
-                        <span className="block">Baas en hond</span>
-                        <span className="block">werken samen</span>
-                      </h1>
-
-                      <p className="mt-2.5 max-w-[31ch] text-[11px] leading-5 text-stone-100/88 sm:text-[12px] sm:leading-5">
-                        In The Missing Snack worden jullie als team uitgedaagd
-                        om puzzels op te lossen en samen het mysterie te
-                        ontrafelen.
-                      </p>
-
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <Link
-                          href="#boeken"
-                          className="inline-flex min-h-9 items-center justify-center rounded-xl bg-pink-600 px-3.5 py-2 text-[11px] font-semibold text-white shadow-lg shadow-pink-950/30 transition hover:bg-pink-700 focus:outline-none focus:ring-4 focus:ring-pink-300"
-                        >
-                          Boek nu
-                        </Link>
-
-                        <Link
-                          href="#skills"
-                          className="inline-flex min-h-9 items-center justify-center rounded-xl border border-white/15 bg-white/10 px-3.5 py-2 text-[11px] font-semibold text-white backdrop-blur-sm transition hover:bg-white/15 focus:outline-none focus:ring-4 focus:ring-white/30"
-                        >
-                          Bekijk de ervaring
-                        </Link>
-                      </div>
-
-                      <ul className="mt-3 flex flex-wrap gap-1.5">
-                        {FEATURE_CHIPS.map((label) => (
-                          <li
-                            key={label}
-                            className="rounded-full border border-white/10 bg-white/10 px-2.5 py-1 text-[9px] font-medium text-stone-100/90"
-                          >
-                            {label}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
+                        {label}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               </div>
-            </div>
 
-            <div className="flex flex-col gap-3 sm:gap-4">
-              {HERO_IMAGES.map((image, index) => {
-                const active = index === activeIndex;
+              <div className="absolute right-4 top-4 flex gap-1.5">
+                {HERO_IMAGES.map((image, index) => {
+                  const active = index === activeIndex;
 
-                return (
-                  <button
-                    key={image.src}
-                    type="button"
-                    onClick={() => setActiveIndex(index)}
-                    aria-label={`Toon foto ${index + 1}`}
-                    className={[
-                      "group relative overflow-hidden rounded-[1.35rem] border transition",
-                      active
-                        ? "border-rose-300 ring-2 ring-rose-300/50"
-                        : "border-white/10 hover:border-white/20",
-                    ].join(" ")}
-                  >
-                    <div className="relative aspect-[0.94] w-full">
-                      <Image
-                        src={image.src}
-                        alt=""
-                        fill
-                        sizes="(max-width: 640px) 26vw, 150px"
-                        className="object-cover transition duration-300 group-hover:scale-[1.02]"
-                      />
-                      <div
-                        className={[
-                          "absolute inset-0 transition",
-                          active ? "bg-black/10" : "bg-black/28",
-                        ].join(" ")}
-                      />
-                    </div>
-                  </button>
-                );
-              })}
+                  return (
+                    <button
+                      key={image.src}
+                      type="button"
+                      onClick={() => setActiveIndex(index)}
+                      aria-label={`Toon foto ${index + 1}`}
+                      className={[
+                        "h-2.5 rounded-full transition",
+                        active ? "w-7 bg-rose-300" : "w-2.5 bg-white/45",
+                      ].join(" ")}
+                    />
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>

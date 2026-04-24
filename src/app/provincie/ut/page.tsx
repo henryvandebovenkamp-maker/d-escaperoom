@@ -24,7 +24,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "D-EscapeRoom Utrecht | WoofExperience",
   description:
-    "Boek D-EscapeRoom in Utrecht bij WoofExperience. Beleef The Missing Snack samen met je hond.",
+    "Boek D-EscapeRoom in Utrecht bij WoofExperience. Beleef The Stolen Snack samen met je hond.",
   alternates: {
     canonical: "https://d-escaperoom.com/partner/provincie/ut",
   },

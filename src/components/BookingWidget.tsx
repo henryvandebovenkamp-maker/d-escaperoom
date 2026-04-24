@@ -843,7 +843,7 @@ export default function BookingWidget({
 
           <p className="mt-5 text-sm leading-7 text-stone-200/90 sm:text-base">
             Selecteer een hondenschool, prik een beschikbare datum en reserveer
-            jullie plek voor The Missing Snack.
+            jullie plek voor The Stolen Snack.
           </p>
         </div>
 

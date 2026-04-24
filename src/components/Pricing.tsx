@@ -36,7 +36,7 @@ export default function Pricing() {
 
           <p className="mt-5 text-sm leading-7 text-stone-200/90 sm:text-base">
             Verzamel je team, neem je hond mee en stap samen de wereld van The
-            Missing Snack binnen. Jullie gaan speuren, puzzelen en ontdekken of
+            Stolen Snack binnen. Jullie gaan speuren, puzzelen en ontdekken of
             jullie het mysterie kunnen oplossen.
           </p>
         </div>

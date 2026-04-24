@@ -15,7 +15,7 @@ export const metadata: Metadata = {
     template: "%s | D-EscapeRoom",
   },
   description:
-    "The Missing Snack: een unieke escaperoom ervaring voor baas en hond.",
+    "The Stolen Snack: een unieke escaperoom ervaring voor baas en hond.",
 };
 
 type Props = {

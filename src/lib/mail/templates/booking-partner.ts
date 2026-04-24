@@ -13,7 +13,7 @@ const Tpl = {
   html: (v: TemplateVars["booking-partner"]) => {
     const body = `
       <p style="margin:0 0 12px 0">
-        Yes! Er is een nieuwe boeking binnen voor <strong>The Missing Snack</strong>. 🎉
+        Yes! Er is een nieuwe boeking binnen voor <strong>The Stolen Snack</strong>. 🎉
       </p>
 
       <table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border:1px solid #e7e5e4;border-radius:10px;margin:8px 0 12px 0">

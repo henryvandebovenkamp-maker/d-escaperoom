@@ -27,7 +27,7 @@ export default function Footer() {
             </span>
 
             <h3 className="mt-5 text-3xl font-black tracking-tight text-rose-300">
-              The Missing Snack
+              The Stolen Snack
             </h3>
 
             <p className="mt-4 max-w-sm text-sm leading-7 text-stone-300">

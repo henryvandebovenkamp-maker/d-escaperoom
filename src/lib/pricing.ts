@@ -17,7 +17,7 @@ function roundCents(n: number) {
 
 /**
  * Vaste prijs:
- * The Missing Snack kost altijd €79,90 per boeking.
+ * The Stolen Snack kost altijd €79,90 per boeking.
  * Aantal spelers heeft géén invloed op de prijs.
  */
 export function computeBaseTotalCents(

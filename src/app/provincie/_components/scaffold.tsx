@@ -30,7 +30,7 @@ export const TAKEN: Partial<Record<ProvinceCode, boolean>> = {
 export function metaForProvince(code: ProvinceCode): Metadata {
   const name = PROVINCES[code];
   const title = `D-EscapeRoom in ${name}`;
-  const description = `The Missing Snack — boek je sessie in ${name}.`;
+  const description = `The Stolen Snack — boek je sessie in ${name}.`;
   return {
     title,
     description,
@@ -66,7 +66,7 @@ export function ProvincePageScaffold({ code }: { code: ProvinceCode }) {
             {name}
           </h1>
           <p className="mt-1 text-sm text-stone-700">
-            D-EscapeRoom “The Missing Snack” in <strong>{name}</strong>
+            D-EscapeRoom “The Stolen Snack” in <strong>{name}</strong>
           </p>
           <div
             className={[
