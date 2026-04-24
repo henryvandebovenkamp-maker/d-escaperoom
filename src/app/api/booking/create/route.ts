@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const FIXED_TOTAL_CENTS = 7995;
+const FIXED_TOTAL_CENTS = 7990;
 const PENDING_BOOKING_TTL_MINUTES = 15;
 
 function json(data: any, status = 200, extraHeaders?: Record<string, string>) {

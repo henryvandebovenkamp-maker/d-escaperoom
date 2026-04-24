@@ -1,168 +1,92 @@
-// PATH: src/components/Pricing.tsx
-"use client";
 
-import * as React from "react";
+// PATH: src/components/Pricing.tsx
 import Link from "next/link";
+
+const INCLUDED_ITEMS = [
+  "Vaste prijs voor jullie team",
+  "Speeladvies: 2 volwassenen + 1 hond",
+  "Kinderen mogen gratis mee",
+  "Maximaal 2 honden per boeking",
+];
 
 export default function Pricing() {
   return (
-    <section id="prijzen" aria-labelledby="prijzen-title" className="bg-stone-50 py-0">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 text-center">
-        {/* TOPBAND: zelfde grootte als Skills-header */}
-        <div className="relative w-full overflow-hidden h-14 sm:h-16 lg:h-20">
-          <div className="flex h-full w-full items-start justify-center pt-4 sm:pt-5">
-            <img
-              src="/images/pricing-header.png"
-              alt="" // decoratief
-              width={2304}
-              height={224}
-              className="h-[95%] w-auto object-contain"
-            />
+    <section
+      id="prijzen"
+      aria-labelledby="pricing-title"
+      className="relative overflow-hidden bg-stone-950 px-4 py-12 text-white sm:px-6 lg:px-8 lg:py-20"
+    >
+      <div aria-hidden className="absolute inset-0">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(251,113,133,0.16),transparent_38%)]" />
+        <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(rgba(255,255,255,0.10)_1px,transparent_1px)] [background-size:12px_12px]" />
+      </div>
+
+      <div className="relative mx-auto max-w-6xl">
+        <div className="mx-auto max-w-2xl text-center">
+          <span className="inline-flex rounded-full border border-white/15 bg-white/10 px-4 py-1.5 text-[11px] font-semibold tracking-[0.24em] text-stone-100/90 backdrop-blur-sm">
+            PRIJS & INFO
+          </span>
+
+          <h2
+            id="pricing-title"
+            className="mt-5 text-4xl font-black tracking-tight text-rose-300 sm:text-5xl lg:text-6xl"
+          >
+            Prijzen en deelname
+          </h2>
+
+          <p className="mt-5 text-sm leading-7 text-stone-200/90 sm:text-base">
+            Verzamel je team, neem je hond mee en stap samen de wereld van The
+            Missing Snack binnen. Jullie gaan speuren, puzzelen en ontdekken of
+            jullie het mysterie kunnen oplossen.
+          </p>
+        </div>
+
+        <div className="mx-auto mt-10 max-w-xl rounded-[2rem] border border-white/10 bg-white/5 p-5 shadow-2xl shadow-black/30 backdrop-blur-md sm:p-7">
+          <div className="rounded-[1.5rem] border border-white/10 bg-black/35 p-6 text-center">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-200/90">
+              Vaste prijs per boeking
+            </p>
+
+            <div className="mt-4">
+              <span className="text-6xl font-black tracking-tight text-white">
+                €79,90
+              </span>
+            </div>
+
+            <p className="mt-3 text-sm leading-6 text-stone-200/90">
+              Voor jullie complete team
+            </p>
           </div>
-          <h2 id="prijzen-title" className="sr-only">Wat kost het?</h2>
-        </div>
 
-        <p className="mt-3 max-w-2xl mx-auto text-sm sm:text-base text-stone-700">
-          Betaal makkelijk met iDEAL of creditcard.
-        </p>
+          <ul className="mt-6 space-y-3">
+            {INCLUDED_ITEMS.map((item) => (
+              <li
+                key={item}
+                className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm text-stone-100/95"
+              >
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-pink-600 text-[11px] font-black text-white">
+                  ✓
+                </span>
 
-        {/* Divider */}
-        <div className="mx-auto mt-6 h-1 w-28 rounded-full bg-gradient-to-r from-pink-400 via-rose-300 to-pink-400" />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
 
-        {/* Cards (50% lagere hoogte) */}
-        <div className="mx-auto mt-12 max-w-3xl grid gap-6 sm:grid-cols-2">
-          {/* Kaart: 1 persoon */}
-          <article
-            className="
-              group relative h-36 sm:h-40 overflow-hidden rounded-2xl border border-stone-200
-              bg-gradient-to-br from-rose-50/90 via-stone-50 to-stone-100/80
-              shadow-[0_10px_30px_-12px_rgba(0,0,0,0.25)]
-              transition-all duration-500 ease-out will-change-transform
-              hover:scale-[1.015] hover:shadow-[0_18px_44px_-18px_rgba(0,0,0,0.35)]
-            "
-          >
-            {/* Watermark compacter */}
-            <div
-              aria-hidden
-              className="
-                absolute right-3 top-2 text-6xl sm:text-7xl leading-none opacity-15 select-none pointer-events-none
-                transition-transform duration-500 ease-out
-                group-hover:translate-x-1 group-hover:-rotate-2 group-hover:opacity-20
-              "
+          <div className="mt-7">
+            <Link
+              href="#boeken"
+              className="inline-flex min-h-12 w-full items-center justify-center rounded-2xl bg-pink-600 px-6 py-3 text-base font-semibold text-white shadow-lg shadow-pink-950/30 transition hover:bg-pink-700 focus:outline-none focus:ring-4 focus:ring-pink-300"
             >
-              🐾
-            </div>
+              Boek nu
+            </Link>
+          </div>
 
-            {/* Zachte highlight / vignette compacter */}
-            <div
-              aria-hidden
-              className="
-                absolute -right-8 -top-8 h-28 w-28 sm:h-36 sm:w-36 rounded-full
-                bg-white/25 blur-2xl opacity-40 pointer-events-none
-              "
-            />
-
-            {/* Subtiele ring (on hover roze tint) */}
-            <div
-              aria-hidden
-              className="
-                pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-white/60
-                transition-colors duration-300
-                group-hover:ring-pink-200/60
-              "
-            />
-
-            <div className="relative z-10 flex h-full flex-col justify-end p-4 sm:p-5 text-left">
-              <h3 className="text-sm sm:text-base font-bold tracking-tight text-stone-900">1 persoon</h3>
-              <div className="mt-1 flex items-baseline gap-2">
-                <span className="text-3xl sm:text-3xl font-black leading-none text-stone-900">€ 49,95</span>
-                <span className="text-xs sm:text-sm font-medium text-stone-700">per sessie</span>
-              </div>
-              <div className="mt-3">
-                <Link
-                  href="#boeken"
-                  aria-label="Boek nu: 1 persoon voor € 49,95"
-                  className="
-                    inline-flex h-10 sm:h-10 items-center justify-center rounded-3xl
-                    bg-pink-600 px-5 text-base sm:text-base font-bold text-white
-                    shadow hover:bg-pink-700
-                    focus:outline-none focus-visible:ring-4 focus-visible:ring-pink-300 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50
-                    active:translate-y-[1px] transition-colors
-                  "
-                >
-                  Boek nu
-                </Link>
-              </div>
-            </div>
-          </article>
-
-          {/* Kaart: 2 of meer personen */}
-          <article
-            className="
-              group relative h-36 sm:h-40 overflow-hidden rounded-2xl border border-stone-200
-              bg-gradient-to-br from-rose-50/90 via-stone-50 to-stone-100/80
-              shadow-[0_10px_30px_-12px_rgba(0,0,0,0.25)]
-              transition-all duration-500 ease-out will-change-transform
-              hover:scale-[1.015] hover:shadow-[0_18px_44px_-18px_rgba(0,0,0,0.35)]
-            "
-          >
-            <div
-              aria-hidden
-              className="
-                absolute right-3 top-2 text-6xl sm:text-7xl leading-none opacity-15 select-none pointer-events-none
-                transition-transform duration-500 ease-out
-                group-hover:-translate-y-0.5 group-hover:rotate-1 group-hover:opacity-20
-              "
-            >
-              🤠
-            </div>
-
-            <div
-              aria-hidden
-              className="
-                absolute -right-8 -top-8 h-28 w-28 sm:h-36 sm:w-36 rounded-full
-                bg-white/25 blur-2xl opacity-40 pointer-events-none
-              "
-            />
-
-            <div
-              aria-hidden
-              className="
-                pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-white/60
-                transition-colors duration-300
-                group-hover:ring-pink-200/60
-              "
-            />
-
-            <div className="relative z-10 flex h-full flex-col justify-end p-4 sm:p-5 text-left">
-              <h3 className="text-sm sm:text-base font-bold tracking-tight text-stone-900">2 of meer personen</h3>
-              <div className="mt-1 flex items-baseline gap-2">
-                <span className="text-3xl sm:text-3xl font-black leading-none text-stone-900">€ 39,95</span>
-                <span className="text-xs sm:text-sm font-semibold text-stone-700">p.p.</span>
-              </div>
-              <div className="mt-3">
-                <Link
-                  href="#boeken"
-                  aria-label="Boek nu: 2 of meer personen voor € 39,95 p.p."
-                  className="
-                    inline-flex h-10 sm:h-10 items-center justify-center rounded-3xl
-                    bg-pink-600 px-5 text-base sm:text-base font-bold text-white
-                    shadow hover:bg-pink-700
-                    focus:outline-none focus-visible:ring-4 focus-visible:ring-pink-300 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50
-                    active:translate-y-[1px] transition-colors
-                  "
-                >
-                  Boek nu
-                </Link>
-              </div>
-            </div>
-          </article>
+          <p className="mt-4 text-center text-xs leading-5 text-stone-300/80">
+            Voor de beste ervaring adviseren we 2 volwassenen en 1 hond. Extra
+            kinderen mogen gratis mee.
+          </p>
         </div>
-
-        {/* Speeladvies */}
-        <p className="mt-8 text-center text-sm sm:text-base font-medium text-stone-800">
-          👉 Voor de optimale beleving raden we <strong>2 personen + 1 hond</strong> aan.
-        </p>
       </div>
     </section>
   );

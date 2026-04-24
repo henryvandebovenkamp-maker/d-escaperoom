@@ -451,7 +451,9 @@ export default function BookingWidget({
     fixedPartnerSlug ?? defaultPartnerSlug
   );
 
-  const [viewMonth, setViewMonth] = React.useState<Date>(startOfMonth(new Date()));
+  const [viewMonth, setViewMonth] = React.useState<Date>(
+    startOfMonth(new Date())
+  );
   const [selectedDayISO, setSelectedDayISO] = React.useState<string>(todayISO);
   const [dayStats, setDayStats] = React.useState<Record<string, DayCounts>>({});
   const [loadingCalendar, setLoadingCalendar] = React.useState(false);
@@ -692,103 +694,124 @@ export default function BookingWidget({
     }
   }
 
-  const calendarDays = React.useMemo(() => buildCalendarDays(viewMonth), [viewMonth]);
+  const calendarDays = React.useMemo(
+    () => buildCalendarDays(viewMonth),
+    [viewMonth]
+  );
   const selectedDate = parseISODateOnly(selectedDayISO);
   const filteredSlots = React.useMemo(
     () => filterFutureSlotsForDay(selectedDayISO, slots),
     [slots, selectedDayISO]
   );
 
-  const availableCount = filteredSlots.length;
-  const availabilityBadge =
-    availableCount > 3
-      ? {
-          cls: "bg-emerald-100 text-emerald-800 border-emerald-300",
-          label: "Groen — meer dan 3 boekbaar",
-        }
-      : availableCount === 1
-      ? {
-          cls: "bg-orange-100 text-orange-800 border-orange-300",
-          label: "Oranje — nog maar 1 boekbaar",
-        }
-      : availableCount === 0
-      ? {
-          cls: "bg-stone-100 text-stone-700 border-stone-300",
-          label: "Grijs — geen tijdsloten beschikbaar",
-        }
-      : null;
-
   function dotClassForDay(
     counts?: DayCounts,
     d?: Date
   ): { cls: string; label: string; hideDot?: boolean } {
-    if (d && isPastDay(d)) return { cls: "bg-transparent", label: "", hideDot: true };
+    if (d && isPastDay(d))
+      return { cls: "bg-transparent", label: "", hideDot: true };
     const c = counts;
-    if (!c || c.total === 0) return { cls: "bg-stone-500", label: "Geen tijdsloten (grijs)" };
-    if (c.published === 1) return { cls: "bg-orange-500", label: "Nog 1 tijdslot (oranje)" };
-    if (c.published >= 2) return { cls: "bg-emerald-600", label: "Beschikbaar (groen)" };
-    return { cls: "bg-stone-500", label: "Geen tijdsloten (grijs)" };
+    if (!c || c.total === 0)
+      return { cls: "bg-stone-500", label: "Geen tijdsloten" };
+    if (c.published === 1)
+      return { cls: "bg-orange-400", label: "Nog 1 tijdslot" };
+    if (c.published >= 2)
+      return { cls: "bg-emerald-400", label: "Beschikbaar" };
+    return { cls: "bg-stone-500", label: "Geen tijdsloten" };
   }
 
   function dayTintForDay(counts?: DayCounts, d?: Date) {
-    if (d && isPastDay(d)) return { bg: "bg-stone-50", border: "border-stone-200" };
+    if (d && isPastDay(d)) {
+      return {
+        bg: "bg-white/[0.03]",
+        border: "border-white/10",
+        text: "text-stone-500",
+      };
+    }
+
     const c = counts;
-    if (!c || c.total === 0) return { bg: "bg-stone-50", border: "border-stone-300" };
-    if (c.published === 1) return { bg: "bg-orange-50", border: "border-orange-200" };
-    if (c.published >= 2) return { bg: "bg-emerald-50", border: "border-emerald-200" };
-    return { bg: "bg-stone-50", border: "border-stone-300" };
+
+    if (!c || c.total === 0) {
+      return {
+        bg: "bg-white/[0.04]",
+        border: "border-white/10",
+        text: "text-stone-300",
+      };
+    }
+
+    if (c.published === 1) {
+      return {
+        bg: "bg-orange-400/14",
+        border: "border-orange-300/35",
+        text: "text-orange-100",
+      };
+    }
+
+    if (c.published >= 2) {
+      return {
+        bg: "bg-emerald-400/14",
+        border: "border-emerald-300/35",
+        text: "text-emerald-100",
+      };
+    }
+
+    return {
+      bg: "bg-white/[0.04]",
+      border: "border-white/10",
+      text: "text-stone-300",
+    };
   }
 
   if (!mounted) {
     return (
       <section
+        id="boeken"
         aria-label="Boekingswidget"
-        className="space-y-4 rounded-2xl border border-stone-200 bg-white/90 p-4 shadow-md backdrop-blur-sm"
+        className="relative overflow-hidden bg-stone-950 px-4 py-12 text-white sm:px-6 lg:px-8 lg:py-20"
       >
-        <div className="relative w-full overflow-hidden h-14 sm:h-16 lg:h-20">
-          <div className="flex h-full w-full items-start justify-center pt-4 sm:pt-5">
-            <img
-              src="/images/booking-header.png"
-              alt=""
-              width={2304}
-              height={224}
-              className="h-[95%] w-auto object-contain"
-            />
-          </div>
-          <h2 className="sr-only">Boek nu</h2>
+        <div aria-hidden className="absolute inset-0">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(251,113,133,0.16),transparent_38%)]" />
+          <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(rgba(255,255,255,0.10)_1px,transparent_1px)] [background-size:12px_12px]" />
         </div>
 
-        <div className="relative overflow-hidden rounded-2xl border border-stone-200">
-          <div className="h-40 w-full animate-pulse bg-stone-100" />
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div className="rounded-xl border border-stone-200 bg-white p-3 shadow-sm">
-            <div className="mb-3 h-5 w-28 animate-pulse rounded bg-stone-100" />
-            <div className="grid grid-cols-7 gap-1.5">
-              {Array.from({ length: 42 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-11 animate-pulse rounded-lg bg-stone-100"
-                />
-              ))}
+        <div className="relative mx-auto max-w-6xl">
+          <div className="rounded-[2rem] border border-white/10 bg-white/5 p-4 shadow-2xl shadow-black/30 backdrop-blur-md sm:p-6">
+            <div className="mb-6 text-center">
+              <div className="mx-auto h-4 w-40 animate-pulse rounded-full bg-white/10" />
+              <div className="mx-auto mt-4 h-9 w-64 animate-pulse rounded-xl bg-white/10" />
             </div>
-          </div>
 
-          <div className="rounded-xl border border-stone-200 bg-white p-3 shadow-sm">
-            <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-9 animate-pulse rounded-md bg-stone-100"
-                />
-              ))}
-            </div>
-            <div className="space-y-2">
-              <div className="h-10 animate-pulse rounded-md bg-stone-100" />
-              <div className="h-10 animate-pulse rounded-md bg-stone-100" />
-              <div className="h-10 animate-pulse rounded-md bg-stone-100" />
-              <div className="h-10 animate-pulse rounded-md bg-stone-100" />
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="rounded-[1.5rem] border border-white/10 bg-black/30 p-4">
+                <div className="mb-3 h-5 w-28 animate-pulse rounded bg-white/10" />
+                <div className="grid grid-cols-7 gap-1.5">
+                  {Array.from({ length: 42 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="h-11 animate-pulse rounded-xl bg-white/10"
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-[1.5rem] border border-white/10 bg-black/30 p-4">
+                <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="h-9 animate-pulse rounded-xl bg-white/10"
+                    />
+                  ))}
+                </div>
+                <div className="space-y-2">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="h-10 animate-pulse rounded-xl bg-white/10"
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -798,345 +821,409 @@ export default function BookingWidget({
 
   return (
     <section
+      id="boeken"
       aria-label="Boekingswidget"
-      className="space-y-4 rounded-2xl border border-stone-200 bg-white/90 p-4 shadow-md backdrop-blur-sm"
+      className="relative overflow-hidden bg-stone-950 px-4 py-12 text-white sm:px-6 lg:px-8 lg:py-20"
     >
-      <div className="relative w-full overflow-hidden h-14 sm:h-16 lg:h-20">
-        <div className="flex h-full w-full items-start justify-center pt-4 sm:pt-5">
-          <img
-            src="/images/booking-header.png"
-            alt=""
-            width={2304}
-            height={224}
-            className="h-[95%] w-auto object-contain"
-          />
-        </div>
-        <h2 className="sr-only">Boek nu</h2>
+      <div aria-hidden className="absolute inset-0">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(251,113,133,0.16),transparent_38%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(28,25,23,0.45)_0%,rgba(12,10,9,0.96)_100%)]" />
+        <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(rgba(255,255,255,0.10)_1px,transparent_1px)] [background-size:12px_12px]" />
       </div>
 
-      <div className="relative overflow-visible rounded-2xl border border-stone-200">
-        <img
-          src="/images/header-foto.png"
-          alt=""
-          className="pointer-events-none absolute inset-0 h-full w-full rounded-2xl object-cover opacity-80"
-          aria-hidden
-        />
-        <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-r from-rose-50/60 via-pink-50/50 to-stone-50/60" />
+      <div className="relative mx-auto max-w-6xl">
+        <div className="mx-auto max-w-2xl text-center">
+          <span className="inline-flex rounded-full border border-white/15 bg-white/10 px-4 py-1.5 text-[11px] font-semibold tracking-[0.24em] text-stone-100/90 backdrop-blur-sm">
+            BOEK JULLIE ESCAPEROOM
+          </span>
 
-        <div className="relative z-10 grid items-center gap-3 p-3 md:grid-cols-12">
-          <div className="md:col-span-3">
-            <div className="rounded-xl border border-stone-200/80 bg-white/80 p-2.5 shadow-sm backdrop-blur">
-              <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-stone-700">
-                Zo boek je
-              </div>
-              <ol className="space-y-0.5 text-[11px] text-stone-800">
-                <li><strong>1:</strong> Selecteer locatie</li>
-                <li><strong>2:</strong> Datum &amp; tijd prikken</li>
-                <li><strong>3:</strong> Reserveren</li>
+          <h2 className="mt-5 text-4xl font-black tracking-tight text-rose-300 sm:text-5xl lg:text-6xl">
+            Kies jullie moment
+          </h2>
+
+          <p className="mt-5 text-sm leading-7 text-stone-200/90 sm:text-base">
+            Selecteer een hondenschool, prik een beschikbare datum en reserveer
+            jullie plek voor The Missing Snack.
+          </p>
+        </div>
+
+        <div className="mt-10 rounded-[2rem] border border-white/10 bg-white/5 p-4 shadow-2xl shadow-black/30 backdrop-blur-md sm:p-6">
+          <div className="mb-5 grid gap-3 rounded-[1.5rem] border border-white/10 bg-black/35 p-4 backdrop-blur-md md:grid-cols-12 md:items-center">
+            <div className="md:col-span-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-200/90">
+                Zo werkt het
+              </p>
+
+              <ol className="mt-3 grid gap-2 text-xs leading-5 text-stone-100/90 sm:grid-cols-3 md:grid-cols-1">
+                <li>
+                  <strong className="text-white">1.</strong> Kies de locatie
+                </li>
+                <li>
+                  <strong className="text-white">2.</strong> Prik datum & tijd
+                </li>
+                <li>
+                  <strong className="text-white">3.</strong> Reserveer je plek
+                </li>
               </ol>
             </div>
-          </div>
 
-          <div className="md:col-span-6 text-center">
-            <h3 className="text-lg font-extrabold leading-tight tracking-tight text-stone-900 md:text-xl"></h3>
-          </div>
+            <div className="hidden text-center md:col-span-4 md:block">
+              <p className="text-sm font-semibold text-stone-100">
+                Speelduur ± 45 minuten
+              </p>
+              <p className="mt-1 text-xs text-stone-300">
+                Voor baas, hond en teamgenoten
+              </p>
+            </div>
 
-          <div className="relative z-20 md:col-span-3">
-            <label className="mb-1 block text-[11px] font-medium text-stone-700">
-              Locatie
-            </label>
+            <div className="md:col-span-4">
+              <label className="mb-1.5 block text-xs font-semibold text-stone-100">
+                Locatie
+              </label>
 
-            {locked ? (
-              <div className="h-9 w-full select-none rounded-lg border border-stone-300 bg-stone-50 px-2 text-xs text-stone-700">
-                <div className="flex h-full items-center justify-between">
+              {locked ? (
+                <div className="flex h-11 w-full items-center rounded-2xl border border-white/15 bg-white/10 px-3 text-sm text-stone-100 backdrop-blur-sm">
                   <span className="truncate">
                     {selectedPartner?.name ?? partnerSlug}
                     {selectedPartner?.city ? ` — ${selectedPartner.city}` : ""}
                   </span>
                 </div>
-              </div>
-            ) : (
-              <select
-                value={partnerSlug}
-                onChange={(e) => setPartnerSlug(e.target.value)}
-                className="h-9 w-full rounded-lg border border-stone-300 bg-white px-2 text-xs outline-none transition focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
-                aria-label="Kies locatie"
-              >
-                {partners.length === 0 ? (
-                  <option value="">{msg ? "Kon niet laden" : "Laden…"}</option>
-                ) : (
-                  <>
-                    <option value="">Kies locatie</option>
-                    {partners.map((p) => (
-                      <option key={p.slug} value={p.slug}>
-                        {p.name}
-                        {p.city ? ` — ${p.city}` : ""}
-                      </option>
-                    ))}
-                  </>
-                )}
-              </select>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="rounded-xl border border-stone-200 bg-white p-3 shadow-sm">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-stone-800">Agenda</span>
-              <span className="rounded-md bg-stone-100 px-2 py-0.5 text-[11px] text-stone-700">
-                {monthLabel(viewMonth)}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setViewMonth((m) => addMonths(m, -1))}
-                className="h-8 rounded-lg border border-stone-300 px-2 text-xs font-medium text-stone-800 hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-pink-300"
-                aria-label="Vorige maand"
-                title="Vorige maand"
-              >
-                ←
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMonth((m) => addMonths(m, 1))}
-                className="h-8 rounded-lg border border-stone-300 px-2 text-xs font-medium text-stone-800 hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-pink-300"
-                aria-label="Volgende maand"
-                title="Volgende maand"
-              >
-                →
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-7 gap-1.5 text-center text-[10px] font-semibold tracking-wide text-stone-600">
-            {NL_DAYS.map((d) => (
-              <div key={d} className="py-1">
-                {d.toUpperCase()}
-              </div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-7 gap-1.5">
-            {calendarDays.map((day) => {
-              const iso = toDayISO(day);
-              const isSelected = isSameDay(day, selectedDate);
-              const muted = day.getMonth() !== viewMonth.getMonth();
-              const todayFlag = isToday(day);
-              const counts = dayStats[iso];
-              const dot = dotClassForDay(counts, day);
-              const tint = dayTintForDay(counts, day);
-              const past = isPastDay(day);
-
-              return (
-                <button
-                  key={iso}
-                  type="button"
-                  onClick={() => !past && setSelectedDayISO(iso)}
-                  disabled={past}
-                  tabIndex={past ? -1 : 0}
-                  aria-disabled={past || undefined}
-                  className={[
-                    "relative h-11 w-full rounded-lg border text-[11px] leading-none transition",
-                    past
-                      ? "cursor-default pointer-events-none border-stone-200 bg-stone-50 text-stone-400 opacity-70"
-                      : isSelected
-                      ? "border-pink-600 bg-pink-50 text-pink-700 shadow-[inset_0_0_0_1px_rgba(236,72,153,0.3)]"
-                      : muted
-                      ? "border-stone-200 bg-stone-50 text-stone-400 hover:opacity-95"
-                      : `${tint.border} ${tint.bg} text-stone-800 hover:opacity-95`,
-                    todayFlag && !isSelected && !past ? "ring-1 ring-stone-300" : "",
-                  ].join(" ")}
-                  aria-pressed={isSelected}
-                  aria-current={todayFlag && !past ? "date" : undefined}
-                  title={!past && counts ? `${iso} • ${dot.label}` : iso}
-                >
-                  {day.getDate()}
-                  {!past && !dot.hideDot && (
-                    <span
-                      className={`pointer-events-none absolute inset-x-0 bottom-1 mx-auto block h-1.5 w-1.5 rounded-full ${dot.cls}`}
-                      aria-hidden
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {loadingCalendar && (
-            <p className="mt-2 text-[11px] text-stone-500">
-              Kalenderstatus laden…
-            </p>
-          )}
-
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-100 px-2 py-1 text-[11px] font-medium text-stone-800">
-              <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" aria-hidden />
-              Groen +2
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-orange-300 bg-orange-100 px-2 py-1 text-[11px] font-medium text-stone-800">
-              <span className="inline-block h-2 w-2 rounded-full bg-orange-500" aria-hidden />
-              Oranje 1 boekbaar
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-stone-300 bg-stone-100 px-2 py-1 text-[11px] font-medium text-stone-800">
-              <span className="inline-block h-2 w-2 rounded-full bg-stone-500" aria-hidden />
-              Grijs = Geen tijdsloten beschikbaar
-            </span>
-          </div>
-        </div>
-
-        <div ref={timesRef} className="rounded-xl border border-stone-200 bg-white p-3 shadow-sm">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="text-sm font-semibold text-stone-800">
-              {(() => {
-                const date = parseISODateOnly(selectedDayISO);
-                const weekday = date.toLocaleDateString("nl-NL", { weekday: "long" });
-                const day = date.toLocaleDateString("nl-NL", { day: "numeric" });
-                const month = date.toLocaleDateString("nl-NL", { month: "long" });
-                return `Beschikbare tijdsloten op ${weekday} ${day} ${month}`;
-              })()}
-            </div>
-
-            {availabilityBadge && (
-              <span
-                className={`hidden md:inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-medium ${availabilityBadge.cls}`}
-              >
-                {availabilityBadge.label}
-              </span>
-            )}
-          </div>
-
-          {!partnerSlug ? (
-            <div className="rounded-lg border border-stone-200 bg-stone-50 p-2 text-xs text-stone-600">
-              Selecteer eerst een hondenschool om beschikbare tijdsloten te zien.
-            </div>
-          ) : loadingSlots ? (
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-4" aria-live="polite">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="h-9 animate-pulse rounded-md bg-stone-100" />
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-              {filteredSlots.length === 0 ? (
-                <div className="col-span-2 rounded-lg border border-stone-200 bg-stone-50 p-2 text-xs text-stone-600 md:col-span-4">
-                  Geen tijdsloten beschikbaar.
-                </div>
               ) : (
-                filteredSlots.map((slot) => {
-                  const selected = slotId === slot.id;
-                  const cls = selected
-                    ? "border-pink-600 bg-pink-50 text-pink-700 focus:ring-pink-300"
-                    : "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 focus:ring-emerald-300";
+                <select
+                  value={partnerSlug}
+                  onChange={(e) => setPartnerSlug(e.target.value)}
+                  className="h-11 w-full rounded-2xl border border-white/15 bg-stone-950/70 px-3 text-sm text-white outline-none transition focus:border-pink-400 focus:ring-4 focus:ring-pink-300/30"
+                  aria-label="Kies locatie"
+                >
+                  {partners.length === 0 ? (
+                    <option value="">
+                      {msg ? "Kon niet laden" : "Laden…"}
+                    </option>
+                  ) : (
+                    <>
+                      <option value="">Kies locatie</option>
+                      {partners.map((p) => (
+                        <option key={p.slug} value={p.slug}>
+                          {p.name}
+                          {p.city ? ` — ${p.city}` : ""}
+                        </option>
+                      ))}
+                    </>
+                  )}
+                </select>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1.05fr]">
+            <div className="rounded-[1.5rem] border border-white/10 bg-black/35 p-4 shadow-xl shadow-black/20 backdrop-blur-md">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-200/90">
+                    Agenda
+                  </p>
+                  <p className="mt-1 text-lg font-black capitalize text-white">
+                    {monthLabel(viewMonth)}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setViewMonth((m) => addMonths(m, -1))}
+                    className="h-10 rounded-xl border border-white/15 bg-white/10 px-3 text-sm font-semibold text-white transition hover:bg-white/15 focus:outline-none focus:ring-4 focus:ring-white/20"
+                    aria-label="Vorige maand"
+                    title="Vorige maand"
+                  >
+                    ←
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setViewMonth((m) => addMonths(m, 1))}
+                    className="h-10 rounded-xl border border-white/15 bg-white/10 px-3 text-sm font-semibold text-white transition hover:bg-white/15 focus:outline-none focus:ring-4 focus:ring-white/20"
+                    aria-label="Volgende maand"
+                    title="Volgende maand"
+                  >
+                    →
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-7 gap-1.5 text-center text-[10px] font-semibold tracking-wide text-stone-400">
+                {NL_DAYS.map((d) => (
+                  <div key={d} className="py-1">
+                    {d.toUpperCase()}
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-1.5">
+                {calendarDays.map((day) => {
+                  const iso = toDayISO(day);
+                  const isSelected = isSameDay(day, selectedDate);
+                  const muted = day.getMonth() !== viewMonth.getMonth();
+                  const todayFlag = isToday(day);
+                  const counts = dayStats[iso];
+                  const dot = dotClassForDay(counts, day);
+                  const tint = dayTintForDay(counts, day);
+                  const past = isPastDay(day);
 
                   return (
                     <button
-                      key={slot.id}
+                      key={iso}
                       type="button"
-                      onClick={() => setSlotId(slot.id)}
-                      className={`relative h-9 rounded-lg border px-2 text-xs font-medium transition focus:outline-none focus:ring-2 ${cls}`}
-                      aria-pressed={selected}
-                      aria-label={`Tijdslot ${formatTime(slot.startTime)} (boekbaar)`}
-                      title={formatTime(slot.startTime)}
+                      onClick={() => !past && setSelectedDayISO(iso)}
+                      disabled={past}
+                      tabIndex={past ? -1 : 0}
+                      aria-disabled={past || undefined}
+                      className={[
+                        "relative h-11 w-full rounded-xl border text-[11px] leading-none transition focus:outline-none focus:ring-4 focus:ring-pink-300/30",
+                        past
+                          ? "pointer-events-none cursor-default border-white/5 bg-white/[0.02] text-stone-600"
+                          : isSelected
+                          ? "border-rose-300 bg-rose-400/20 text-rose-100 shadow-[inset_0_0_0_1px_rgba(253,164,175,0.35)]"
+                          : muted
+                          ? "border-white/5 bg-white/[0.03] text-stone-600 hover:bg-white/[0.05]"
+                          : `${tint.border} ${tint.bg} ${tint.text} hover:bg-white/10`,
+                        todayFlag && !isSelected && !past
+                          ? "ring-1 ring-white/25"
+                          : "",
+                      ].join(" ")}
+                      aria-pressed={isSelected}
+                      aria-current={todayFlag && !past ? "date" : undefined}
+                      title={!past && counts ? `${iso} • ${dot.label}` : iso}
                     >
-                      {formatTime(slot.startTime)}
-                      {selected && (
-                        <span className="pointer-events-none absolute right-1 top-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/90">
-                          <svg viewBox="0 0 20 20" className="h-3 w-3 fill-white" aria-hidden>
-                            <path d="M7.629 13.233 3.9 9.504l1.414-1.414 2.315 2.315 6.057-6.057 1.414 1.414z" />
-                          </svg>
-                        </span>
+                      {day.getDate()}
+
+                      {!past && !dot.hideDot && (
+                        <span
+                          className={`pointer-events-none absolute inset-x-0 bottom-1 mx-auto block h-1.5 w-1.5 rounded-full ${dot.cls}`}
+                          aria-hidden
+                        />
                       )}
                     </button>
                   );
-                })
-              )}
-            </div>
-          )}
-
-          <form onSubmit={onReserve} className="mt-3 space-y-3" aria-label="Reserveringsformulier">
-            <div className="flex flex-nowrap items-start gap-2">
-              <label className="w-28 shrink-0 text-xs font-medium text-stone-800">
-                Aantal spelers
-                <select
-                  value={players}
-                  onChange={(e) => setPlayers(Number(e.target.value))}
-                  className="mt-1 h-10 w-full rounded-lg border border-stone-300 bg-white px-2 text-sm outline-none transition focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
-                >
-                  <option value={1}>1</option>
-                  <option value={2}>2</option>
-                  <option value={3}>3</option>
-                </select>
-              </label>
-
-              <label className="min-w-0 flex-1 text-xs font-medium text-stone-800">
-                Naam hond
-                <input
-                  value={dogName}
-                  onChange={(e) => setDogName(e.target.value)}
-                  placeholder="bijv. Sam"
-                  className="mt-1 h-10 w-full min-w-0 rounded-lg border border-stone-300 bg-white px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
-                />
-              </label>
-            </div>
-
-            <label className="block text-xs font-medium text-stone-800">
-              Jouw naam
-              <input
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="bijv. Jamie de Vries"
-                className="mt-1 h-10 w-full rounded-lg border border-stone-300 bg-white px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
-              />
-            </label>
-
-            <label className="block text-xs font-medium text-stone-800">
-              E-mailadres
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="jij@example.com"
-                className="mt-1 h-10 w-full rounded-lg border border-stone-300 bg-white px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
-              />
-            </label>
-
-            {price && (
-              <div className="rounded-xl border border-stone-200 bg-stone-50 p-3 text-xs">
-                <div className="mb-1 text-[11px] font-semibold text-stone-700">Prijs</div>
-                <div className="flex items-center justify-between"><span>Totaal</span><strong>€ {price.total.toFixed(2)}</strong></div>
-                <div className="flex items-center justify-between"><span>Aanbetaling ({price.feePercent}%)</span><strong>€ {price.deposit.toFixed(2)}</strong></div>
-                <div className="flex items-center justify-between"><span>Rest op locatie</span><strong>€ {price.rest.toFixed(2)}</strong></div>
+                })}
               </div>
-            )}
 
-            {msg && (
-              <p className="rounded-md bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700">
-                {msg}
-              </p>
-            )}
+              {loadingCalendar && (
+                <p className="mt-3 text-xs text-stone-400">
+                  Kalenderstatus laden…
+                </p>
+              )}
 
-            <button
-              type="submit"
-              disabled={submitting || !slotId}
-              className="w-full rounded-2xl bg-pink-600 px-4 py-2.5 text-sm font-semibold text-white shadow hover:bg-pink-700 focus:outline-none focus:ring-4 focus:ring-pink-300 disabled:opacity-60"
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300/35 bg-emerald-400/14 px-3 py-1.5 text-[11px] font-medium text-emerald-100">
+                  <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                  Beschikbaar
+                </span>
+
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-orange-300/35 bg-orange-400/14 px-3 py-1.5 text-[11px] font-medium text-orange-100">
+                  <span className="h-2 w-2 rounded-full bg-orange-400" />
+                  Nog 1 plek
+                </span>
+
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-[11px] font-medium text-stone-200">
+                  <span className="h-2 w-2 rounded-full bg-stone-500" />
+                  Geen tijdsloten
+                </span>
+              </div>
+            </div>
+
+            <div
+              ref={timesRef}
+              className="rounded-[1.5rem] border border-white/10 bg-black/35 p-4 shadow-xl shadow-black/20 backdrop-blur-md"
             >
-              {submitting ? "Reserveren…" : "Reserveer nu"}
-            </button>
+              <div className="mb-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-200/90">
+                  Tijdslot
+                </p>
 
-            {!slotId && (
-              <p className="text-[11px] text-stone-500">
-                Kies eerst een tijdslot hierboven om door te gaan naar de checkout.
-              </p>
-            )}
-            <p className="text-[11px] text-stone-500">
-              Je betaalt nu de aanbetaling; het restant betaal je bij de hondenschool.
-            </p>
-          </form>
+                <h3 className="mt-1 text-lg font-black text-white">
+                  {(() => {
+                    const date = parseISODateOnly(selectedDayISO);
+                    const weekday = date.toLocaleDateString("nl-NL", {
+                      weekday: "long",
+                    });
+                    const day = date.toLocaleDateString("nl-NL", {
+                      day: "numeric",
+                    });
+                    const month = date.toLocaleDateString("nl-NL", {
+                      month: "long",
+                    });
+                    return `${weekday} ${day} ${month}`;
+                  })()}
+                </h3>
+              </div>
+
+              {!partnerSlug ? (
+                <div className="rounded-2xl border border-white/10 bg-white/10 p-4 text-sm text-stone-200">
+                  Selecteer eerst een hondenschool om beschikbare tijdsloten te
+                  zien.
+                </div>
+              ) : loadingSlots ? (
+                <div
+                  className="grid grid-cols-2 gap-2 sm:grid-cols-4"
+                  aria-live="polite"
+                >
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="h-10 animate-pulse rounded-xl bg-white/10"
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {filteredSlots.length === 0 ? (
+                    <div className="col-span-2 rounded-2xl border border-white/10 bg-white/10 p-4 text-sm text-stone-200 sm:col-span-4">
+                      Geen tijdsloten beschikbaar.
+                    </div>
+                  ) : (
+                    filteredSlots.map((slot) => {
+                      const selected = slotId === slot.id;
+
+                      const cls = selected
+                        ? "border-rose-300 bg-rose-400/20 text-rose-100 ring-2 ring-rose-300/40"
+                        : "border-emerald-300/35 bg-emerald-400/14 text-emerald-100 hover:bg-emerald-400/20";
+
+                      return (
+                        <button
+                          key={slot.id}
+                          type="button"
+                          onClick={() => setSlotId(slot.id)}
+                          className={`relative h-11 rounded-xl border px-3 text-sm font-semibold transition focus:outline-none focus:ring-4 focus:ring-pink-300/30 ${cls}`}
+                          aria-pressed={selected}
+                          aria-label={`Tijdslot ${formatTime(
+                            slot.startTime
+                          )} boekbaar`}
+                          title={formatTime(slot.startTime)}
+                        >
+                          {formatTime(slot.startTime)}
+
+                          {selected && (
+                            <span className="pointer-events-none absolute right-1.5 top-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-pink-600">
+                              <svg
+                                viewBox="0 0 20 20"
+                                className="h-3 w-3 fill-white"
+                                aria-hidden
+                              >
+                                <path d="M7.629 13.233 3.9 9.504l1.414-1.414 2.315 2.315 6.057-6.057 1.414 1.414z" />
+                              </svg>
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
+              <form
+                onSubmit={onReserve}
+                className="mt-5 space-y-3"
+                aria-label="Reserveringsformulier"
+              >
+                <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-2">
+                  <label className="text-xs font-semibold text-stone-100">
+                    Spelers
+                    <select
+                      value={players}
+                      onChange={(e) => setPlayers(Number(e.target.value))}
+                      className="mt-1 h-11 w-full rounded-xl border border-white/15 bg-stone-950/70 px-3 text-sm text-white outline-none transition focus:border-pink-400 focus:ring-4 focus:ring-pink-300/30"
+                    >
+                      <option value={1}>1</option>
+                      <option value={2}>2</option>
+                      <option value={3}>3</option>
+                    </select>
+                  </label>
+
+                  <label className="min-w-0 text-xs font-semibold text-stone-100">
+                    Naam hond
+                    <input
+                      value={dogName}
+                      onChange={(e) => setDogName(e.target.value)}
+                      placeholder="bijv. Sam"
+                      className="mt-1 h-11 w-full rounded-xl border border-white/15 bg-stone-950/70 px-3 text-sm text-white outline-none transition placeholder:text-stone-500 focus:border-pink-400 focus:ring-4 focus:ring-pink-300/30"
+                    />
+                  </label>
+                </div>
+
+                <label className="block text-xs font-semibold text-stone-100">
+                  Jouw naam
+                  <input
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="bijv. Jamie de Vries"
+                    className="mt-1 h-11 w-full rounded-xl border border-white/15 bg-stone-950/70 px-3 text-sm text-white outline-none transition placeholder:text-stone-500 focus:border-pink-400 focus:ring-4 focus:ring-pink-300/30"
+                  />
+                </label>
+
+                <label className="block text-xs font-semibold text-stone-100">
+                  E-mailadres
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="jij@example.com"
+                    className="mt-1 h-11 w-full rounded-xl border border-white/15 bg-stone-950/70 px-3 text-sm text-white outline-none transition placeholder:text-stone-500 focus:border-pink-400 focus:ring-4 focus:ring-pink-300/30"
+                  />
+                </label>
+
+                {price && (
+                  <div className="rounded-2xl border border-white/10 bg-white/10 p-4 text-sm text-stone-100">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-amber-200/90">
+                      Prijs
+                    </p>
+
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <span>Totaal</span>
+                        <strong>€ {price.total.toFixed(2)}</strong>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3">
+                        <span>Aanbetaling ({price.feePercent}%)</span>
+                        <strong>€ {price.deposit.toFixed(2)}</strong>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3 text-stone-300">
+                        <span>Rest op locatie</span>
+                        <strong>€ {price.rest.toFixed(2)}</strong>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {msg && (
+                  <p className="rounded-xl border border-rose-300/30 bg-rose-400/15 px-3 py-2 text-sm font-medium text-rose-100">
+                    {msg}
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={submitting || !slotId}
+                  className="inline-flex min-h-12 w-full items-center justify-center rounded-2xl bg-pink-600 px-6 py-3 text-base font-semibold text-white shadow-lg shadow-pink-950/30 transition hover:bg-pink-700 focus:outline-none focus:ring-4 focus:ring-pink-300 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {submitting ? "Reserveren…" : "Reserveer nu"}
+                </button>
+
+                {!slotId && (
+                  <p className="text-xs text-stone-400">
+                    Kies eerst een tijdslot hierboven om door te gaan naar de
+                    checkout.
+                  </p>
+                )}
+
+                <p className="text-xs leading-5 text-stone-400">
+                  Je betaalt nu de aanbetaling; het restant betaal je bij de
+                  hondenschool.
+                </p>
+              </form>
+            </div>
+          </div>
         </div>
       </div>
     </section>

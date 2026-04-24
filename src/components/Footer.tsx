@@ -2,96 +2,114 @@
 import Link from "next/link";
 
 export default function Footer() {
-  const year = new Date().getFullYear(); // server-only
+  const year = new Date().getFullYear();
 
   return (
     <footer
-      className="bg-stone-900 text-stone-50 mt-20"
+      className="relative overflow-hidden border-t border-white/10 bg-stone-950 text-white"
       itemScope
       itemType="https://schema.org/Organization"
     >
-      <div className="mx-auto max-w-6xl px-4 py-12">
-        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-3">
-          {/* Bedrijfsgegevens */}
+      {/* Background sfeer */}
+      <div aria-hidden className="absolute inset-0">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(251,113,133,0.14),transparent_34%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(28,25,23,0.35)_0%,rgba(12,10,9,0.96)_100%)]" />
+        <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(rgba(255,255,255,0.10)_1px,transparent_1px)] [background-size:12px_12px]" />
+      </div>
+
+      <div className="relative mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
+        {/* Top */}
+        <div className="grid gap-8 lg:grid-cols-3">
+          {/* Merk */}
           <div>
-            <h3 className="text-xl font-semibold tracking-tight">D-EscapeRoom</h3>
-            <p className="mt-1 text-stone-300">Hoofdkantoor</p>
+            <span className="inline-flex rounded-full border border-white/15 bg-white/10 px-4 py-1.5 text-[11px] font-semibold tracking-[0.24em] text-stone-100/90 backdrop-blur-sm">
+              D-ESCAPEROOM
+            </span>
 
-            <address
-              className="not-italic mt-4 leading-relaxed"
-              itemProp="address"
-              itemScope
-              itemType="https://schema.org/PostalAddress"
-            >
-              <div itemProp="streetAddress">Lakerveld 84</div>
-              <div>
-                <span itemProp="postalCode">4128LK</span>{" "}
-                <span itemProp="addressLocality">Lexmond</span>
-              </div>
-              <div itemProp="addressCountry">Nederland</div>
-            </address>
+            <h3 className="mt-5 text-3xl font-black tracking-tight text-rose-300">
+              The Missing Snack
+            </h3>
 
-            <dl className="mt-4 space-y-1 text-stone-300">
-              <div className="flex gap-2">
-                <dt className="font-medium text-stone-100">KVK</dt>
-                <dd>92105815</dd>
-              </div>
-              <div className="flex gap-2">
-                <dt className="font-medium text-stone-100">BTW</dt>
-                <dd>NL004936558B58</dd>
-              </div>
-            </dl>
+            <p className="mt-4 max-w-sm text-sm leading-7 text-stone-300">
+              Een unieke escaperoom ervaring waar baas en hond samen puzzels
+              oplossen, speuren en plezier maken.
+            </p>
           </div>
 
-          {/* Contact */}
+          {/* Contact + adres */}
           <div>
-            <h3 className="text-lg font-semibold mb-2">Contact</h3>
-            <ul className="space-y-1">
+            <h4 className="text-sm font-semibold uppercase tracking-[0.22em] text-amber-200/90">
+              Contact
+            </h4>
+
+            <ul className="mt-4 space-y-3 text-sm text-stone-300">
               <li>
                 <a
                   href="mailto:info@d-escaperoom.com"
-                  className="text-pink-300 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-500/70 rounded-sm"
+                  className="transition hover:text-pink-300"
                   itemProp="email"
                 >
                   info@d-escaperoom.com
                 </a>
               </li>
+
               <li>
                 <a
                   href="tel:+31683853373"
-                  className="hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-500/70 rounded-sm"
+                  className="transition hover:text-pink-300"
                   itemProp="telephone"
                 >
                   +31 (0)6 83 85 33 73
                 </a>
               </li>
             </ul>
+
+            <address
+              className="mt-5 not-italic text-sm leading-7 text-stone-300"
+              itemProp="address"
+              itemScope
+              itemType="https://schema.org/PostalAddress"
+            >
+              <div itemProp="streetAddress">
+                Nijverheidsweg-Noord 42
+              </div>
+              <div>
+                <span itemProp="postalCode">3812 PM</span>{" "}
+                <span itemProp="addressLocality">Amersfoort</span>
+              </div>
+              <div itemProp="addressCountry">Nederland</div>
+            </address>
           </div>
 
           {/* Juridisch */}
           <div>
-            <h3 className="text-lg font-semibold mb-2">Juridisch</h3>
-            <ul className="space-y-1">
+            <h4 className="text-sm font-semibold uppercase tracking-[0.22em] text-amber-200/90">
+              Juridisch
+            </h4>
+
+            <ul className="mt-4 space-y-3 text-sm text-stone-300">
               <li>
                 <Link
                   href="/algemene-voorwaarden"
-                  className="hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-500/70 rounded-sm"
+                  className="transition hover:text-pink-300"
                 >
                   Algemene voorwaarden
                 </Link>
               </li>
+
               <li>
                 <Link
                   href="/privacy"
-                  className="hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-500/70 rounded-sm"
+                  className="transition hover:text-pink-300"
                 >
                   Privacyverklaring
                 </Link>
               </li>
+
               <li>
                 <Link
                   href="/cookies"
-                  className="hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-500/70 rounded-sm"
+                  className="transition hover:text-pink-300"
                 >
                   Cookiebeleid
                 </Link>
@@ -100,10 +118,15 @@ export default function Footer() {
           </div>
         </div>
 
-        {/* Bottom bar */}
-        <div className="mt-10 border-t border-stone-800 pt-6 text-sm text-stone-400 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p>© {year} D-EscapeRoom. Alle rechten voorbehouden.</p>
-          <p className="text-stone-500">KvK 92105815 · BTW NL004936558B58</p>
+        {/* Bottom */}
+        <div className="mt-10 border-t border-white/10 pt-6">
+          <div className="flex flex-col gap-3 text-sm text-stone-400 sm:flex-row sm:items-center sm:justify-between">
+            <p>© {year} D-EscapeRoom. Alle rechten voorbehouden.</p>
+
+            <p className="text-stone-500">
+              KvK 92105815 · BTW NL004936558B58
+            </p>
+          </div>
         </div>
       </div>
     </footer>

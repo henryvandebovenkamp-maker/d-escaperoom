@@ -3,13 +3,20 @@
 
 import * as React from "react";
 import Link from "next/link";
-import Image from "next/image";
 
-/* =========================================
-   Types
-========================================= */
 type ProvinceCode =
-  | "DR" | "FL" | "FR" | "GE" | "GR" | "LB" | "NB" | "NH" | "OV" | "UT" | "ZH" | "ZE";
+  | "DR"
+  | "FL"
+  | "FR"
+  | "GE"
+  | "GR"
+  | "LB"
+  | "NB"
+  | "NH"
+  | "OV"
+  | "UT"
+  | "ZH"
+  | "ZE";
 
 type Province = {
   code: ProvinceCode;
@@ -22,9 +29,6 @@ type Props = {
   className?: string;
 };
 
-/* =========================================
-   Data
-========================================= */
 const PROVINCES: Province[] = [
   { code: "DR", name: "Drenthe" },
   { code: "FL", name: "Flevoland" },
@@ -35,163 +39,191 @@ const PROVINCES: Province[] = [
   { code: "NB", name: "Noord-Brabant" },
   { code: "NH", name: "Noord-Holland" },
   { code: "OV", name: "Overijssel" },
-  { code: "UT", name: "Utrecht", taken: { by: "WoofExperience", note: "Regio Utrecht is bezet" } },
+  {
+    code: "UT",
+    name: "Utrecht",
+    taken: { by: "WoofExperience" },
+  },
   { code: "ZH", name: "Zuid-Holland" },
   { code: "ZE", name: "Zeeland" },
 ];
 
-/* =========================================
-   Helpers
-========================================= */
-function applyOverrides(base: Province[], overrides?: Props["overrides"]): Province[] {
+function applyOverrides(
+  base: Province[],
+  overrides?: Props["overrides"]
+): Province[] {
   if (!overrides) return base;
-  return base.map((p) => (overrides[p.code] ? { ...p, taken: overrides[p.code] || undefined } : p));
+
+  return base.map((p) =>
+    overrides[p.code] ? { ...p, taken: overrides[p.code] } : p
+  );
 }
 
-function statusFor(p: Province) {
-  const isUtrecht = p.code === "UT";
-  if (p.taken) return { label: `Bezet • ${p.taken.by}`, tone: "text-orange-800" as const };
-  if (isUtrecht) return { label: "Nu te boeken", tone: "text-pink-700" as const };
-  return { label: "Beschikbaar", tone: "text-emerald-800" as const };
+function isTaken(p: Province) {
+  return Boolean(p.taken);
 }
 
-/* =========================================
-   Component
-========================================= */
-export default function PartnerWidget({ overrides, className = "" }: Props) {
-  const items = React.useMemo(() => applyOverrides(PROVINCES, overrides), [overrides]);
+function FeatureItem({
+  icon,
+  title,
+  text,
+}: {
+  icon: string;
+  title: string;
+  text: string;
+}) {
+  return (
+    <li className="flex items-start gap-3">
+      <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/10 text-base">
+        {icon}
+      </span>
+
+      <div>
+        <div className="text-sm font-semibold text-white">{title}</div>
+        <p className="mt-1 text-sm leading-6 text-stone-300">{text}</p>
+      </div>
+    </li>
+  );
+}
+
+export default function PartnerWidget({
+  overrides,
+  className = "",
+}: Props) {
+  const items = React.useMemo(
+    () => applyOverrides(PROVINCES, overrides),
+    [overrides]
+  );
 
   return (
     <section
       aria-labelledby="partner-widget-title"
       className={[
-        "space-y-4 rounded-2xl border border-stone-200 bg-white/95 p-3 md:p-4 shadow-md backdrop-blur-sm",
+        "relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06] p-4 text-white shadow-2xl shadow-black/25 backdrop-blur-sm sm:p-6",
         className,
       ].join(" ")}
     >
-      {/* ======= HEADER-STRIP (zelfde als Contact/Skills) ======= */}
-      <div className="relative w-full overflow-hidden h-14 sm:h-16 lg:h-20 rounded-2xl border border-stone-200">
-        <div className="flex h-full w-full items-start justify-center pt-2 sm:pt-3">
-          <Image
-            src="/images/hondenschool-header.png" // 2304×224 px
-            alt="" // decoratief
-            width={2304}
-            height={224}
-            className="h-[95%] w-auto object-contain"
-            priority={false}
-          />
-        </div>
-        <h2 id="partner-widget-title" className="sr-only">
-          Partner worden
-        </h2>
-      </div>
-      {/* ======= /HEADER ======= */}
+      <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(244,114,182,0.07),rgba(251,191,36,0.05),rgba(255,255,255,0.02))]" />
 
-      <div className="mx-auto w-full max-w-6xl">
-        {/* ======= BOVENRIJ: Propositie + Provincies (tekst) ======= */}
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {/* Propositie (anker blok) */}
-          <div
-            className="relative overflow-hidden rounded-xl border border-stone-200 bg-white p-4 md:p-5 shadow-sm"
-            aria-labelledby="prop-title"
+      <div className="relative">
+        <div className="text-center">
+          <span className="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-semibold tracking-[0.24em] text-stone-100">
+            PARTNER WORDEN
+          </span>
+
+          <h2
+            id="partner-widget-title"
+            className="mt-4 text-3xl font-black tracking-tight text-white sm:text-4xl"
           >
-            <div aria-hidden className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-stone-200" />
-            <div aria-hidden className="pointer-events-none absolute -inset-px rounded-[14px] bg-linear-to-br from-rose-50/60 via-pink-50/35 to-stone-50/25" />
-            <div className="relative z-10 space-y-3">
-              <h3 id="prop-title" className="text-lg md:text-xl font-extrabold leading-tight tracking-tight text-stone-900">
-                D-EscapeRoom op jouw locatie?
-              </h3>
-              <p className="text-[13px] text-stone-700">
-                Voeg een onderscheidende belevenis toe die naadloos past in je lesaanbod — en bouw aan een sterkere band tussen mens en hond.
-              </p>
+            D-EscapeRoom
+            <span className="block text-rose-300">op jouw locatie?</span>
+          </h2>
 
-              <ul className="space-y-2">
-                <li className="flex items-start gap-3">
-                  <span aria-hidden className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full border border-stone-300 bg-stone-50 text-[13px]">🐶</span>
-                  <div>
-                    <div className="text-[13px] font-semibold text-stone-900">Beleving</div>
-                    <p className="text-[13px] text-stone-700">
-                      Hond en mens werken samen, we samen aan een nog betere band.
-                    </p>
-                  </div>
-                </li>
-                <li className="flex items-start gap-3">
-                  <span aria-hidden className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full border border-stone-300 bg-stone-50 text-[13px]">📅</span>
-                  <div>
-                    <div className="text-[13px] font-semibold text-stone-900">Past in je rooster</div>
-                    <p className="text-[13px] text-stone-700">
-                      Past goed in je bestaande lesaanbod.
-                    </p>
-                  </div>
-                </li>
-                <li className="flex items-start gap-3">
-                  <span aria-hidden className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full border border-stone-300 bg-stone-50 text-[13px]">🧰</span>
-                  <div>
-                    <div className="text-[13px] font-semibold text-stone-900">Gemak</div>
-                    <p className="text-[13px] text-stone-700">
-                      Jij host; wij leveren concept, materialen en styling.
-                    </p>
-                  </div>
-                </li>
-                <li className="flex items-start gap-3">
-                  <span aria-hidden className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full border border-stone-300 bg-stone-50 text-[13px]">🏅</span>
-                  <div>
-                    <div className="text-[13px] font-semibold text-stone-900">Exclusief</div>
-                    <p className="text-[13px] text-stone-700">
-                      Maximaal één D-Escaperoom per provincie
-                    </p>
-                  </div>
-                </li>
-              </ul>
+          <p className="mx-auto mt-3 max-w-2xl text-sm leading-7 text-stone-300">
+            Voeg een onderscheidende belevenis toe aan je hondenschool en bied
+            baas en hond samen een unieke western ervaring.
+          </p>
+        </div>
 
-              <div className="pt-1">
-                <Link
-                  href="#contact"
-                  className="inline-flex h-10 items-center justify-center rounded-2xl bg-pink-600 px-4 text-sm font-semibold text-white shadow hover:bg-pink-700 focus:outline-none focus:ring-4 focus:ring-pink-500/40 focus:ring-offset-2 focus:ring-offset-white transition"
-                >
-                  Neem contact op
-                </Link>
-              </div>
+        <div className="mt-7 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_0.95fr]">
+          {/* LINKS */}
+          <div className="rounded-[1.35rem] border border-white/10 bg-black/25 p-5 sm:p-6">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-amber-200">
+              Waarom partner worden
+            </div>
+
+            <h3 className="mt-2 text-2xl font-black tracking-tight text-white">
+              Een exclusieve beleving
+            </h3>
+
+            <ul className="mt-5 space-y-4">
+              <FeatureItem
+                icon="🐶"
+                title="Beleving"
+                text="Mens en hond lossen samen puzzels op en bouwen aan hun band."
+              />
+              <FeatureItem
+                icon="📅"
+                title="Praktisch inzetbaar"
+                text="Past eenvoudig binnen jouw rooster of lesaanbod."
+              />
+              <FeatureItem
+                icon="🧰"
+                title="Wij leveren concept"
+                text="Jij host op locatie, wij verzorgen styling en concept."
+              />
+              <FeatureItem
+                icon="🏅"
+                title="Exclusief per provincie"
+                text="Maximaal één partner per provincie."
+              />
+            </ul>
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Link
+                href="#contact"
+                className="rounded-2xl bg-pink-600 px-5 py-3 text-sm font-semibold text-white hover:bg-pink-700"
+              >
+                Neem contact op
+              </Link>
+
+              <Link
+                href="#boeken"
+                className="rounded-2xl border border-white/15 bg-white/10 px-5 py-3 text-sm font-semibold text-white hover:bg-white/15"
+              >
+                Bekijk ervaring
+              </Link>
             </div>
           </div>
 
-          {/* Provincies (TEKST) */}
-          <div
-            className="relative overflow-hidden rounded-xl border border-stone-200 bg-white p-4 md:p-5 shadow-sm"
-            aria-labelledby="provincies-tekst-title"
-          >
-            <div aria-hidden className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-stone-200" />
-            <div aria-hidden className="pointer-events-none absolute -inset-px rounded-[14px] bg-linear-to-br from-stone-50/70 via-rose-50/35 to-pink-50/25" />
-            <div className="relative z-10">
-              <h3 id="provincies-tekst-title" className="text-lg font-extrabold text-stone-900">
-                Beschikbaarheid per provincie
-              </h3>
-              <p className="mt-1 text-[13px] text-stone-700">
-                Nog beschikbaar? Neem contact op voor de mogelijkheden.
-              </p>
+          {/* RECHTS */}
+          <div className="rounded-[1.35rem] border border-white/10 bg-black/25 p-5 sm:p-6">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-amber-200">
+              Beschikbaarheid
+            </div>
 
-              <ul className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {items.map((p) => {
-                  const s = statusFor(p);
-                  const href = `/provincie/${p.code.toLowerCase()}`;
-                  return (
-                    <li key={`txt-${p.code}`} className="flex items-start gap-2">
-                      <span aria-hidden className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-stone-400" />
-                      <div className="min-w-0">
-                        <Link
-                          href={href}
-                          className="truncate text-[13px] font-semibold text-stone-900 hover:underline focus:outline-none focus:ring-2 focus:ring-pink-300 rounded"
-                        >
-                          {p.name}
-                        </Link>
-                        <div className={`text-[12px] ${s.tone}`}>{s.label}</div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+            <h3 className="mt-2 text-2xl font-black tracking-tight text-white">
+              Provincies
+            </h3>
 
-              <div className="mt-3 text-[11px] text-stone-600">{/* extra toelichting optioneel */}</div>
+            <p className="mt-3 text-sm text-stone-300">
+              Klik op een vrije provincie om direct contact op te nemen.
+            </p>
+
+            <ul className="mt-5 grid grid-cols-2 gap-3">
+              {items.map((province) => {
+                const taken = isTaken(province);
+
+                const href = taken
+                  ? `/provincie/${province.code.toLowerCase()}`
+                  : "#contact";
+
+                const pillClass = taken
+                  ? "border-orange-400/30 bg-orange-500/12 text-orange-100"
+                  : "border-emerald-400/30 bg-emerald-500/12 text-emerald-100";
+
+                const label = taken
+                  ? `${province.name} - Bezet`
+                  : `${province.name} - Open`;
+
+                return (
+                  <li key={province.code}>
+                    <Link
+                      href={href}
+                      className={[
+                        "flex min-h-[52px] items-center justify-center rounded-full border px-4 text-sm font-semibold transition hover:scale-[1.02]",
+                        pillClass,
+                      ].join(" ")}
+                    >
+                      {label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm text-stone-300">
+              Interesse in jouw provincie? Neem contact op voor de mogelijkheden.
             </div>
           </div>
         </div>

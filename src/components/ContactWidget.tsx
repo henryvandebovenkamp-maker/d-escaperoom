@@ -2,7 +2,6 @@
 "use client";
 
 import * as React from "react";
-import Image from "next/image";
 
 type Variant = "partner" | "consumer";
 
@@ -40,10 +39,10 @@ export default function ContactWidget({
   const [ok, setOk] = React.useState(false);
 
   const isPartner = variant === "partner";
-  const ctaClass =
-    isPartner
-      ? "bg-black hover:bg-black/90 focus:ring-stone-400"
-      : "bg-pink-600 hover:bg-pink-700 focus:ring-pink-300";
+
+  const ctaClass = isPartner
+    ? "bg-white text-stone-950 hover:bg-stone-200 focus:ring-white/30"
+    : "bg-pink-600 text-white hover:bg-pink-700 focus:ring-pink-300";
 
   const canSubmit =
     fullName.trim().length > 1 &&
@@ -53,14 +52,20 @@ export default function ContactWidget({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (submitting) return;
+
     setMsg(null);
     setOk(false);
+
     if (!canSubmit) {
-      setMsg("Controleer je invoer: naam (≥2), e-mail en bericht (≥3 tekens) zijn verplicht.");
+      setMsg(
+        "Controleer je invoer: naam, e-mail en bericht zijn verplicht."
+      );
       return;
     }
+
     try {
       setSubmitting(true);
+
       const payload = {
         fullName: fullName.trim(),
         email: email.trim(),
@@ -69,6 +74,7 @@ export default function ContactWidget({
         message: message.trim(),
         callOk,
       };
+
       if (onSubmit) {
         await onSubmit(payload);
       } else {
@@ -77,11 +83,16 @@ export default function ContactWidget({
           headers: { "content-type": "application/json" },
           body: JSON.stringify(payload),
         });
+
         const json = await res.json().catch(() => ({}));
+
         if (!res.ok || json?.ok !== true) {
-          throw new Error(json?.error || "Versturen mislukt. Probeer het nog een keer.");
+          throw new Error(
+            json?.error || "Versturen mislukt. Probeer het nog een keer."
+          );
         }
       }
+
       setOk(true);
       setFullName("");
       setEmail("");
@@ -89,6 +100,7 @@ export default function ContactWidget({
       setTopic("Algemene vraag");
       setMessage("");
       setCallOk(true);
+
       window.setTimeout(() => setOk(false), 6000);
     } catch (err: any) {
       setMsg(err?.message || "Versturen mislukt. Probeer het nog een keer.");
@@ -102,176 +114,155 @@ export default function ContactWidget({
       id="contact"
       aria-labelledby="contact-title"
       className={[
-        // FIX: sectie krijgt hetzelfde zachte grijs als de pagina en verbergt randen
-        "relative isolate overflow-hidden bg-stone-100 py-16 sm:py-20",
+        "relative overflow-hidden bg-stone-950 px-4 py-12 text-white sm:px-6 lg:px-8 lg:py-20",
         className,
       ].join(" ")}
     >
-      {/* FIX: dotted texture over de héle sectie, geen mask dat randen blootlegt */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 [background:radial-gradient(rgba(0,0,0,0.03)_1px,transparent_1px)] [background-size:12px_12px]"
-      />
+      <div aria-hidden className="absolute inset-0">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(251,113,133,0.16),transparent_38%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(28,25,23,0.45)_0%,rgba(12,10,9,0.96)_100%)]" />
+        <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(rgba(255,255,255,0.10)_1px,transparent_1px)] [background-size:12px_12px]" />
+      </div>
 
-      <div className="relative mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-        <div className="relative overflow-hidden rounded-3xl border border-stone-200 shadow-lg">
-          <div
-            aria-hidden
-            className="absolute inset-0 bg-gradient-to-br from-white/70 via-rose-50/50 to-amber-50/40"
-          />
-          <div className="relative backdrop-blur-sm">
-            {/* TOPBAND */}
-            <div className="relative w-full overflow-hidden h-14 sm:h-16 lg:h-20">
-              <div className="flex h-full w-full items-start justify-center pt-4 sm:pt-5">
-                <Image
-                  src="/images/contact-header.png"
-                  alt=""
-                  width={2304}
-                  height={224}
-                  className="h-[90%] w-auto object-contain mix-blend-multiply drop-shadow"
-                  priority={false}
-                  style={{ mixBlendMode: "multiply" }}
-                />
-              </div>
-              <h2 id="contact-title" className="sr-only">
-                {title}
-              </h2>
-              <p className="sr-only">{subtitle}</p>
-            </div>
+      <div className="relative mx-auto max-w-6xl">
+        <div className="mx-auto max-w-2xl text-center">
+          <span className="inline-flex rounded-full border border-white/15 bg-white/10 px-4 py-1.5 text-[11px] font-semibold tracking-[0.24em] text-stone-100/90 backdrop-blur-sm">
+            CONTACT
+          </span>
 
-            {/* BODY */}
-            <div className="px-4 pb-8 sm:px-6 lg:px-8">
-              <form
-                onSubmit={handleSubmit}
-                noValidate
-                aria-label="Contactformulier"
-                aria-busy={submitting}
-                className="mx-auto max-w-2xl"
-              >
-                <article className="relative overflow-hidden rounded-2xl border border-stone-200/80 bg-white/80 p-4 shadow-sm focus-within:ring-2 focus-within:ring-pink-400/60 focus-within:ring-offset-2 focus-within:ring-offset-white">
-                  <div
-                    aria-hidden
-                    className="pointer-events-none absolute inset-0 opacity-100"
-                    style={{
-                      background:
-                        "linear-gradient(120deg, rgba(244,114,182,0.10), rgba(244,63,94,0.06) 30%, rgba(214,211,209,0.06) 60%)",
-                    }}
+          <h2
+            id="contact-title"
+            className="mt-5 text-4xl font-black tracking-tight text-rose-300 sm:text-5xl lg:text-6xl"
+          >
+            {title}
+          </h2>
+
+          <p className="mt-5 text-sm leading-7 text-stone-200/90 sm:text-base">
+            {subtitle}
+          </p>
+        </div>
+
+        <div className="mx-auto mt-10 max-w-2xl rounded-[2rem] border border-white/10 bg-white/5 p-5 shadow-2xl shadow-black/30 backdrop-blur-md sm:p-7">
+          <form
+            onSubmit={handleSubmit}
+            noValidate
+            aria-label="Contactformulier"
+            aria-busy={submitting}
+            className="rounded-[1.5rem] border border-white/10 bg-black/35 p-5 backdrop-blur-md sm:p-6"
+          >
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-200/90">
+                Stuur een bericht
+              </h3>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="block text-xs font-semibold text-stone-100">
+                  Volledige naam
+                  <input
+                    className="mt-1 h-11 w-full rounded-xl border border-white/15 bg-stone-950/70 px-3 text-sm text-white outline-none transition placeholder:text-stone-500 focus:border-pink-400 focus:ring-4 focus:ring-pink-300/30"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="bijv. Jamie de Vries"
                   />
+                </label>
 
-                  <div className="relative z-10 space-y-3">
-                    <h3 className="text-sm font-semibold text-stone-900">Stuur een bericht</h3>
+                <label className="block text-xs font-semibold text-stone-100">
+                  E-mail
+                  <input
+                    type="email"
+                    className="mt-1 h-11 w-full rounded-xl border border-white/15 bg-stone-950/70 px-3 text-sm text-white outline-none transition placeholder:text-stone-500 focus:border-pink-400 focus:ring-4 focus:ring-pink-300/30"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="jij@example.com"
+                  />
+                </label>
 
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                      <label className="block text-xs font-medium text-stone-800">
-                        Volledige naam
-                        <input
-                          className="mt-1 h-10 w-full rounded-lg border border-stone-300 bg-white/90 px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
-                          value={fullName}
-                          onChange={(e) => setFullName(e.target.value)}
-                          placeholder="bijv. Jamie de Vries"
-                        />
-                      </label>
+                <label className="block text-xs font-semibold text-stone-100 sm:col-span-2">
+                  Telefoon optioneel
+                  <input
+                    className="mt-1 h-11 w-full rounded-xl border border-white/15 bg-stone-950/70 px-3 text-sm text-white outline-none transition placeholder:text-stone-500 focus:border-pink-400 focus:ring-4 focus:ring-pink-300/30"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+31 6 12 34 56 78"
+                  />
+                </label>
+              </div>
 
-                      <label className="block text-xs font-medium text-stone-800">
-                        E-mail
-                        <input
-                          type="email"
-                          className="mt-1 h-10 w-full rounded-lg border border-stone-300 bg-white/90 px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          placeholder="jij@example.com"
-                        />
-                      </label>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="block text-xs font-semibold text-stone-100">
+                  Onderwerp
+                  <select
+                    className="mt-1 h-11 w-full rounded-xl border border-white/15 bg-stone-950/70 px-3 text-sm text-white outline-none transition focus:border-pink-400 focus:ring-4 focus:ring-pink-300/30"
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value)}
+                  >
+                    <option>Algemene vraag</option>
+                    <option>Partner worden</option>
+                    <option>Beschikbaarheid & agenda</option>
+                    <option>Prijs & aanbetaling</option>
+                    <option>Overig</option>
+                  </select>
+                </label>
 
-                      <label className="block text-xs font-medium text-stone-800 sm:col-span-2">
-                        Telefoon (optioneel)
-                        <input
-                          className="mt-1 h-10 w-full rounded-lg border border-stone-300 bg-white/90 px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
-                          value={phone}
-                          onChange={(e) => setPhone(e.target.value)}
-                          placeholder="+31 6 12 34 56 78"
-                        />
-                      </label>
-                    </div>
+                <label className="block text-xs font-semibold text-stone-100">
+                  Terugbelverzoek
+                  <select
+                    className="mt-1 h-11 w-full rounded-xl border border-white/15 bg-stone-950/70 px-3 text-sm text-white outline-none transition focus:border-pink-400 focus:ring-4 focus:ring-pink-300/30"
+                    value={callOk ? "Ja, graag" : "Niet nodig"}
+                    onChange={(e) => setCallOk(e.target.value === "Ja, graag")}
+                  >
+                    <option>Ja, graag</option>
+                    <option>Niet nodig</option>
+                  </select>
+                </label>
+              </div>
 
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                      <label className="block text-xs font-medium text-stone-800">
-                        Onderwerp
-                        <select
-                          className="mt-1 h-10 w-full rounded-lg border border-stone-300 bg-white/90 px-2 text-sm outline-none transition focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
-                          value={topic}
-                          onChange={(e) => setTopic(e.target.value)}
-                        >
-                          <option>Algemene vraag</option>
-                          <option>Partner worden</option>
-                          <option>Beschikbaarheid & agenda</option>
-                          <option>Prijs & aanbetaling</option>
-                          <option>Overig</option>
-                        </select>
-                      </label>
+              <label className="block text-xs font-semibold text-stone-100">
+                Bericht
+                <textarea
+                  rows={5}
+                  className="mt-1 w-full rounded-xl border border-white/15 bg-stone-950/70 px-3 py-3 text-sm text-white outline-none transition placeholder:text-stone-500 focus:border-pink-400 focus:ring-4 focus:ring-pink-300/30"
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder="Vertel kort waar we je mee kunnen helpen…"
+                />
+              </label>
 
-                      <label className="block text-xs font-medium text-stone-800">
-                        Terugbelverzoek
-                        <select
-                          className="mt-1 h-10 w-full rounded-lg border border-stone-300 bg-white/90 px-2 text-sm outline-none transition focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
-                          value={callOk ? "Ja, graag" : "Niet nodig"}
-                          onChange={(e) => setCallOk(e.target.value === "Ja, graag")}
-                        >
-                          <option>Ja, graag</option>
-                          <option>Niet nodig</option>
-                        </select>
-                      </label>
-                    </div>
+              <div aria-live="polite">
+                {msg && (
+                  <p className="rounded-xl border border-rose-300/30 bg-rose-400/15 px-3 py-2 text-sm font-medium text-rose-100">
+                    {msg}
+                  </p>
+                )}
 
-                    <label className="block text-xs font-medium text-stone-800">
-                      Bericht
-                      <textarea
-                        rows={5}
-                        className="mt-1 w-full rounded-lg border border-stone-300 bg-white/90 px-3 py-2 text-sm outline-none transition placeholder:text-stone-400 focus:border-pink-600 focus:ring-2 focus:ring-pink-300"
-                        value={message}
-                        onChange={(e) => setMessage(e.target.value)}
-                        placeholder="Vertel kort waar we je mee helpen…"
-                      />
-                    </label>
+                {ok && (
+                  <p className="rounded-xl border border-emerald-300/30 bg-emerald-400/15 px-3 py-2 text-sm font-medium text-emerald-100">
+                    Bedankt! Je bericht is verstuurd. We nemen snel contact op.
+                  </p>
+                )}
+              </div>
 
-                    <div aria-live="polite">
-                      {msg && (
-                        <p className="rounded-md bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700">
-                          {msg}
-                        </p>
-                      )}
-                      {ok && (
-                        <p className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-800">
-                          Bedankt! Je bericht is verstuurd. We nemen snel contact op.
-                        </p>
-                      )}
-                    </div>
+              <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center sm:justify-between">
+                <label className="inline-flex items-center gap-2 text-xs text-stone-300">
+                  <input
+                    type="checkbox"
+                    checked={callOk}
+                    onChange={(e) => setCallOk(e.target.checked)}
+                    className="h-4 w-4 rounded border-white/20 bg-stone-950 text-pink-600 focus:ring-pink-300"
+                  />
+                  Je mag me bellen als er vragen zijn
+                </label>
 
-                    <div className="flex items-center justify-between gap-2 pt-1">
-                      <label className="inline-flex items-center gap-2 text-[11px] text-stone-700">
-                        <input
-                          type="checkbox"
-                          checked={callOk}
-                          onChange={(e) => setCallOk(e.target.checked)}
-                          className="h-4 w-4 rounded border-stone-300 text-pink-600 focus:ring-pink-300"
-                        />
-                        Je mag me bellen als er vragen zijn
-                      </label>
-
-                      <button
-                        type="submit"
-                        disabled={submitting}
-                        className={`inline-flex h-10 items-center justify-center rounded-2xl px-4 text-sm font-semibold text-white shadow focus:outline-none focus:ring-4 disabled:opacity-60 ${ctaClass}`}
-                      >
-                        {submitting ? "Versturen…" : "Verstuur bericht"}
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              </form>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className={`inline-flex min-h-11 items-center justify-center rounded-2xl px-5 py-2.5 text-sm font-semibold shadow-lg transition focus:outline-none focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60 ${ctaClass}`}
+                >
+                  {submitting ? "Versturen…" : "Verstuur bericht"}
+                </button>
+              </div>
             </div>
-            {/* /BODY */}
-          </div>
+          </form>
         </div>
       </div>
     </section>
