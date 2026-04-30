@@ -35,6 +35,10 @@ function toMollieAmountValue(amountCents: number) {
   return (amountCents / 100).toFixed(2);
 }
 
+function toJsonSafe(value: unknown) {
+  return JSON.parse(JSON.stringify(value));
+}
+
 export async function POST(req: Request) {
   try {
     const { bookingId } = await req.json();
@@ -230,7 +234,7 @@ export async function POST(req: Request) {
           where: { id: reusablePayment.id },
           data: {
             status: PaymentStatus.CANCELED,
-            rawPayload: molliePayment as any,
+            rawPayload: toJsonSafe(molliePayment),
           },
         });
       } catch (error) {
@@ -303,7 +307,7 @@ export async function POST(req: Request) {
         currency,
         amountCents,
         providerPaymentId: payment.id,
-        rawPayload: payment as any,
+        rawPayload: toJsonSafe(payment),
       },
     });
 
