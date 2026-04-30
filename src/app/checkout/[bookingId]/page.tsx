@@ -76,15 +76,32 @@ async function postJSON<T>(url: string, body: any): Promise<T> {
     cache: "no-store",
     body: JSON.stringify(body),
   });
-  if (!r.ok) throw new Error(await r.text());
-  return r.json();
+
+  const text = await r.text();
+
+  let json: any = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    json = null;
+  }
+
+  if (!r.ok) {
+    throw new Error(
+      json?.error || json?.code || text || `Request mislukt (${r.status})`
+    );
+  }
+
+  return json as T;
 }
 
 function useDebouncedCallback(fn: () => void, delay = 600, deps: any[] = []) {
   const timeoutRef = React.useRef<number | null>(null);
+
   React.useEffect(() => {
     if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
     timeoutRef.current = window.setTimeout(() => fn(), delay);
+
     return () => {
       if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
     };
@@ -95,6 +112,7 @@ function useDebouncedCallback(fn: () => void, delay = 600, deps: any[] = []) {
 /* ===================== Pagina ===================== */
 export default function CheckoutPage() {
   const params = useParams();
+
   const bookingId = React.useMemo(() => {
     const raw = (params as any)?.bookingId;
     return Array.isArray(raw) ? raw[0] : String(raw ?? "");
@@ -107,7 +125,8 @@ export default function CheckoutPage() {
   const [dogName, setDogName] = React.useState("");
   const [dogAllergies, setDogAllergies] = React.useState("");
   const [dogFears, setDogFears] = React.useState("");
-  const [dogSocialWithPeople, setDogSocialWithPeople] = React.useState<"YES" | "NO" | "">("");
+  const [dogSocialWithPeople, setDogSocialWithPeople] =
+    React.useState<"YES" | "NO" | "">("");
   const [savingDog, setSavingDog] = React.useState(false);
   const [savedAt, setSavedAt] = React.useState<number | null>(null);
 
@@ -125,12 +144,19 @@ export default function CheckoutPage() {
 
   React.useEffect(() => {
     let cancelled = false;
+
     (async () => {
       if (!bookingId) return;
+
       try {
         setLoading(true);
-        const r = await fetch(`/api/booking/${encodeURIComponent(bookingId)}`, { cache: "no-store" });
+
+        const r = await fetch(`/api/booking/${encodeURIComponent(bookingId)}`, {
+          cache: "no-store",
+        });
+
         if (!r.ok) throw new Error(await r.text());
+
         const j = await r.json();
 
         const vm: BookingVM = {
@@ -152,8 +178,13 @@ export default function CheckoutPage() {
             restCents: j.restAmountCents,
           },
           discount:
-            (typeof j.discountAmountCents === "number" && j.discountAmountCents > 0) || j.discountCode
-              ? { code: j.discountCode?.code ?? null, amountCents: Math.max(0, j.discountAmountCents ?? 0) }
+            (typeof j.discountAmountCents === "number" &&
+              j.discountAmountCents > 0) ||
+            j.discountCode
+              ? {
+                  code: j.discountCode?.code ?? null,
+                  amountCents: Math.max(0, j.discountAmountCents ?? 0),
+                }
               : null,
         };
 
@@ -163,7 +194,11 @@ export default function CheckoutPage() {
           setDogAllergies(vm.dogAllergies ?? "");
           setDogFears(vm.dogFears ?? "");
           setDogSocialWithPeople(
-            vm.dogSocialWithPeople === true ? "YES" : vm.dogSocialWithPeople === false ? "NO" : ""
+            vm.dogSocialWithPeople === true
+              ? "YES"
+              : vm.dogSocialWithPeople === false
+                ? "NO"
+                : ""
           );
           setCustomerName(vm.customerName ?? "");
           setCustomerEmail(vm.customerEmail ?? "");
@@ -176,6 +211,7 @@ export default function CheckoutPage() {
         if (!cancelled) setLoading(false);
       }
     })();
+
     return () => {
       cancelled = true;
     };
@@ -184,6 +220,7 @@ export default function CheckoutPage() {
   function validateEmail(value: string): string | null {
     const clean = value.trim();
     if (!clean) return "E-mailadres is verplicht.";
+
     const ok = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(clean);
     return ok ? null : "Vul een geldig e-mailadres in.";
   }
@@ -191,13 +228,17 @@ export default function CheckoutPage() {
   useDebouncedCallback(
     async () => {
       if (!data) return;
+
       const err = validateEmail(customerEmail);
       setEmailError(err);
       if (err) return;
+
       try {
         setEmailSaving(true);
         setEmailSavedAt(null);
+
         let resp: any;
+
         try {
           resp = await postJSON("/api/booking/update-customer-email", {
             bookingId: data.id,
@@ -209,8 +250,14 @@ export default function CheckoutPage() {
             customer: { email: customerEmail.trim() },
           });
         }
-        if (!resp?.ok && !resp?.booking) throw new Error(resp?.error || "Opslaan mislukt");
-        setData((d) => (d ? ({ ...d, customerEmail: customerEmail.trim() } as BookingVM) : d));
+
+        if (!resp?.ok && !resp?.booking) {
+          throw new Error(resp?.error || "Opslaan mislukt");
+        }
+
+        setData((d) =>
+          d ? ({ ...d, customerEmail: customerEmail.trim() } as BookingVM) : d
+        );
         setEmailSavedAt(Date.now());
       } catch {
         setEmailError("Opslaan mislukt. Probeer opnieuw.");
@@ -225,9 +272,11 @@ export default function CheckoutPage() {
   useDebouncedCallback(
     async () => {
       if (!data) return;
+
       try {
         setSavingDog(true);
         setSavedAt(null);
+
         const r = await fetch("/api/booking/update-dog", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -238,10 +287,14 @@ export default function CheckoutPage() {
             dogAllergies: dogAllergies.trim() || null,
             dogFears: dogFears.trim() || null,
             dogSocialWithPeople:
-              dogSocialWithPeople === "" ? null : dogSocialWithPeople === "YES",
+              dogSocialWithPeople === ""
+                ? null
+                : dogSocialWithPeople === "YES",
           }),
         });
+
         if (!r.ok) throw new Error(await r.text());
+
         setSavedAt(Date.now());
       } catch (e: any) {
         setMsg(e?.message || "Opslaan mislukt");
@@ -255,28 +308,40 @@ export default function CheckoutPage() {
 
   async function applyDiscount(codeRaw: string | null) {
     if (!data) return;
+
     setApplying(true);
     setDiscountMsg(null);
+
     try {
       const code = codeRaw?.trim() || null;
 
       const tryApply = async () =>
-        postJSON<any>("/api/booking/apply-discount", { bookingId: data.id, code });
-
-      const tryAlt = async () =>
-        postJSON<any>(code ? "/api/booking/discount/apply" : "/api/booking/discount/clear", {
+        postJSON<any>("/api/booking/apply-discount", {
           bookingId: data.id,
           code,
         });
 
+      const tryAlt = async () =>
+        postJSON<any>(
+          code ? "/api/booking/discount/apply" : "/api/booking/discount/clear",
+          {
+            bookingId: data.id,
+            code,
+          }
+        );
+
       let resp: any;
+
       try {
         resp = await tryApply();
       } catch {
         resp = await tryAlt();
       }
 
-      if (!resp?.ok || !resp?.booking) throw new Error(resp?.error || "Kon kortingscode niet toepassen");
+      if (!resp?.ok || !resp?.booking) {
+        throw new Error(resp?.error || "Kon kortingscode niet toepassen");
+      }
+
       const b = resp.booking;
 
       const vm: BookingVM = {
@@ -298,20 +363,28 @@ export default function CheckoutPage() {
           restCents: b.restAmountCents,
         },
         discount:
-          (typeof b.discountAmountCents === "number" && b.discountAmountCents > 0) || b.discountCode
-            ? { code: b.discountCode?.code ?? null, amountCents: Math.max(0, b.discountAmountCents ?? 0) }
+          (typeof b.discountAmountCents === "number" &&
+            b.discountAmountCents > 0) ||
+          b.discountCode
+            ? {
+                code: b.discountCode?.code ?? null,
+                amountCents: Math.max(0, b.discountAmountCents ?? 0),
+              }
             : null,
       };
 
       setData(vm);
       setCouponInput(vm.discount?.code ?? "");
-      setDiscountMsg(code ? "Kortingscode toegepast ✔️" : "Kortingscode verwijderd");
+      setDiscountMsg(
+        code ? "Kortingscode toegepast ✔️" : "Kortingscode verwijderd"
+      );
     } catch {
       const typed = (couponInput || "").trim().toUpperCase();
-      const pretty =
-        typed
-          ? `De kortingscode ‘${typed}’ is ongeldig of niet van toepassing op deze boeking. Controleer de spelling (hoofdletters), of vraag bij de hondenschool naar een geldige/actieve code.`
-          : "Deze kortingscode is ongeldig of niet van toepassing op deze boeking.";
+
+      const pretty = typed
+        ? `De kortingscode ‘${typed}’ is ongeldig of niet van toepassing op deze boeking. Controleer de spelling (hoofdletters), of vraag bij de hondenschool naar een geldige/actieve code.`
+        : "Deze kortingscode is ongeldig of niet van toepassing op deze boeking.";
+
       setDiscountMsg(pretty);
     } finally {
       setApplying(false);
@@ -329,20 +402,34 @@ export default function CheckoutPage() {
       setEmailError(err);
       if (err) return;
 
+      setMsg(null);
       setPayLoading(true);
-      const res = await fetch("/api/payments/mollie/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        cache: "no-store",
-        body: JSON.stringify({ bookingId: id }),
+
+      const j = await postJSON<{
+        ok: boolean;
+        url?: string;
+        paymentId?: string;
+        code?: string;
+        error?: string;
+      }>("/api/payments/mollie/create", {
+        bookingId: id,
       });
-      if (!res.ok) throw new Error(await res.text());
-      const j = await res.json();
-      if (!j?.url) throw new Error("Geen Mollie URL ontvangen");
-      window.location.assign(j.url as string);
+
+      if (!j?.ok || !j?.url) {
+        throw new Error(j?.error || j?.code || "Geen Mollie URL ontvangen");
+      }
+
+      window.location.assign(j.url);
     } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Betaling starten mislukt, probeer later opnieuw.";
+
       console.error("Betaling starten mislukt", err);
-      alert("Betaling starten mislukt, probeer later opnieuw.");
+
+      alert(message);
+      setMsg(message);
       setPayLoading(false);
     }
   }
@@ -371,7 +458,10 @@ export default function CheckoutPage() {
         <Background />
         <div className="relative mx-auto max-w-6xl p-4 md:p-8">
           <SimpleHeader title="Bevestig jouw boeking" />
-          <div className="mt-6 rounded-2xl border border-rose-300/30 bg-rose-400/15 p-4 text-rose-100 shadow-sm" role="alert">
+          <div
+            className="mt-6 rounded-2xl border border-rose-300/30 bg-rose-400/15 p-4 text-rose-100 shadow-sm"
+            role="alert"
+          >
             Boekingsnummer onbekend of verlopen.
           </div>
         </div>
@@ -384,23 +474,37 @@ export default function CheckoutPage() {
       <Background />
 
       <div className="relative mx-auto max-w-6xl p-4 md:p-8">
-        <SimpleHeader title="Bevestig jouw boeking" status={data.status} idLabel={data.id} />
+        <SimpleHeader
+          title="Bevestig jouw boeking"
+          status={data.status}
+          idLabel={data.id}
+        />
 
         <div className="mt-6 grid gap-6 md:grid-cols-3">
           <section className="space-y-6 md:col-span-2">
             <Card>
               <CardTitle icon="📅" title="Overzicht" />
+
               <div className="mt-4 space-y-4">
                 <InfoRow label="Hondenschool" icon={<span aria-hidden>🏫</span>}>
-                  <span className="font-semibold text-white">{data.partnerName}</span>
+                  <span className="font-semibold text-white">
+                    {data.partnerName}
+                  </span>
                 </InfoRow>
 
-                <InfoRow label="Datum & tijd" icon={<IconCalendar className="h-4 w-4" />}>
+                <InfoRow
+                  label="Datum & tijd"
+                  icon={<IconCalendar className="h-4 w-4" />}
+                >
                   {fmtDateTimeNL(data.startTimeISO)}
                 </InfoRow>
 
-                <InfoRow label="Aantal deelnemers" icon={<IconUsers className="h-4 w-4" />}>
-                  {data.playersCount} {data.playersCount === 1 ? "speler" : "spelers"}
+                <InfoRow
+                  label="Aantal deelnemers"
+                  icon={<IconUsers className="h-4 w-4" />}
+                >
+                  {data.playersCount}{" "}
+                  {data.playersCount === 1 ? "speler" : "spelers"}
                 </InfoRow>
 
                 <InfoRow label="Voornaam" icon={<span aria-hidden>👤</span>}>
@@ -414,7 +518,10 @@ export default function CheckoutPage() {
                   />
                 </InfoRow>
 
-                <InfoRow label="E-mailadres" icon={<IconMail className="h-4 w-4" />}>
+                <InfoRow
+                  label="E-mailadres"
+                  icon={<IconMail className="h-4 w-4" />}
+                >
                   <div className="flex flex-col gap-1">
                     <input
                       type="email"
@@ -432,11 +539,22 @@ export default function CheckoutPage() {
                       aria-describedby="email-help"
                       autoComplete="email"
                     />
-                    <div id="email-help" className="min-h-[18px]" aria-live="polite">
-                      {emailError && <p className="text-[12px] text-rose-200">{emailError}</p>}
+
+                    <div
+                      id="email-help"
+                      className="min-h-[18px]"
+                      aria-live="polite"
+                    >
+                      {emailError && (
+                        <p className="text-[12px] text-rose-200">
+                          {emailError}
+                        </p>
+                      )}
+
                       {emailSaving && !emailError && (
                         <p className="text-[12px] text-stone-400">Opslaan…</p>
                       )}
+
                       {emailSavedAt && !emailError && !emailSaving && null}
                     </div>
                   </div>
@@ -462,7 +580,11 @@ export default function CheckoutPage() {
                   <Field label="Is je hond sociaal tegen andere mensen?">
                     <select
                       value={dogSocialWithPeople}
-                      onChange={(e) => setDogSocialWithPeople(e.target.value as "YES" | "NO" | "")}
+                      onChange={(e) =>
+                        setDogSocialWithPeople(
+                          e.target.value as "YES" | "NO" | ""
+                        )
+                      }
                       className="mt-1 h-11 w-full rounded-xl border border-white/15 bg-stone-950/70 px-3 text-sm text-white outline-none transition focus:border-pink-400 focus:ring-4 focus:ring-pink-300/30"
                     >
                       <option value="">Kies ja of nee</option>
@@ -493,8 +615,12 @@ export default function CheckoutPage() {
                 </Field>
 
                 <div className="min-h-[18px]" aria-live="polite">
-                  {savingDog && <p className="text-[12px] text-stone-400">Opslaan…</p>}
+                  {savingDog && (
+                    <p className="text-[12px] text-stone-400">Opslaan…</p>
+                  )}
+
                   {savedAt && !savingDog && null}
+
                   {msg && <span className="text-[12px] text-rose-200">{msg}</span>}
                 </div>
               </div>
@@ -514,7 +640,7 @@ export default function CheckoutPage() {
               onApply={() => applyDiscount(couponInput)}
               onClear={() => applyDiscount(null)}
               applying={applying}
-              message={discountMsg}
+              message={discountMsg || msg}
               onPay={() => handlePayNow(data.id)}
               canPay={canPay}
               payLoading={payLoading}
@@ -562,7 +688,8 @@ function SimpleHeader({
 
           {idLabel && (
             <p className="mt-2 text-xs text-stone-400">
-              Boekingsnummer: <span className="font-semibold text-stone-200">{idLabel}</span>
+              Boekingsnummer:{" "}
+              <span className="font-semibold text-stone-200">{idLabel}</span>
             </p>
           )}
         </div>
@@ -582,13 +709,22 @@ function HeaderSkeleton() {
 function Card({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/5 p-5 shadow-2xl shadow-black/20 backdrop-blur-md">
-      <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(251,113,133,0.10),transparent_45%)]" />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(251,113,133,0.10),transparent_45%)]"
+      />
       <div className="relative z-10">{children}</div>
     </div>
   );
 }
 
-function CardTitle({ icon, title }: { icon?: React.ReactNode | string; title: string }) {
+function CardTitle({
+  icon,
+  title,
+}: {
+  icon?: React.ReactNode | string;
+  title: string;
+}) {
   return (
     <div className="flex items-center gap-3">
       <div className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-lg">
@@ -614,6 +750,7 @@ function InfoRow({
         {icon && <span className="text-stone-400">{icon}</span>}
         {label}
       </div>
+
       <div className="text-sm text-stone-100">{children}</div>
     </div>
   );
@@ -630,11 +767,22 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function StatusBadge({ status }: { status: BookingVM["status"] }) {
   const map: Record<BookingVM["status"], { cls: string; label: string }> = {
-    PENDING: { cls: "border-amber-300/40 bg-amber-400/15 text-amber-100", label: "PENDING" },
-    CONFIRMED: { cls: "border-emerald-300/40 bg-emerald-400/15 text-emerald-100", label: "CONFIRMED" },
-    CANCELLED: { cls: "border-rose-300/40 bg-rose-400/15 text-rose-100", label: "CANCELLED" },
+    PENDING: {
+      cls: "border-amber-300/40 bg-amber-400/15 text-amber-100",
+      label: "PENDING",
+    },
+    CONFIRMED: {
+      cls: "border-emerald-300/40 bg-emerald-400/15 text-emerald-100",
+      label: "CONFIRMED",
+    },
+    CANCELLED: {
+      cls: "border-rose-300/40 bg-rose-400/15 text-rose-100",
+      label: "CANCELLED",
+    },
   };
+
   const s = map[status];
+
   return (
     <span className={`rounded-full border px-3 py-1 text-xs font-semibold shadow-sm ${s.cls}`}>
       {s.label}
@@ -642,7 +790,15 @@ function StatusBadge({ status }: { status: BookingVM["status"] }) {
   );
 }
 
-function Row({ label, value, emphasize = false }: { label: string; value: string; emphasize?: boolean }) {
+function Row({
+  label,
+  value,
+  emphasize = false,
+}: {
+  label: string;
+  value: string;
+  emphasize?: boolean;
+}) {
   return (
     <div
       className={[
@@ -653,7 +809,9 @@ function Row({ label, value, emphasize = false }: { label: string; value: string
       ].join(" ")}
     >
       <span>{label}</span>
-      <strong className={emphasize ? "text-white" : "text-stone-100"}>{value}</strong>
+      <strong className={emphasize ? "text-white" : "text-stone-100"}>
+        {value}
+      </strong>
     </div>
   );
 }
@@ -694,7 +852,9 @@ function PriceCard({
   bookingId: string;
 }) {
   const hasDiscount = discountCents > 0;
-  const isSuccess = message ? message.includes("✔") || message.toLowerCase().startsWith("ok") : false;
+  const isSuccess = message
+    ? message.includes("✔") || message.toLowerCase().startsWith("ok")
+    : false;
 
   return (
     <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/5 shadow-2xl shadow-black/30 backdrop-blur-md md:sticky md:top-6">
@@ -734,8 +894,12 @@ function PriceCard({
                 <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500">
                   <IconCheck className="h-3 w-3 text-white" />
                 </span>
+
                 <span className="font-semibold text-emerald-100">
-                  Toegepast: <span className="underline decoration-dotted">{discountCode}</span>
+                  Toegepast:{" "}
+                  <span className="underline decoration-dotted">
+                    {discountCode}
+                  </span>
                 </span>
               </div>
 
