@@ -103,12 +103,30 @@ export async function POST(req: Request) {
     }
 
     if (isExpiredPendingBooking(booking)) {
-      await prisma.booking.update({
-        where: { id: booking.id },
-        data: {
-          status: BookingStatus.CANCELLED,
-          cancelledAt: new Date(),
-        },
+      await prisma.$transaction(async (tx) => {
+        await tx.booking.update({
+          where: { id: booking.id },
+          data: {
+            status: BookingStatus.CANCELLED,
+            cancelledAt: new Date(),
+          },
+        });
+
+        const confirmedBookingForSlot = await tx.booking.findFirst({
+          where: {
+            slotId: booking.slot.id,
+            status: BookingStatus.CONFIRMED,
+            id: { not: booking.id },
+          },
+          select: { id: true },
+        });
+
+        if (!confirmedBookingForSlot) {
+          await tx.slot.update({
+            where: { id: booking.slot.id },
+            data: { status: SlotStatus.PUBLISHED },
+          });
+        }
       });
 
       return NextResponse.json(
@@ -116,7 +134,7 @@ export async function POST(req: Request) {
           ok: false,
           code: "BOOKING_EXPIRED",
           error:
-            "Deze tijdelijke reservering is verlopen. Kies het tijdslot opnieuw.",
+            "Deze tijdelijke reservering is verlopen. Het tijdslot is weer vrijgegeven. Kies het tijdslot opnieuw.",
         },
         { status: 409 }
       );
