@@ -1,19 +1,20 @@
 // PATH: src/app/api/payments/mollie/webhook/route.ts
 import { NextResponse, type NextRequest } from "next/server";
-import prisma from "@/lib/prisma";
 import createMollieClient from "@mollie/api-client";
 import {
-  PaymentStatus,
+  BookingStatus,
   PaymentProvider,
+  PaymentStatus,
   PaymentType,
   SlotStatus,
-  BookingStatus,
 } from "@prisma/client";
 
+import prisma from "@/lib/prisma";
 import { sendBookingEmails } from "@/lib/events/booking-confirmed";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 function mollie() {
   const apiKey = process.env.MOLLIE_API_KEY;
@@ -79,7 +80,7 @@ export async function POST(req: NextRequest) {
 
     const paidAt = (molliePayment as any)?.paidAt
       ? new Date((molliePayment as any).paidAt)
-      : undefined;
+      : null;
 
     const amountCents = molliePayment.amount?.value
       ? Math.round(Number(molliePayment.amount.value) * 100)
@@ -123,7 +124,7 @@ export async function POST(req: NextRequest) {
         type: PaymentType.DEPOSIT,
         status: mappedStatus,
         providerPaymentId: molliePayment.id,
-        method: (molliePayment as any)?.method ?? undefined,
+        method: (molliePayment as any)?.method ?? null,
         rawPayload,
         currency,
         amountCents,
@@ -132,7 +133,7 @@ export async function POST(req: NextRequest) {
       update: {
         bookingId: booking.id,
         status: mappedStatus,
-        method: (molliePayment as any)?.method ?? undefined,
+        method: (molliePayment as any)?.method ?? null,
         rawPayload,
         currency,
         amountCents,
@@ -164,16 +165,12 @@ export async function POST(req: NextRequest) {
 
       if (!freshBooking) return;
 
-      // Al bevestigd? Dan niets opnieuw doen.
       if (freshBooking.status === BookingStatus.CONFIRMED) {
         return;
       }
 
-      // Belangrijk:
-      // Alleen PENDING bookings mogen naar CONFIRMED.
-      // CANCELLED/EXPIRED/andere statussen niet alsnog bevestigen.
       if (freshBooking.status !== BookingStatus.PENDING) {
-        console.warn("[mollie/webhook] paid payment voor niet-PENDING booking", {
+        console.warn("[mollie/webhook] betaalde betaling voor niet-PENDING booking", {
           bookingId: freshBooking.id,
           bookingStatus: freshBooking.status,
           paymentId: molliePayment.id,
@@ -191,10 +188,11 @@ export async function POST(req: NextRequest) {
         return;
       }
 
-      if (freshBooking.slot.status === SlotStatus.BOOKED) {
-        console.warn("[mollie/webhook] slot is al BOOKED", {
+      if (freshBooking.slot.status !== SlotStatus.PUBLISHED) {
+        console.warn("[mollie/webhook] slot niet meer publiceerbaar", {
           bookingId: freshBooking.id,
           slotId: freshBooking.slot.id,
+          slotStatus: freshBooking.slot.status,
           paymentId: molliePayment.id,
         });
 
@@ -229,6 +227,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("[mollie/webhook] error", err);
 
+    // Mollie verwacht 200, anders blijft hij retried pushen.
     return NextResponse.json({ ok: true }, { status: 200 });
   }
 }

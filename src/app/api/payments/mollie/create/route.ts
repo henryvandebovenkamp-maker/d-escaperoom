@@ -1,6 +1,5 @@
 // PATH: src/app/api/payments/mollie/create/route.ts
 import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
 import createMollieClient from "@mollie/api-client";
 import {
   BookingStatus,
@@ -9,11 +8,15 @@ import {
   PaymentType,
   SlotStatus,
 } from "@prisma/client";
+
+import prisma from "@/lib/prisma";
 import { APP_ORIGIN } from "@/lib/env";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+const PENDING_BOOKING_TTL_MINUTES = 15;
 
 function mollie() {
   const apiKey = process.env.MOLLIE_API_KEY;
@@ -22,11 +25,22 @@ function mollie() {
   return createMollieClient({ apiKey });
 }
 
+function isExpiredPendingBooking(booking: { createdAt: Date }) {
+  const expiresAt =
+    booking.createdAt.getTime() + PENDING_BOOKING_TTL_MINUTES * 60 * 1000;
+
+  return Date.now() > expiresAt;
+}
+
+function toMollieAmountValue(amountCents: number) {
+  return (amountCents / 100).toFixed(2);
+}
+
 export async function POST(req: Request) {
   try {
     const { bookingId } = await req.json();
 
-    if (!bookingId) {
+    if (!bookingId || typeof bookingId !== "string") {
       return NextResponse.json(
         { ok: false, error: "bookingId ontbreekt" },
         { status: 400 }
@@ -36,8 +50,17 @@ export async function POST(req: Request) {
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
       include: {
-        partner: true,
-        slot: true,
+        partner: {
+          select: {
+            name: true,
+          },
+        },
+        slot: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
         payments: {
           where: {
             provider: PaymentProvider.MOLLIE,
@@ -70,6 +93,25 @@ export async function POST(req: Request) {
       );
     }
 
+    if (isExpiredPendingBooking(booking)) {
+      await prisma.booking.update({
+        where: { id: booking.id },
+        data: {
+          status: BookingStatus.CANCELLED,
+          cancelledAt: new Date(),
+        },
+      });
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Deze tijdelijke reservering is verlopen. Kies het tijdslot opnieuw.",
+        },
+        { status: 409 }
+      );
+    }
+
     if (booking.slot.status !== SlotStatus.PUBLISHED) {
       return NextResponse.json(
         { ok: false, error: "Dit tijdslot is niet meer beschikbaar" },
@@ -77,7 +119,19 @@ export async function POST(req: Request) {
       );
     }
 
-    if (booking.payments.length > 0) {
+    const existingPayment = booking.payments[0];
+
+    if (existingPayment?.status === PaymentStatus.PAID) {
+      return NextResponse.json(
+        { ok: false, error: "Deze boeking is al betaald" },
+        { status: 409 }
+      );
+    }
+
+    if (
+      existingPayment?.status === PaymentStatus.CREATED ||
+      existingPayment?.status === PaymentStatus.PENDING
+    ) {
       return NextResponse.json(
         {
           ok: false,
@@ -88,15 +142,22 @@ export async function POST(req: Request) {
       );
     }
 
-    const amountValue = (Number(booking.depositAmountCents) / 100).toFixed(2);
+    const amountCents = Number(booking.depositAmountCents);
     const currency = booking.currency || "EUR";
+
+    if (!Number.isFinite(amountCents) || amountCents <= 0) {
+      return NextResponse.json(
+        { ok: false, error: "Ongeldig aanbetalingsbedrag" },
+        { status: 400 }
+      );
+    }
 
     const payment = await mollie().payments.create({
       amount: {
         currency,
-        value: amountValue,
+        value: toMollieAmountValue(amountCents),
       },
-      description: `Aanbetaling EscapeRoom ${booking.partner.name}`,
+      description: `Aanbetaling D-EscapeRoom - ${booking.partner.name}`,
       redirectUrl: `${APP_ORIGIN}/checkout/${booking.id}/return`,
       webhookUrl: `${APP_ORIGIN}/api/payments/mollie/webhook`,
       metadata: {
@@ -108,7 +169,7 @@ export async function POST(req: Request) {
 
     if (!checkoutUrl) {
       return NextResponse.json(
-        { ok: false, error: "Geen checkout URL" },
+        { ok: false, error: "Geen checkout URL ontvangen van Mollie" },
         { status: 502 }
       );
     }
@@ -120,8 +181,9 @@ export async function POST(req: Request) {
         type: PaymentType.DEPOSIT,
         status: PaymentStatus.CREATED,
         currency,
-        amountCents: Number(booking.depositAmountCents),
+        amountCents,
         providerPaymentId: payment.id,
+        rawPayload: payment as any,
       },
     });
 
