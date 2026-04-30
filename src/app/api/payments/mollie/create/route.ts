@@ -16,7 +16,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const PENDING_BOOKING_TTL_MINUTES = 15;
+const PENDING_BOOKING_TTL_MINUTES = 30;
 
 function mollie() {
   const apiKey = process.env.MOLLIE_API_KEY;
@@ -41,7 +41,7 @@ export async function POST(req: Request) {
 
     if (!bookingId || typeof bookingId !== "string") {
       return NextResponse.json(
-        { ok: false, error: "bookingId ontbreekt" },
+        { ok: false, code: "MISSING_BOOKING_ID", error: "bookingId ontbreekt" },
         { status: 400 }
       );
     }
@@ -55,30 +55,49 @@ export async function POST(req: Request) {
           where: {
             provider: PaymentProvider.MOLLIE,
             type: PaymentType.DEPOSIT,
-            status: {
-              in: [
-                PaymentStatus.CREATED,
-                PaymentStatus.PENDING,
-                PaymentStatus.PAID,
-              ],
-            },
           },
           orderBy: { createdAt: "desc" },
-          take: 1,
+          take: 5,
         },
       },
     });
 
     if (!booking || !booking.partner || !booking.slot) {
       return NextResponse.json(
-        { ok: false, error: "Boeking niet gevonden" },
+        { ok: false, code: "BOOKING_NOT_FOUND", error: "Boeking niet gevonden" },
         { status: 404 }
+      );
+    }
+
+    if (booking.status === BookingStatus.CONFIRMED) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "BOOKING_ALREADY_CONFIRMED",
+          error: "Deze boeking is al bevestigd",
+        },
+        { status: 409 }
+      );
+    }
+
+    if (booking.status === BookingStatus.CANCELLED) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "BOOKING_CANCELLED",
+          error: "Deze boeking is geannuleerd. Kies het tijdslot opnieuw.",
+        },
+        { status: 409 }
       );
     }
 
     if (booking.status !== BookingStatus.PENDING) {
       return NextResponse.json(
-        { ok: false, error: "Deze boeking kan niet meer betaald worden" },
+        {
+          ok: false,
+          code: "BOOKING_NOT_PAYABLE",
+          error: "Deze boeking kan niet meer betaald worden",
+        },
         { status: 409 }
       );
     }
@@ -95,6 +114,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           ok: false,
+          code: "BOOKING_EXPIRED",
           error:
             "Deze tijdelijke reservering is verlopen. Kies het tijdslot opnieuw.",
         },
@@ -102,17 +122,16 @@ export async function POST(req: Request) {
       );
     }
 
-    /**
-     * Belangrijk:
-     * Sommige flows zetten het slot al op BOOKED zodra de pending booking is aangemaakt.
-     * Dan mag deze betaling WEL starten voor deze eigen pending booking.
-     */
     if (
       booking.slot.status !== SlotStatus.PUBLISHED &&
       booking.slot.status !== SlotStatus.BOOKED
     ) {
       return NextResponse.json(
-        { ok: false, error: "Dit tijdslot is niet meer beschikbaar" },
+        {
+          ok: false,
+          code: "SLOT_NOT_AVAILABLE",
+          error: "Dit tijdslot is niet meer beschikbaar",
+        },
         { status: 409 }
       );
     }
@@ -128,18 +147,88 @@ export async function POST(req: Request) {
 
     if (confirmedBookingForSlot) {
       return NextResponse.json(
-        { ok: false, error: "Dit tijdslot is inmiddels geboekt" },
+        {
+          ok: false,
+          code: "SLOT_ALREADY_CONFIRMED",
+          error: "Dit tijdslot is inmiddels geboekt",
+        },
         { status: 409 }
       );
     }
 
-    const existingPayment = booking.payments[0];
+    const paidPayment = booking.payments.find(
+      (payment) => payment.status === PaymentStatus.PAID
+    );
 
-    if (existingPayment?.status === PaymentStatus.PAID) {
+    if (paidPayment) {
       return NextResponse.json(
-        { ok: false, error: "Deze boeking is al betaald" },
+        {
+          ok: false,
+          code: "PAYMENT_ALREADY_PAID",
+          error: "Deze boeking is al betaald",
+        },
         { status: 409 }
       );
+    }
+
+    const reusablePayment = booking.payments.find(
+      (payment) =>
+        payment.providerPaymentId &&
+        (payment.status === PaymentStatus.CREATED ||
+          payment.status === PaymentStatus.PENDING)
+    );
+
+    if (reusablePayment?.providerPaymentId) {
+      try {
+        const molliePayment = await mollie().payments.get(
+          reusablePayment.providerPaymentId
+        );
+
+        const checkoutUrl = molliePayment._links?.checkout?.href;
+
+        if (
+          checkoutUrl &&
+          molliePayment.status !== "expired" &&
+          molliePayment.status !== "canceled" &&
+          molliePayment.status !== "failed" &&
+          molliePayment.status !== "paid"
+        ) {
+          return NextResponse.json(
+            {
+              ok: true,
+              url: checkoutUrl,
+              paymentId: molliePayment.id,
+              reused: true,
+            },
+            {
+              headers: {
+                "Cache-Control": "no-store",
+              },
+            }
+          );
+        }
+
+        await prisma.payment.update({
+          where: { id: reusablePayment.id },
+          data: {
+            status: PaymentStatus.CANCELED,
+            rawPayload: molliePayment as any,
+          },
+        });
+      } catch (error) {
+        console.error("[mollie/create] bestaande betaling ophalen mislukt", {
+          bookingId: booking.id,
+          providerPaymentId: reusablePayment.providerPaymentId,
+          error,
+        });
+
+        await prisma.payment.update({
+          where: { id: reusablePayment.id },
+          data: {
+            status: PaymentStatus.FAILED,
+          },
+        });
+      }
     }
 
     const amountCents = Number(booking.depositAmountCents);
@@ -147,12 +236,19 @@ export async function POST(req: Request) {
 
     if (!Number.isFinite(amountCents) || amountCents <= 0) {
       return NextResponse.json(
-        { ok: false, error: "Ongeldig aanbetalingsbedrag" },
+        {
+          ok: false,
+          code: "INVALID_DEPOSIT_AMOUNT",
+          error: "Ongeldig aanbetalingsbedrag",
+        },
         { status: 400 }
       );
     }
 
-    const origin = APP_ORIGIN || "https://d-escaperoom.com";
+    const origin = (APP_ORIGIN || "https://www.d-escaperoom.com").replace(
+      /\/$/,
+      ""
+    );
 
     const payment = await mollie().payments.create({
       amount: {
@@ -171,7 +267,11 @@ export async function POST(req: Request) {
 
     if (!checkoutUrl) {
       return NextResponse.json(
-        { ok: false, error: "Geen checkout URL ontvangen van Mollie" },
+        {
+          ok: false,
+          code: "MOLLIE_CHECKOUT_URL_MISSING",
+          error: "Geen checkout URL ontvangen van Mollie",
+        },
         { status: 502 }
       );
     }
@@ -207,10 +307,8 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         ok: false,
-        error:
-          err instanceof Error
-            ? err.message
-            : "Kon betaling niet starten",
+        code: "PAYMENT_CREATE_FAILED",
+        error: err instanceof Error ? err.message : "Kon betaling niet starten",
       },
       { status: 500 }
     );
