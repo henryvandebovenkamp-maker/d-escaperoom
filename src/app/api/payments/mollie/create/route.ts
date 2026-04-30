@@ -21,15 +21,14 @@ const PENDING_BOOKING_TTL_MINUTES = 15;
 function mollie() {
   const apiKey = process.env.MOLLIE_API_KEY;
   if (!apiKey) throw new Error("MOLLIE_API_KEY ontbreekt");
-
   return createMollieClient({ apiKey });
 }
 
 function isExpiredPendingBooking(booking: { createdAt: Date }) {
-  const expiresAt =
-    booking.createdAt.getTime() + PENDING_BOOKING_TTL_MINUTES * 60 * 1000;
-
-  return Date.now() > expiresAt;
+  return (
+    Date.now() >
+    booking.createdAt.getTime() + PENDING_BOOKING_TTL_MINUTES * 60 * 1000
+  );
 }
 
 function toMollieAmountValue(amountCents: number) {
@@ -50,17 +49,8 @@ export async function POST(req: Request) {
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
       include: {
-        partner: {
-          select: {
-            name: true,
-          },
-        },
-        slot: {
-          select: {
-            id: true,
-            status: true,
-          },
-        },
+        partner: { select: { name: true } },
+        slot: { select: { id: true, status: true } },
         payments: {
           where: {
             provider: PaymentProvider.MOLLIE,
@@ -112,9 +102,33 @@ export async function POST(req: Request) {
       );
     }
 
-    if (booking.slot.status !== SlotStatus.PUBLISHED) {
+    /**
+     * Belangrijk:
+     * Sommige flows zetten het slot al op BOOKED zodra de pending booking is aangemaakt.
+     * Dan mag deze betaling WEL starten voor deze eigen pending booking.
+     */
+    if (
+      booking.slot.status !== SlotStatus.PUBLISHED &&
+      booking.slot.status !== SlotStatus.BOOKED
+    ) {
       return NextResponse.json(
         { ok: false, error: "Dit tijdslot is niet meer beschikbaar" },
+        { status: 409 }
+      );
+    }
+
+    const confirmedBookingForSlot = await prisma.booking.findFirst({
+      where: {
+        slotId: booking.slot.id,
+        status: BookingStatus.CONFIRMED,
+        id: { not: booking.id },
+      },
+      select: { id: true },
+    });
+
+    if (confirmedBookingForSlot) {
+      return NextResponse.json(
+        { ok: false, error: "Dit tijdslot is inmiddels geboekt" },
         { status: 409 }
       );
     }
@@ -124,20 +138,6 @@ export async function POST(req: Request) {
     if (existingPayment?.status === PaymentStatus.PAID) {
       return NextResponse.json(
         { ok: false, error: "Deze boeking is al betaald" },
-        { status: 409 }
-      );
-    }
-
-    if (
-      existingPayment?.status === PaymentStatus.CREATED ||
-      existingPayment?.status === PaymentStatus.PENDING
-    ) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "Er bestaat al een betaling voor deze boeking. Rond de bestaande betaling af of probeer later opnieuw.",
-        },
         { status: 409 }
       );
     }
@@ -152,14 +152,16 @@ export async function POST(req: Request) {
       );
     }
 
+    const origin = APP_ORIGIN || "https://d-escaperoom.com";
+
     const payment = await mollie().payments.create({
       amount: {
         currency,
         value: toMollieAmountValue(amountCents),
       },
       description: `Aanbetaling D-EscapeRoom - ${booking.partner.name}`,
-      redirectUrl: `${APP_ORIGIN}/checkout/${booking.id}/return`,
-      webhookUrl: `${APP_ORIGIN}/api/payments/mollie/webhook`,
+      redirectUrl: `${origin}/checkout/${booking.id}/return`,
+      webhookUrl: `${origin}/api/payments/mollie/webhook`,
       metadata: {
         bookingId: booking.id,
       },
@@ -205,7 +207,10 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         ok: false,
-        error: "Kon betaling niet starten",
+        error:
+          err instanceof Error
+            ? err.message
+            : "Kon betaling niet starten",
       },
       { status: 500 }
     );
