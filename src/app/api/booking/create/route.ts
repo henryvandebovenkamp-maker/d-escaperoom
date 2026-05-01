@@ -1,6 +1,10 @@
 // PATH: src/app/api/booking/create/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
+import {
+  BookingStatus,
+  Prisma,
+  SlotStatus,
+} from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { z } from "zod";
 
@@ -9,7 +13,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const FIXED_TOTAL_CENTS = 7990;
-const PENDING_BOOKING_TTL_MINUTES = 15;
+const PENDING_BOOKING_TTL_SECONDS = 90;
 
 function json(data: unknown, status = 200, extraHeaders?: Record<string, string>) {
   return new NextResponse(JSON.stringify(data), {
@@ -26,23 +30,25 @@ function json(data: unknown, status = 200, extraHeaders?: Record<string, string>
 function computePriceCents(feePercent: number) {
   const totalCents = FIXED_TOTAL_CENTS;
   const depositCents = Math.round((totalCents * feePercent) / 100);
-  const restCents = totalCents - depositCents;
 
   return {
     currency: "EUR",
     totalCents,
     depositCents,
-    restCents,
+    restCents: totalCents - depositCents,
   };
 }
 
-function isExpiredPendingBooking(booking: { status: string; createdAt: Date }) {
-  if (booking.status !== "PENDING") return false;
+function isExpiredPendingBooking(booking: {
+  status: BookingStatus;
+  createdAt: Date;
+}) {
+  if (booking.status !== BookingStatus.PENDING) return false;
 
-  const expiresAt =
-    booking.createdAt.getTime() + PENDING_BOOKING_TTL_MINUTES * 60 * 1000;
-
-  return Date.now() > expiresAt;
+  return (
+    Date.now() >
+    booking.createdAt.getTime() + PENDING_BOOKING_TTL_SECONDS * 1000
+  );
 }
 
 const CreateBookingSchema = z
@@ -135,7 +141,6 @@ export async function POST(req: NextRequest) {
     };
 
     const data = CreateBookingSchema.parse(normalized);
-
     const normalizedEmail = data.customer.email.trim().toLowerCase();
 
     const result = await prisma.$transaction(
@@ -186,17 +191,116 @@ export async function POST(req: NextRequest) {
           };
         }
 
-        if (slot.status !== "PUBLISHED") {
+        if (slot.status !== SlotStatus.PUBLISHED) {
           return {
             status: 409,
             body: {
               ok: false,
               error:
-                slot.status === "BOOKED"
+                slot.status === SlotStatus.BOOKED
                   ? "Tijdslot is al geboekt"
                   : "Tijdslot is niet beschikbaar",
             },
           };
+        }
+
+        const existing = await tx.booking.findUnique({
+          where: { slotId: slot.id },
+          select: {
+            id: true,
+            status: true,
+            createdAt: true,
+            slotId: true,
+          },
+        });
+
+        if (existing?.status === BookingStatus.CONFIRMED) {
+          return {
+            status: 409,
+            body: {
+              ok: false,
+              error: "Tijdslot is al geboekt",
+              details: [
+                {
+                  path: ["slotId"],
+                  message: "Dit tijdslot is al definitief geboekt.",
+                },
+              ],
+            },
+          };
+        }
+
+        if (
+          existing?.status === BookingStatus.PENDING &&
+          !isExpiredPendingBooking(existing)
+        ) {
+          const secondsLeft = Math.max(
+            1,
+            Math.ceil(
+              (existing.createdAt.getTime() +
+                PENDING_BOOKING_TTL_SECONDS * 1000 -
+                Date.now()) /
+                1000
+            )
+          );
+
+          return {
+            status: 409,
+            body: {
+              ok: false,
+              error: "Tijdslot is tijdelijk gereserveerd",
+              details: [
+                {
+                  path: ["slotId"],
+                  message: `Dit tijdslot is tijdelijk gereserveerd. Probeer het over ${secondsLeft} seconden opnieuw.`,
+                },
+              ],
+              booking: {
+                id: existing.id,
+                status: existing.status,
+              },
+              secondsLeft,
+            },
+          };
+        }
+
+        if (
+          existing?.status === BookingStatus.PENDING &&
+          isExpiredPendingBooking(existing)
+        ) {
+          await tx.payment.deleteMany({
+            where: { bookingId: existing.id },
+          });
+
+          await tx.booking.delete({
+            where: { id: existing.id },
+          });
+
+          await tx.slot.update({
+            where: { id: slot.id },
+            data: {
+              status: SlotStatus.PUBLISHED,
+              bookedAt: null,
+            },
+          });
+        }
+
+        if (existing?.status === BookingStatus.CANCELLED) {
+          await tx.payment.deleteMany({
+            where: { bookingId: existing.id },
+          });
+
+          await tx.booking.delete({
+            where: { id: existing.id },
+          });
+
+          await tx.slot.update({
+            where: { id: slot.id },
+            data: {
+              status: SlotStatus.PUBLISHED,
+              bookedAt: null,
+            },
+          });
         }
 
         let customer = await tx.customer.findFirst({
@@ -227,106 +331,45 @@ export async function POST(req: NextRequest) {
 
         const price = computePriceCents(partner.feePercent);
 
-        const existing = await tx.booking.findUnique({
-          where: { slotId: slot.id },
+        const booking = await tx.booking.create({
+          data: {
+            partnerId: partner.id,
+            slotId: slot.id,
+            customerId: customer.id,
+
+            status: BookingStatus.PENDING,
+            emailsSentAt: null,
+
+            currency: price.currency,
+            totalAmountCents: price.totalCents,
+            depositAmountCents: price.depositCents,
+            restAmountCents: price.restCents,
+
+            playersCount: data.players,
+
+            dogName: data.dog?.name ?? null,
+            dogAllergies: data.dog?.allergies ?? null,
+            dogFears: data.dog?.fears ?? null,
+            dogTrackingLevel: data.dog?.trackingLevel ?? null,
+
+            confirmedAt: null,
+            cancelledAt: null,
+            depositPaidAt: null,
+
+            giftCardId: null,
+            giftCardAppliedCents: null,
+            discountCodeId: null,
+            discountAmountCents: 0,
+          },
           select: {
             id: true,
             status: true,
-            createdAt: true,
+            slotId: true,
           },
         });
 
-        if (existing?.status === "CONFIRMED") {
-          return {
-            status: 409,
-            body: {
-              ok: false,
-              error: "Tijdslot is al geboekt",
-              details: [
-                {
-                  path: ["slotId"],
-                  message: "Dit tijdslot is al definitief geboekt.",
-                },
-              ],
-            },
-          };
-        }
-
-        if (
-          existing?.status === "PENDING" &&
-          !isExpiredPendingBooking(existing)
-        ) {
-          return {
-            status: 409,
-            body: {
-              ok: false,
-              error: "Tijdslot is tijdelijk gereserveerd",
-              details: [
-                {
-                  path: ["slotId"],
-                  message:
-                    "Dit tijdslot is tijdelijk gereserveerd. Probeer het over enkele minuten opnieuw.",
-                },
-              ],
-              booking: {
-                id: existing.id,
-                status: existing.status,
-              },
-            },
-          };
-        }
-
-        const bookingData = {
-          partnerId: partner.id,
-          slotId: slot.id,
-          customerId: customer.id,
-
-          status: "PENDING" as const,
-          emailsSentAt: null,
-
-          currency: price.currency,
-          totalAmountCents: price.totalCents,
-          depositAmountCents: price.depositCents,
-          restAmountCents: price.restCents,
-
-          playersCount: data.players,
-
-          dogName: data.dog?.name ?? null,
-          dogAllergies: data.dog?.allergies ?? null,
-          dogFears: data.dog?.fears ?? null,
-          dogTrackingLevel: data.dog?.trackingLevel ?? null,
-
-          confirmedAt: null,
-          cancelledAt: null,
-          depositPaidAt: null,
-
-          giftCardId: null,
-          giftCardAppliedCents: null,
-          discountCodeId: null,
-          discountAmountCents: 0,
-        };
-
-        const booking = existing
-          ? await tx.booking.update({
-              where: { id: existing.id },
-              data: bookingData,
-              select: {
-                id: true,
-                status: true,
-                slotId: true,
-              },
-            })
-          : await tx.booking.create({
-              data: bookingData,
-              select: {
-                id: true,
-                status: true,
-                slotId: true,
-              },
-            });
-
         return {
-          status: existing ? 200 : 201,
+          status: 201,
           body: {
             ok: true,
             bookingId: booking.id,
@@ -338,9 +381,10 @@ export async function POST(req: NextRequest) {
             },
             slot: {
               id: slot.id,
-              status: slot.status,
+              status: SlotStatus.PUBLISHED,
             },
-            expiresInMinutes: PENDING_BOOKING_TTL_MINUTES,
+            expiresInSeconds: PENDING_BOOKING_TTL_SECONDS,
+            expiresInMinutes: PENDING_BOOKING_TTL_SECONDS / 60,
           },
           headers: {
             Location: `/api/booking/${booking.id}`,
@@ -377,7 +421,7 @@ export async function POST(req: NextRequest) {
             {
               path: ["slotId"],
               message:
-                "Dit tijdslot werd net door iemand anders gereserveerd. Kies een ander tijdslot.",
+                "Dit tijdslot werd net door iemand anders gereserveerd. Wacht kort of kies een ander tijdslot.",
             },
           ],
         },
