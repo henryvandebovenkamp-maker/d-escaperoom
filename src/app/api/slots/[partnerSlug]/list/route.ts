@@ -1,5 +1,6 @@
 // PATH: src/app/api/slots/[partnerSlug]/list/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { BookingStatus, SlotStatus } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { resolvePartnerForRequest } from "@/lib/partner";
@@ -8,6 +9,8 @@ import { fromZonedTime, formatInTimeZone } from "date-fns-tz";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+const PENDING_BOOKING_TTL_SECONDS = 90;
 
 const QuerySchema = z.object({
   scope: z.enum(["day", "month"]).optional(),
@@ -113,11 +116,79 @@ type EffStatus = "DRAFT" | "PUBLISHED" | "BOOKED";
 
 function effectiveStatus(
   dbStatus: "DRAFT" | "PUBLISHED" | "BOOKED",
-  hasConfirmed: boolean
+  bookingStatus?: BookingStatus | null
 ): EffStatus {
-  if (hasConfirmed) return "BOOKED";
+  if (bookingStatus === BookingStatus.CONFIRMED) return "BOOKED";
   if (dbStatus === "PUBLISHED" || dbStatus === "BOOKED") return "PUBLISHED";
   return "DRAFT";
+}
+
+async function cleanupExpiredPendingBookings(params: {
+  partnerId?: string;
+  from: Date;
+  to: Date;
+}) {
+  const expiresBefore = new Date(
+    Date.now() - PENDING_BOOKING_TTL_SECONDS * 1000
+  );
+
+  const expiredBookings = await prisma.booking.findMany({
+    where: {
+      status: BookingStatus.PENDING,
+      createdAt: {
+        lt: expiresBefore,
+      },
+      slot: {
+        startTime: {
+          gte: params.from,
+          lt: params.to,
+        },
+        ...(params.partnerId ? { partnerId: params.partnerId } : {}),
+      },
+    },
+    select: {
+      id: true,
+      slotId: true,
+    },
+  });
+
+  if (!expiredBookings.length) return;
+
+  const bookingIds = expiredBookings.map((booking) => booking.id);
+  const slotIds = expiredBookings.map((booking) => booking.slotId);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.payment.deleteMany({
+      where: {
+        bookingId: {
+          in: bookingIds,
+        },
+      },
+    });
+
+    await tx.booking.deleteMany({
+      where: {
+        id: {
+          in: bookingIds,
+        },
+      },
+    });
+
+    await tx.slot.updateMany({
+      where: {
+        id: {
+          in: slotIds,
+        },
+        status: {
+          not: SlotStatus.DRAFT,
+        },
+      },
+      data: {
+        status: SlotStatus.PUBLISHED,
+        bookedAt: null,
+      },
+    });
+  });
 }
 
 export async function GET(
@@ -154,12 +225,31 @@ export async function GET(
         },
       };
 
+      let cleanupPartnerId: string | undefined;
+
       if (user.role === "PARTNER") {
         const partner = await resolvePartnerForRequest(user, partnerSlug);
         whereSlots.partnerId = partner.id;
+        cleanupPartnerId = partner.id;
       } else if (user.role === "ADMIN" && partnerSlug !== "all") {
-        whereSlots.partner = { slug: partnerSlug };
+        const partner = await prisma.partner.findUnique({
+          where: { slug: partnerSlug },
+          select: { id: true },
+        });
+
+        if (partner) {
+          whereSlots.partnerId = partner.id;
+          cleanupPartnerId = partner.id;
+        } else {
+          whereSlots.partner = { slug: partnerSlug };
+        }
       }
+
+      await cleanupExpiredPendingBookings({
+        partnerId: cleanupPartnerId,
+        from,
+        to,
+      });
 
       const monthSlots = await prisma.slot.findMany({
         where: whereSlots,
@@ -191,8 +281,7 @@ export async function GET(
         const key = dayKeyInAmsterdam(new Date(slot.startTime));
         if (!byDay[key]) continue;
 
-        const hasConfirmed = slot.booking?.status === "CONFIRMED";
-        const eff = effectiveStatus(slot.status as EffStatus, hasConfirmed);
+        const eff = effectiveStatus(slot.status as EffStatus, slot.booking?.status);
 
         if (eff === "BOOKED") {
           byDay[key].BOOKED++;
@@ -254,6 +343,12 @@ export async function GET(
     const from = startOfDayUtc(q.day);
     const to = startOfNextDayUtc(q.day);
 
+    await cleanupExpiredPendingBookings({
+      partnerId: partner.id,
+      from,
+      to,
+    });
+
     const realAll = await prisma.slot.findMany({
       where: {
         partnerId: partner.id,
@@ -275,8 +370,7 @@ export async function GET(
     });
 
     const items = realAll.map((slot) => {
-      const hasConfirmed = slot.booking?.status === "CONFIRMED";
-      const eff = effectiveStatus(slot.status as EffStatus, hasConfirmed);
+      const eff = effectiveStatus(slot.status as EffStatus, slot.booking?.status);
 
       return {
         id: slot.id,
@@ -316,8 +410,7 @@ export async function GET(
 
     const publishedBookable = realAll
       .map((slot) => {
-        const hasConfirmed = slot.booking?.status === "CONFIRMED";
-        const eff = effectiveStatus(slot.status as EffStatus, hasConfirmed);
+        const eff = effectiveStatus(slot.status as EffStatus, slot.booking?.status);
 
         if (eff !== "PUBLISHED") return null;
 
