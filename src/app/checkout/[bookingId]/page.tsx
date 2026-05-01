@@ -87,9 +87,7 @@ async function postJSON<T>(url: string, body: any): Promise<T> {
   }
 
   if (!r.ok) {
-    throw new Error(
-      json?.error || json?.code || text || `Request mislukt (${r.status})`
-    );
+    throw new Error(json?.error || json?.code || text || `Request mislukt (${r.status})`);
   }
 
   return json as T;
@@ -125,8 +123,7 @@ export default function CheckoutPage() {
   const [dogName, setDogName] = React.useState("");
   const [dogAllergies, setDogAllergies] = React.useState("");
   const [dogFears, setDogFears] = React.useState("");
-  const [dogSocialWithPeople, setDogSocialWithPeople] =
-    React.useState<"YES" | "NO" | "">("");
+  const [dogSocialWithPeople, setDogSocialWithPeople] = React.useState<"YES" | "NO" | "">("");
   const [savingDog, setSavingDog] = React.useState(false);
   const [savedAt, setSavedAt] = React.useState<number | null>(null);
 
@@ -178,9 +175,7 @@ export default function CheckoutPage() {
             restCents: j.restAmountCents,
           },
           discount:
-            (typeof j.discountAmountCents === "number" &&
-              j.discountAmountCents > 0) ||
-            j.discountCode
+            (typeof j.discountAmountCents === "number" && j.discountAmountCents > 0) || j.discountCode
               ? {
                   code: j.discountCode?.code ?? null,
                   amountCents: Math.max(0, j.discountAmountCents ?? 0),
@@ -194,11 +189,7 @@ export default function CheckoutPage() {
           setDogAllergies(vm.dogAllergies ?? "");
           setDogFears(vm.dogFears ?? "");
           setDogSocialWithPeople(
-            vm.dogSocialWithPeople === true
-              ? "YES"
-              : vm.dogSocialWithPeople === false
-                ? "NO"
-                : ""
+            vm.dogSocialWithPeople === true ? "YES" : vm.dogSocialWithPeople === false ? "NO" : ""
           );
           setCustomerName(vm.customerName ?? "");
           setCustomerEmail(vm.customerEmail ?? "");
@@ -255,9 +246,7 @@ export default function CheckoutPage() {
           throw new Error(resp?.error || "Opslaan mislukt");
         }
 
-        setData((d) =>
-          d ? ({ ...d, customerEmail: customerEmail.trim() } as BookingVM) : d
-        );
+        setData((d) => (d ? ({ ...d, customerEmail: customerEmail.trim() } as BookingVM) : d));
         setEmailSavedAt(Date.now());
       } catch {
         setEmailError("Opslaan mislukt. Probeer opnieuw.");
@@ -286,10 +275,7 @@ export default function CheckoutPage() {
             dogName: dogName.trim() || null,
             dogAllergies: dogAllergies.trim() || null,
             dogFears: dogFears.trim() || null,
-            dogSocialWithPeople:
-              dogSocialWithPeople === ""
-                ? null
-                : dogSocialWithPeople === "YES",
+            dogSocialWithPeople: dogSocialWithPeople === "" ? null : dogSocialWithPeople === "YES",
           }),
         });
 
@@ -311,32 +297,18 @@ export default function CheckoutPage() {
 
     setApplying(true);
     setDiscountMsg(null);
+    setMsg(null);
 
     try {
-      const code = codeRaw?.trim() || null;
+      const code = codeRaw?.trim() || "";
 
-      const tryApply = async () =>
-        postJSON<any>("/api/booking/apply-discount", {
-          bookingId: data.id,
-          code,
-        });
+      const endpoint = code
+        ? `/api/booking/${encodeURIComponent(data.id)}/apply-discount`
+        : `/api/booking/${encodeURIComponent(data.id)}/remove-discount`;
 
-      const tryAlt = async () =>
-        postJSON<any>(
-          code ? "/api/booking/discount/apply" : "/api/booking/discount/clear",
-          {
-            bookingId: data.id,
-            code,
-          }
-        );
-
-      let resp: any;
-
-      try {
-        resp = await tryApply();
-      } catch {
-        resp = await tryAlt();
-      }
+      const resp = await postJSON<any>(endpoint, {
+        code,
+      });
 
       if (!resp?.ok || !resp?.booking) {
         throw new Error(resp?.error || "Kon kortingscode niet toepassen");
@@ -363,9 +335,7 @@ export default function CheckoutPage() {
           restCents: b.restAmountCents,
         },
         discount:
-          (typeof b.discountAmountCents === "number" &&
-            b.discountAmountCents > 0) ||
-          b.discountCode
+          (typeof b.discountAmountCents === "number" && b.discountAmountCents > 0) || b.discountCode
             ? {
                 code: b.discountCode?.code ?? null,
                 amountCents: Math.max(0, b.discountAmountCents ?? 0),
@@ -375,17 +345,18 @@ export default function CheckoutPage() {
 
       setData(vm);
       setCouponInput(vm.discount?.code ?? "");
-      setDiscountMsg(
-        code ? "Kortingscode toegepast ✔️" : "Kortingscode verwijderd"
-      );
-    } catch {
+      setDiscountMsg(code ? "Kortingscode toegepast ✔️" : "Kortingscode verwijderd");
+    } catch (err) {
       const typed = (couponInput || "").trim().toUpperCase();
 
-      const pretty = typed
-        ? `De kortingscode ‘${typed}’ is ongeldig of niet van toepassing op deze boeking. Controleer de spelling (hoofdletters), of vraag bij de hondenschool naar een geldige/actieve code.`
-        : "Deze kortingscode is ongeldig of niet van toepassing op deze boeking.";
+      const message =
+        err instanceof Error && err.message
+          ? err.message
+          : typed
+            ? `De kortingscode ‘${typed}’ is ongeldig of niet van toepassing op deze boeking. Controleer of de code actief is en bij deze hondenschool hoort.`
+            : "Deze kortingscode is ongeldig of niet van toepassing op deze boeking.";
 
-      setDiscountMsg(pretty);
+      setDiscountMsg(message);
     } finally {
       setApplying(false);
     }
@@ -422,9 +393,7 @@ export default function CheckoutPage() {
       window.location.assign(j.url);
     } catch (err) {
       const message =
-        err instanceof Error
-          ? err.message
-          : "Betaling starten mislukt, probeer later opnieuw.";
+        err instanceof Error ? err.message : "Betaling starten mislukt, probeer later opnieuw.";
 
       console.error("Betaling starten mislukt", err);
 
@@ -474,11 +443,7 @@ export default function CheckoutPage() {
       <Background />
 
       <div className="relative mx-auto max-w-6xl p-4 md:p-8">
-        <SimpleHeader
-          title="Bevestig jouw boeking"
-          status={data.status}
-          idLabel={data.id}
-        />
+        <SimpleHeader title="Bevestig jouw boeking" status={data.status} idLabel={data.id} />
 
         <div className="mt-6 grid gap-6 md:grid-cols-3">
           <section className="space-y-6 md:col-span-2">
@@ -487,24 +452,15 @@ export default function CheckoutPage() {
 
               <div className="mt-4 space-y-4">
                 <InfoRow label="Hondenschool" icon={<span aria-hidden>🏫</span>}>
-                  <span className="font-semibold text-white">
-                    {data.partnerName}
-                  </span>
+                  <span className="font-semibold text-white">{data.partnerName}</span>
                 </InfoRow>
 
-                <InfoRow
-                  label="Datum & tijd"
-                  icon={<IconCalendar className="h-4 w-4" />}
-                >
+                <InfoRow label="Datum & tijd" icon={<IconCalendar className="h-4 w-4" />}>
                   {fmtDateTimeNL(data.startTimeISO)}
                 </InfoRow>
 
-                <InfoRow
-                  label="Aantal deelnemers"
-                  icon={<IconUsers className="h-4 w-4" />}
-                >
-                  {data.playersCount}{" "}
-                  {data.playersCount === 1 ? "speler" : "spelers"}
+                <InfoRow label="Aantal deelnemers" icon={<IconUsers className="h-4 w-4" />}>
+                  {data.playersCount} {data.playersCount === 1 ? "speler" : "spelers"}
                 </InfoRow>
 
                 <InfoRow label="Voornaam" icon={<span aria-hidden>👤</span>}>
@@ -518,10 +474,7 @@ export default function CheckoutPage() {
                   />
                 </InfoRow>
 
-                <InfoRow
-                  label="E-mailadres"
-                  icon={<IconMail className="h-4 w-4" />}
-                >
+                <InfoRow label="E-mailadres" icon={<IconMail className="h-4 w-4" />}>
                   <div className="flex flex-col gap-1">
                     <input
                       type="email"
@@ -540,21 +493,11 @@ export default function CheckoutPage() {
                       autoComplete="email"
                     />
 
-                    <div
-                      id="email-help"
-                      className="min-h-[18px]"
-                      aria-live="polite"
-                    >
-                      {emailError && (
-                        <p className="text-[12px] text-rose-200">
-                          {emailError}
-                        </p>
-                      )}
-
+                    <div id="email-help" className="min-h-[18px]" aria-live="polite">
+                      {emailError && <p className="text-[12px] text-rose-200">{emailError}</p>}
                       {emailSaving && !emailError && (
                         <p className="text-[12px] text-stone-400">Opslaan…</p>
                       )}
-
                       {emailSavedAt && !emailError && !emailSaving && null}
                     </div>
                   </div>
@@ -581,9 +524,7 @@ export default function CheckoutPage() {
                     <select
                       value={dogSocialWithPeople}
                       onChange={(e) =>
-                        setDogSocialWithPeople(
-                          e.target.value as "YES" | "NO" | ""
-                        )
+                        setDogSocialWithPeople(e.target.value as "YES" | "NO" | "")
                       }
                       className="mt-1 h-11 w-full rounded-xl border border-white/15 bg-stone-950/70 px-3 text-sm text-white outline-none transition focus:border-pink-400 focus:ring-4 focus:ring-pink-300/30"
                     >
@@ -615,12 +556,8 @@ export default function CheckoutPage() {
                 </Field>
 
                 <div className="min-h-[18px]" aria-live="polite">
-                  {savingDog && (
-                    <p className="text-[12px] text-stone-400">Opslaan…</p>
-                  )}
-
+                  {savingDog && <p className="text-[12px] text-stone-400">Opslaan…</p>}
                   {savedAt && !savingDog && null}
-
                   {msg && <span className="text-[12px] text-rose-200">{msg}</span>}
                 </div>
               </div>
@@ -688,8 +625,7 @@ function SimpleHeader({
 
           {idLabel && (
             <p className="mt-2 text-xs text-stone-400">
-              Boekingsnummer:{" "}
-              <span className="font-semibold text-stone-200">{idLabel}</span>
+              Boekingsnummer: <span className="font-semibold text-stone-200">{idLabel}</span>
             </p>
           )}
         </div>
@@ -809,9 +745,7 @@ function Row({
       ].join(" ")}
     >
       <span>{label}</span>
-      <strong className={emphasize ? "text-white" : "text-stone-100"}>
-        {value}
-      </strong>
+      <strong className={emphasize ? "text-white" : "text-stone-100"}>{value}</strong>
     </div>
   );
 }
@@ -853,7 +787,9 @@ function PriceCard({
 }) {
   const hasDiscount = discountCents > 0;
   const isSuccess = message
-    ? message.includes("✔") || message.toLowerCase().startsWith("ok")
+    ? message.includes("✔") ||
+      message.toLowerCase().includes("toegepast") ||
+      message.toLowerCase().includes("verwijderd")
     : false;
 
   return (
@@ -870,9 +806,7 @@ function PriceCard({
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-200/90">
               Betaling
             </p>
-            <div className="mt-1 text-xl font-black tracking-tight text-white">
-              Prijs
-            </div>
+            <div className="mt-1 text-xl font-black tracking-tight text-white">Prijs</div>
           </div>
         </div>
 
@@ -897,9 +831,7 @@ function PriceCard({
 
                 <span className="font-semibold text-emerald-100">
                   Toegepast:{" "}
-                  <span className="underline decoration-dotted">
-                    {discountCode}
-                  </span>
+                  <span className="underline decoration-dotted">{discountCode}</span>
                 </span>
               </div>
 
@@ -971,7 +903,9 @@ function PriceCard({
           </p>
 
           <p className="mt-2 text-[11px] text-stone-500">
-            <a className="underline" href={`/checkout/${bookingId}/return`}></a>
+            <a className="underline" href={`/checkout/${bookingId}/return`}>
+              Terug naar betaalstatus
+            </a>
           </p>
         </div>
       </div>
