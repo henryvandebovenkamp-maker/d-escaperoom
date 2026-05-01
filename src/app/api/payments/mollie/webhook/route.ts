@@ -23,6 +23,10 @@ function mollie() {
   return createMollieClient({ apiKey });
 }
 
+function toJsonSafe(value: unknown) {
+  return JSON.parse(JSON.stringify(value));
+}
+
 function mapStatus(status?: string): PaymentStatus {
   switch (status) {
     case "open":
@@ -41,6 +45,10 @@ function mapStatus(status?: string): PaymentStatus {
     default:
       return PaymentStatus.FAILED;
   }
+}
+
+function shouldCleanupTemporaryBooking(status?: string) {
+  return status === "failed" || status === "canceled" || status === "expired";
 }
 
 async function getMolliePaymentId(req: NextRequest) {
@@ -87,7 +95,7 @@ export async function POST(req: NextRequest) {
       : 0;
 
     const currency = molliePayment.amount?.currency ?? "EUR";
-    const rawPayload = JSON.parse(JSON.stringify(molliePayment));
+    const rawPayload = toJsonSafe(molliePayment);
 
     if (!bookingId) {
       console.warn("[mollie/webhook] payment zonder bookingId metadata", {
@@ -111,6 +119,67 @@ export async function POST(req: NextRequest) {
       console.warn("[mollie/webhook] booking niet gevonden", {
         bookingId,
         paymentId: molliePayment.id,
+      });
+
+      return NextResponse.json({ ok: true }, { status: 200 });
+    }
+
+    if (shouldCleanupTemporaryBooking(molliePayment.status)) {
+      await prisma.$transaction(async (tx) => {
+        const freshBooking = await tx.booking.findUnique({
+          where: { id: booking.id },
+          select: {
+            id: true,
+            status: true,
+            slotId: true,
+          },
+        });
+
+        if (!freshBooking) return;
+
+        if (freshBooking.status !== BookingStatus.PENDING) {
+          await tx.payment.upsert({
+            where: { providerPaymentId: molliePayment.id },
+            create: {
+              bookingId: freshBooking.id,
+              provider: PaymentProvider.MOLLIE,
+              type: PaymentType.DEPOSIT,
+              status: mappedStatus,
+              providerPaymentId: molliePayment.id,
+              method: (molliePayment as any)?.method ?? null,
+              rawPayload,
+              currency,
+              amountCents,
+              paidAt,
+            },
+            update: {
+              status: mappedStatus,
+              method: (molliePayment as any)?.method ?? null,
+              rawPayload,
+              currency,
+              amountCents,
+              paidAt,
+            },
+          });
+
+          return;
+        }
+
+        await tx.payment.deleteMany({
+          where: { bookingId: freshBooking.id },
+        });
+
+        await tx.booking.delete({
+          where: { id: freshBooking.id },
+        });
+
+        await tx.slot.update({
+          where: { id: freshBooking.slotId },
+          data: {
+            status: SlotStatus.PUBLISHED,
+            bookedAt: null,
+          },
+        });
       });
 
       return NextResponse.json({ ok: true }, { status: 200 });
@@ -165,9 +234,7 @@ export async function POST(req: NextRequest) {
 
       if (!freshBooking) return;
 
-      if (freshBooking.status === BookingStatus.CONFIRMED) {
-        return;
-      }
+      if (freshBooking.status === BookingStatus.CONFIRMED) return;
 
       if (freshBooking.status !== BookingStatus.PENDING) {
         console.warn("[mollie/webhook] betaalde betaling voor niet-PENDING booking", {
@@ -179,17 +246,13 @@ export async function POST(req: NextRequest) {
         return;
       }
 
-      if (!freshBooking.slot) {
-        console.warn("[mollie/webhook] booking zonder slot", {
-          bookingId: freshBooking.id,
-          paymentId: molliePayment.id,
-        });
+      if (!freshBooking.slot) return;
 
-        return;
-      }
-
-      if (freshBooking.slot.status !== SlotStatus.PUBLISHED) {
-        console.warn("[mollie/webhook] slot niet meer publiceerbaar", {
+      if (
+        freshBooking.slot.status !== SlotStatus.PUBLISHED &&
+        freshBooking.slot.status !== SlotStatus.BOOKED
+      ) {
+        console.warn("[mollie/webhook] slot niet beschikbaar voor bevestiging", {
           bookingId: freshBooking.id,
           slotId: freshBooking.slot.id,
           slotStatus: freshBooking.slot.status,
@@ -227,7 +290,6 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("[mollie/webhook] error", err);
 
-    // Mollie verwacht 200, anders blijft hij retried pushen.
     return NextResponse.json({ ok: true }, { status: 200 });
   }
 }
