@@ -1,10 +1,6 @@
 // PATH: src/app/api/booking/create/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import {
-  BookingStatus,
-  Prisma,
-  SlotStatus,
-} from "@prisma/client";
+import { BookingStatus, Prisma, SlotStatus } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { z } from "zod";
 
@@ -191,19 +187,6 @@ export async function POST(req: NextRequest) {
           };
         }
 
-        if (slot.status !== SlotStatus.PUBLISHED) {
-          return {
-            status: 409,
-            body: {
-              ok: false,
-              error:
-                slot.status === SlotStatus.BOOKED
-                  ? "Tijdslot is al geboekt"
-                  : "Tijdslot is niet beschikbaar",
-            },
-          };
-        }
-
         const existing = await tx.booking.findUnique({
           where: { slotId: slot.id },
           select: {
@@ -303,6 +286,34 @@ export async function POST(req: NextRequest) {
           });
         }
 
+        const currentSlot = await tx.slot.findUnique({
+          where: { id: slot.id },
+          select: {
+            id: true,
+            status: true,
+          },
+        });
+
+        if (!currentSlot) {
+          return {
+            status: 404,
+            body: { ok: false, error: "Tijdslot niet gevonden" },
+          };
+        }
+
+        if (currentSlot.status !== SlotStatus.PUBLISHED) {
+          return {
+            status: 409,
+            body: {
+              ok: false,
+              error:
+                currentSlot.status === SlotStatus.BOOKED
+                  ? "Tijdslot is al geboekt"
+                  : "Tijdslot is niet beschikbaar",
+            },
+          };
+        }
+
         let customer = await tx.customer.findFirst({
           where: { email: normalizedEmail },
           select: { id: true },
@@ -334,7 +345,7 @@ export async function POST(req: NextRequest) {
         const booking = await tx.booking.create({
           data: {
             partnerId: partner.id,
-            slotId: slot.id,
+            slotId: currentSlot.id,
             customerId: customer.id,
 
             status: BookingStatus.PENDING,
@@ -380,8 +391,8 @@ export async function POST(req: NextRequest) {
               slotId: booking.slotId,
             },
             slot: {
-              id: slot.id,
-              status: SlotStatus.PUBLISHED,
+              id: currentSlot.id,
+              status: currentSlot.status,
             },
             expiresInSeconds: PENDING_BOOKING_TTL_SECONDS,
             expiresInMinutes: PENDING_BOOKING_TTL_SECONDS / 60,
