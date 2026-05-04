@@ -234,6 +234,11 @@ model Booking {
   dogTrackingLevel     String?        // values: "NONE" | "BEGINNER" | "AMATEUR" | "PRO"
   dogSocialWithPeople Boolean?
 
+  // Algemene voorwaarden akkoord
+  acceptedTerms        Boolean        @default(false)
+  acceptedTermsAt      DateTime?
+  acceptedTermsVersion String?
+
 
   // ---- Giftcard-registratie (optioneel) ----
   giftCardId           String?

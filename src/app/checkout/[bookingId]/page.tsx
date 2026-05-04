@@ -137,6 +137,7 @@ export default function CheckoutPage() {
   const [discountMsg, setDiscountMsg] = React.useState<string | null>(null);
   const [applying, setApplying] = React.useState(false);
 
+  const [acceptedTerms, setAcceptedTerms] = React.useState(false);
   const [payLoading, setPayLoading] = React.useState(false);
 
   React.useEffect(() => {
@@ -175,7 +176,8 @@ export default function CheckoutPage() {
             restCents: j.restAmountCents,
           },
           discount:
-            (typeof j.discountAmountCents === "number" && j.discountAmountCents > 0) || j.discountCode
+            (typeof j.discountAmountCents === "number" && j.discountAmountCents > 0) ||
+            j.discountCode
               ? {
                   code: j.discountCode?.code ?? null,
                   amountCents: Math.max(0, j.discountAmountCents ?? 0),
@@ -189,7 +191,11 @@ export default function CheckoutPage() {
           setDogAllergies(vm.dogAllergies ?? "");
           setDogFears(vm.dogFears ?? "");
           setDogSocialWithPeople(
-            vm.dogSocialWithPeople === true ? "YES" : vm.dogSocialWithPeople === false ? "NO" : ""
+            vm.dogSocialWithPeople === true
+              ? "YES"
+              : vm.dogSocialWithPeople === false
+                ? "NO"
+                : ""
           );
           setCustomerName(vm.customerName ?? "");
           setCustomerEmail(vm.customerEmail ?? "");
@@ -306,9 +312,7 @@ export default function CheckoutPage() {
         ? `/api/booking/${encodeURIComponent(data.id)}/apply-discount`
         : `/api/booking/${encodeURIComponent(data.id)}/remove-discount`;
 
-      const resp = await postJSON<any>(endpoint, {
-        code,
-      });
+      const resp = await postJSON<any>(endpoint, { code });
 
       if (!resp?.ok || !resp?.booking) {
         throw new Error(resp?.error || "Kon kortingscode niet toepassen");
@@ -335,7 +339,8 @@ export default function CheckoutPage() {
           restCents: b.restAmountCents,
         },
         discount:
-          (typeof b.discountAmountCents === "number" && b.discountAmountCents > 0) || b.discountCode
+          (typeof b.discountAmountCents === "number" && b.discountAmountCents > 0) ||
+          b.discountCode
             ? {
                 code: b.discountCode?.code ?? null,
                 amountCents: Math.max(0, b.discountAmountCents ?? 0),
@@ -364,14 +369,19 @@ export default function CheckoutPage() {
 
   const canPay = React.useMemo(() => {
     const err = validateEmail(customerEmail);
-    return !err && !emailSaving && !!data?.id;
-  }, [customerEmail, emailSaving, data?.id]);
+    return !err && !emailSaving && !!data?.id && acceptedTerms;
+  }, [customerEmail, emailSaving, data?.id, acceptedTerms]);
 
   async function handlePayNow(id: string) {
     try {
       const err = validateEmail(customerEmail);
       setEmailError(err);
       if (err) return;
+
+      if (!acceptedTerms) {
+        setMsg("Je moet akkoord gaan met de algemene voorwaarden voordat je kunt betalen.");
+        return;
+      }
 
       setMsg(null);
       setPayLoading(true);
@@ -384,6 +394,7 @@ export default function CheckoutPage() {
         error?: string;
       }>("/api/payments/mollie/create", {
         bookingId: id,
+        acceptedTerms,
       });
 
       if (!j?.ok || !j?.url) {
@@ -582,6 +593,8 @@ export default function CheckoutPage() {
               canPay={canPay}
               payLoading={payLoading}
               bookingId={data.id}
+              acceptedTerms={acceptedTerms}
+              onAcceptedTermsChange={setAcceptedTerms}
             />
           </aside>
         </div>
@@ -767,6 +780,8 @@ function PriceCard({
   canPay,
   payLoading,
   bookingId,
+  acceptedTerms,
+  onAcceptedTermsChange,
 }: {
   total: number;
   deposit: number;
@@ -784,6 +799,8 @@ function PriceCard({
   canPay: boolean;
   payLoading: boolean;
   bookingId: string;
+  acceptedTerms: boolean;
+  onAcceptedTermsChange: (value: boolean) => void;
 }) {
   const hasDiscount = discountCents > 0;
   const isSuccess = message
@@ -887,6 +904,29 @@ function PriceCard({
           )}
         </div>
 
+        <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 bg-black/25 p-3 text-sm text-stone-200 transition hover:border-rose-300/30 hover:bg-black/35">
+          <input
+            type="checkbox"
+            checked={acceptedTerms}
+            onChange={(e) => onAcceptedTermsChange(e.target.checked)}
+            className="mt-1 h-4 w-4 rounded border-white/20 bg-stone-950 text-pink-600 focus:ring-pink-300"
+          />
+
+          <span>
+            Ik ga akkoord met de{" "}
+            <a
+              href="/algemene-voorwaarden"
+              target="_blank"
+              rel="noreferrer"
+              className="font-semibold text-rose-200 underline underline-offset-2 hover:text-rose-100"
+              onClick={(e) => e.stopPropagation()}
+            >
+              algemene voorwaarden
+            </a>
+            .
+          </span>
+        </label>
+
         <div className="mt-4">
           <button
             type="button"
@@ -897,6 +937,12 @@ function PriceCard({
           >
             {payLoading ? "Bezig…" : "Betalen"}
           </button>
+
+          {!acceptedTerms && (
+            <p className="mt-2 text-[11px] leading-5 text-rose-200">
+              Je kunt pas betalen nadat je akkoord bent gegaan met de algemene voorwaarden.
+            </p>
+          )}
 
           <p className="mt-3 text-[11px] leading-5 text-stone-400">
             Je betaalt nu de aanbetaling; het restant betaal je bij de hondenschool.

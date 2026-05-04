@@ -120,6 +120,7 @@ export async function POST(req: NextRequest) {
       slotId: raw.slotId,
       startTimeISO: raw.startTimeISO,
       players: raw.players ?? raw.playersCount,
+
       customer: raw.customer,
       dog:
         raw.dog ??
@@ -362,6 +363,10 @@ export async function POST(req: NextRequest) {
             dogAllergies: data.dog?.allergies ?? null,
             dogFears: data.dog?.fears ?? null,
             dogTrackingLevel: data.dog?.trackingLevel ?? null,
+
+            acceptedTerms: false,
+            acceptedTermsAt: null,
+            acceptedTermsVersion: null,
 
             confirmedAt: null,
             cancelledAt: null,

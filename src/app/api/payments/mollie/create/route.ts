@@ -17,6 +17,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const PENDING_BOOKING_TTL_MINUTES = 30;
+const TERMS_VERSION = "2026-05";
 
 function mollie() {
   const apiKey = process.env.MOLLIE_API_KEY;
@@ -41,11 +42,23 @@ function toJsonSafe(value: unknown) {
 
 export async function POST(req: Request) {
   try {
-    const { bookingId } = await req.json();
+    const body = await req.json();
+    const { bookingId, acceptedTerms } = body;
 
     if (!bookingId || typeof bookingId !== "string") {
       return NextResponse.json(
         { ok: false, code: "MISSING_BOOKING_ID", error: "bookingId ontbreekt" },
+        { status: 400 }
+      );
+    }
+
+    if (acceptedTerms !== true) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "TERMS_NOT_ACCEPTED",
+          error: "Je moet akkoord gaan met de algemene voorwaarden.",
+        },
         { status: 400 }
       );
     }
@@ -177,6 +190,15 @@ export async function POST(req: Request) {
         { status: 409 }
       );
     }
+
+    await prisma.booking.update({
+      where: { id: booking.id },
+      data: {
+        acceptedTerms: true,
+        acceptedTermsAt: new Date(),
+        acceptedTermsVersion: TERMS_VERSION,
+      },
+    });
 
     const paidPayment = booking.payments.find(
       (payment) => payment.status === PaymentStatus.PAID
