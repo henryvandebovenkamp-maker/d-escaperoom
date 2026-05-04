@@ -1,31 +1,28 @@
 // PATH: src/app/api/agenda/route.ts
 import { NextResponse, type NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
-import { BookingStatus, PaymentStatus, PaymentType } from "@prisma/client";
+import {
+  BookingStatus,
+  PaymentStatus,
+  PaymentType,
+  type Prisma,
+} from "@prisma/client";
 import jwt from "jsonwebtoken";
 
-/** Query:
- *  ?scope=day|week|month
- *  ?date=YYYY-MM-DD
- *  ?partner=<slug>        (ADMIN-only; PARTNER wordt genegeerd/afgewezen)
- *  ?includeCancelled=true|false
- */
-
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-/* ================================
-   Auth helpers
-================================== */
 type Role = "ADMIN" | "PARTNER";
 type JWTPayload = { sub: string; role: Role; [k: string]: unknown };
 
 const COOKIE_PRIMARY = process.env.SESSION_COOKIE_NAME || "session";
-const COOKIE_LEGACY  = "de_session";
+const COOKIE_LEGACY = "de_session";
 const SECRET = process.env.SESSION_SECRET || "";
 
 function readCookieFromHeader(req: Request, name: string): string | null {
   const cookie = req.headers.get("cookie") || "";
-  const match = cookie.split(/;\s*/).find(c => c.startsWith(name + "="));
+  const match = cookie.split(/;\s*/).find((c) => c.startsWith(name + "="));
   return match ? decodeURIComponent(match.split("=").slice(1).join("=")) : null;
 }
 
@@ -33,7 +30,9 @@ function readSession(req: Request): JWTPayload | null {
   const token =
     readCookieFromHeader(req, COOKIE_PRIMARY) ||
     readCookieFromHeader(req, COOKIE_LEGACY);
-  if (!token) return null;
+
+  if (!token || !SECRET) return null;
+
   try {
     const payload = jwt.verify(token, SECRET) as JWTPayload;
     if (!payload?.sub || !payload?.role) return null;
@@ -43,115 +42,106 @@ function readSession(req: Request): JWTPayload | null {
   }
 }
 
-/* ================================
-   Date helpers
-================================== */
 function parseDateRange(scopeRaw: string | null, ymd: string | null) {
   const scope = (scopeRaw ?? "day").toLowerCase();
   const [Y, M, D] = (ymd ?? "").split("-").map(Number);
-  const pivot = Number.isFinite(Y) ? new Date(Y!, (M ?? 1) - 1, D ?? 1) : new Date();
+  const pivot = Number.isFinite(Y)
+    ? new Date(Y, (M ?? 1) - 1, D ?? 1)
+    : new Date();
 
-  let start = new Date(pivot), end = new Date(pivot);
-  switch (scope) {
-    case "week": {
-      const dow = pivot.getDay();                // 0=zo..6=za
-      const diff = dow === 0 ? -6 : 1 - dow;     // maandag-start
-      start = new Date(pivot); start.setDate(pivot.getDate() + diff);
-      end = new Date(start);   end.setDate(start.getDate() + 7);
-      break;
-    }
-    case "month": {
-      start = new Date(pivot.getFullYear(), pivot.getMonth(), 1);
-      end   = new Date(pivot.getFullYear(), pivot.getMonth() + 1, 1);
-      break;
-    }
-    default: { // day
-      start = new Date(pivot.getFullYear(), pivot.getMonth(), pivot.getDate());
-      end   = new Date(start); end.setDate(start.getDate() + 1);
-    }
+  let start = new Date(pivot);
+  let end = new Date(pivot);
+
+  if (scope === "week") {
+    const dow = pivot.getDay();
+    const diff = dow === 0 ? -6 : 1 - dow;
+    start = new Date(pivot);
+    start.setDate(pivot.getDate() + diff);
+    end = new Date(start);
+    end.setDate(start.getDate() + 7);
+  } else if (scope === "month") {
+    start = new Date(pivot.getFullYear(), pivot.getMonth(), 1);
+    end = new Date(pivot.getFullYear(), pivot.getMonth() + 1, 1);
+  } else {
+    start = new Date(pivot.getFullYear(), pivot.getMonth(), pivot.getDate());
+    end = new Date(start);
+    end.setDate(start.getDate() + 1);
   }
+
   return { start, end };
 }
 
-const toEUR = (cents?: number | null) =>
-  typeof cents === "number" && isFinite(cents) ? +(cents / 100).toFixed(2) : null;
-
-/* ================================
-   GET
-================================== */
 export async function GET(req: NextRequest) {
   try {
-    // ---- AUTH ----
     const session = readSession(req);
+
     if (!session) {
-      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { ok: false, error: "Unauthorized" },
+        { status: 401 }
+      );
     }
-    const role: Role = session.role;
-    const subject = String(session.sub); // kan partner.id of partner.slug zijn
+
+    const role = session.role;
+    const subject = String(session.sub);
 
     const { searchParams } = new URL(req.url);
     const scope = searchParams.get("scope");
     const date = searchParams.get("date");
-    const includeCancelled = (searchParams.get("includeCancelled") ?? "false").toLowerCase() === "true";
+    const includeCancelled =
+      (searchParams.get("includeCancelled") ?? "false").toLowerCase() ===
+      "true";
 
-    // ADMIN mag filteren op partner via query/header; PARTNER niet.
     const partnerSlugQuery = (searchParams.get("partner") || "").trim() || null;
     const partnerSlugHeader =
-      (req.headers.get("x-partner") || req.headers.get("x-partner-slug") || "").trim() || null;
-
-    // Definitieve partnerFilterContext:
-    // - PARTNER: forceer op eigen subject (slug of id)
-    // - ADMIN: gebruik ?partner= of header; anders geen partnerfilter (alle partners)
-    let partnerFilterContext:
-      | { mode: "BY_ID_OR_SLUG"; value: string }  // PARTNER → subject (id of slug)
-      | { mode: "BY_SLUG"; value: string }        // ADMIN → expliciete slug
-      | { mode: "ALL" }                           // ADMIN → alles
-      = { mode: "ALL" };
-
-    if (role === "PARTNER") {
-      // Als PARTNER tóch een ?partner= meestuurt en die wijkt af van eigen subject → 403
-      if (partnerSlugQuery && partnerSlugQuery !== subject) {
-        return NextResponse.json({ ok: false, error: "Forbidden: partner scope mismatch" }, { status: 403 });
-      }
-      partnerFilterContext = { mode: "BY_ID_OR_SLUG", value: subject };
-    } else {
-      // ADMIN
-      const chosen = partnerSlugQuery || partnerSlugHeader;
-      partnerFilterContext = chosen ? { mode: "BY_SLUG", value: chosen } : { mode: "ALL" };
-    }
+      (req.headers.get("x-partner") ||
+        req.headers.get("x-partner-slug") ||
+        "")
+        .trim() || null;
 
     const { start, end } = parseDateRange(scope, date);
 
-    // ---- WHERE-CLAUSE op basis van rol/context ----
-    const baseBookingWhere: any = {
-      ...(includeCancelled ? {} : { status: { not: BookingStatus.CANCELLED } }),
-      slot: { startTime: { gte: start, lt: end } },
+    const statusFilter: Prisma.BookingWhereInput["status"] = includeCancelled
+      ? { in: [BookingStatus.CONFIRMED, BookingStatus.CANCELLED] }
+      : BookingStatus.CONFIRMED;
+
+    const baseWhere: Prisma.BookingWhereInput = {
+      status: statusFilter,
+      slot: {
+        startTime: {
+          gte: start,
+          lt: end,
+        },
+      },
     };
 
-    let where: any = baseBookingWhere;
+    let where: Prisma.BookingWhereInput = baseWhere;
 
-    if (partnerFilterContext.mode === "BY_ID_OR_SLUG") {
-      // PARTNER: subject kan ID of SLUG zijn → filter met OR
+    if (role === "PARTNER") {
       where = {
-        ...baseBookingWhere,
+        ...baseWhere,
         OR: [
-          { slot: { partner: { id: partnerFilterContext.value } } },
-          { slot: { partner: { slug: partnerFilterContext.value } } },
-          { partner: { id: partnerFilterContext.value } },   // legacy fallback
-          { partner: { slug: partnerFilterContext.value } }, // legacy fallback
-        ],
-      };
-    } else if (partnerFilterContext.mode === "BY_SLUG") {
-      // ADMIN met expliciete slug
-      where = {
-        ...baseBookingWhere,
-        OR: [
-          { slot: { partner: { slug: partnerFilterContext.value } } },
-          { partner: { slug: partnerFilterContext.value } }, // legacy fallback
+          { partner: { id: subject } },
+          { partner: { slug: subject } },
+          { slot: { partner: { id: subject } } },
+          { slot: { partner: { slug: subject } } },
         ],
       };
     }
-    // ADMIN ALL → where blijft baseBookingWhere
+
+    if (role === "ADMIN") {
+      const chosenPartnerSlug = partnerSlugQuery || partnerSlugHeader;
+
+      if (chosenPartnerSlug) {
+        where = {
+          ...baseWhere,
+          OR: [
+            { partner: { slug: chosenPartnerSlug } },
+            { slot: { partner: { slug: chosenPartnerSlug } } },
+          ],
+        };
+      }
+    }
 
     const rows = await prisma.booking.findMany({
       where,
@@ -159,70 +149,168 @@ export async function GET(req: NextRequest) {
         id: true,
         status: true,
         currency: true,
+
         totalAmountCents: true,
         depositAmountCents: true,
-        depositPaidAt: true,
+        restAmountCents: true,
+        discountAmountCents: true,
+        giftCardAppliedCents: true,
+
         playersCount: true,
         dogName: true,
         dogAllergies: true,
         dogFears: true,
+        dogTrackingLevel: true,
+        dogSocialWithPeople: true,
+
+        confirmedAt: true,
+        cancelledAt: true,
+        depositPaidAt: true,
+        createdAt: true,
 
         slot: {
           select: {
+            id: true,
             startTime: true,
             endTime: true,
-            partner: { select: { name: true, slug: true, id: true } },
+            status: true,
+            partner: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+                city: true,
+              },
+            },
           },
         },
-        partner: { select: { name: true, slug: true, id: true } }, // legacy fallback
-        customer: { select: { name: true } },
-        payments: { select: { amountCents: true, status: true, type: true } },
+
+        partner: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            city: true,
+          },
+        },
+
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            locale: true,
+          },
+        },
+
+        payments: {
+          where: {
+            type: PaymentType.DEPOSIT,
+          },
+          select: {
+            id: true,
+            status: true,
+            type: true,
+            amountCents: true,
+            currency: true,
+            provider: true,
+            providerPaymentId: true,
+            method: true,
+            paidAt: true,
+            createdAt: true,
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+        },
       },
-      orderBy: [{ slot: { startTime: "asc" } }],
+      orderBy: [
+        {
+          slot: {
+            startTime: "asc",
+          },
+        },
+      ],
     });
 
-    const items = rows
-      .filter(b => !!b.slot?.startTime)
-      .map(b => {
-        const startISO = b.slot!.startTime.toISOString();
-        const endISO   = b.slot?.endTime ? b.slot.endTime.toISOString() : null;
+    const items = rows.map((b) => {
+      const partner = b.slot?.partner ?? b.partner;
 
-        const paidDepositCents = b.payments.reduce((sum, p) => {
-          const isPaidDeposit = p.type === PaymentType.DEPOSIT && p.status === PaymentStatus.PAID;
-          return sum + (isPaidDeposit ? (p.amountCents ?? 0) : 0);
-        }, 0);
+      const paidDepositCents = b.payments.reduce((sum, payment) => {
+        if (payment.status !== PaymentStatus.PAID) return sum;
+        return sum + payment.amountCents;
+      }, 0);
 
-        const depositPaidEffective =
-          paidDepositCents > 0 ? paidDepositCents : (b.depositPaidAt ? (b.depositAmountCents ?? 0) : 0);
+      const latestDepositPayment = b.payments[0] ?? null;
+      const latestPaidDepositPayment =
+        b.payments.find((payment) => payment.status === PaymentStatus.PAID) ??
+        null;
 
-        const customerName = b.customer?.name ?? null;
-        const allergyBits = [b.dogAllergies, b.dogFears].filter(Boolean) as string[];
-        const allergies = allergyBits.length ? allergyBits.join(" · ") : null;
+      return {
+        id: b.id,
+        bookingId: b.id,
 
-        return {
-          id: b.id,
-          partnerId: b.slot?.partner?.id ?? b.partner?.id ?? null,
-          partnerSlug: b.slot?.partner?.slug ?? b.partner?.slug ?? null,
-          partnerName: b.slot?.partner?.name ?? b.partner?.name ?? null,
+        slotId: b.slot.id,
+        slotStatus: b.slot.status,
+        startTime: b.slot.startTime.toISOString(),
+        endTime: b.slot.endTime.toISOString(),
 
-          startTime: startISO,
-          endTime: endISO,
+        partnerId: partner.id,
+        partnerSlug: partner.slug,
+        partnerName: partner.name,
+        partnerCity: partner.city,
 
-          playerCount: b.playersCount ?? null,
-          dogName: b.dogName ?? null,
+        bookingStatus: b.status,
+        confirmedAt: b.confirmedAt?.toISOString() ?? null,
+        cancelledAt: b.cancelledAt?.toISOString() ?? null,
+        depositPaidAt: b.depositPaidAt?.toISOString() ?? null,
+        createdAt: b.createdAt.toISOString(),
 
-          customerName,
-          allergies,
+        customerId: b.customer.id,
+        customerName: b.customer.name,
+        customerEmail: b.customer.email,
+        customerPhone: b.customer.phone,
+        customerLocale: b.customer.locale,
 
-          totalAmount: toEUR(b.totalAmountCents),
-          depositPaidAmount: toEUR(depositPaidEffective),
-          currency: b.currency ?? "EUR",
-        };
-      });
+        playersCount: b.playersCount,
+        dogName: b.dogName,
+        dogAllergies: b.dogAllergies,
+        dogFears: b.dogFears,
+        dogTrackingLevel: b.dogTrackingLevel,
+        dogSocialWithPeople: b.dogSocialWithPeople,
 
-    return NextResponse.json({ items });
-  } catch (e: any) {
+        currency: b.currency,
+        totalAmountCents: b.totalAmountCents,
+        depositAmountCents: b.depositAmountCents,
+        restAmountCents: b.restAmountCents,
+        discountAmountCents: b.discountAmountCents,
+        giftCardAppliedCents: b.giftCardAppliedCents,
+
+        depositPaidAmountCents: paidDepositCents,
+        latestDepositPaymentStatus: latestDepositPayment?.status ?? null,
+        latestDepositPaymentMethod: latestDepositPayment?.method ?? null,
+        latestDepositPaymentPaidAt:
+          latestPaidDepositPayment?.paidAt?.toISOString() ?? null,
+
+        // tijdelijke backwards compatibility voor je huidige agenda-page
+        playerCount: b.playersCount,
+        allergies: [b.dogAllergies, b.dogFears].filter(Boolean).join(" · ") || null,
+        totalAmount: b.totalAmountCents / 100,
+        depositPaidAmount: paidDepositCents / 100,
+      };
+    });
+
+    return NextResponse.json({ ok: true, items });
+  } catch (e: unknown) {
     console.error("GET /api/agenda error:", e);
-    return NextResponse.json({ ok: false, error: e?.message ?? "Server error" }, { status: 500 });
+
+    return NextResponse.json(
+      {
+        ok: false,
+        error: e instanceof Error ? e.message : "Server error",
+      },
+      { status: 500 }
+    );
   }
 }
