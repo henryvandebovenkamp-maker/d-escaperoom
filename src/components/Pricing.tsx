@@ -44,7 +44,7 @@ export default function Pricing() {
         <div className="mx-auto mt-10 max-w-xl rounded-[2rem] border border-white/10 bg-white/5 p-5 shadow-2xl shadow-black/30 backdrop-blur-md sm:p-7">
           <div className="rounded-[1.5rem] border border-white/10 bg-black/35 p-6 text-center">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-200/90">
-              Vaste prijs per boeking
+              prijs
             </p>
 
             <div className="mt-4">
