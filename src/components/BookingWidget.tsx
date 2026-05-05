@@ -8,6 +8,21 @@ import { trackEvent } from "@/lib/analytics";
 
 const APP_TIMEZONE = "Europe/Amsterdam";
 
+type DayAvailabilityStatus = "AVAILABLE" | "FULL" | "NO_SLOTS";
+
+function getDayAvailability(counts?: DayCounts): DayAvailabilityStatus {
+  if (!counts || counts.total === 0) return "NO_SLOTS";
+  if (counts.published > 0) return "AVAILABLE";
+  if (counts.booked > 0) return "FULL";
+  return "NO_SLOTS";
+}
+
+function dayStatusLabel(status: DayAvailabilityStatus) {
+  if (status === "AVAILABLE") return "Beschikbaar";
+  if (status === "FULL") return "Volgeboekt";
+  return "Nog geen tijden";
+}
+
 function isAbortError(err: unknown): boolean {
   return (
     (err as any)?.name === "AbortError" ||
@@ -23,7 +38,12 @@ type SlotItem = {
   status: "DRAFT" | "PUBLISHED" | "BOOKED";
 };
 
-type DayCounts = { published: number; booked: number; total: number };
+type DayCounts = {
+  published: number;
+  booked: number;
+  total: number;
+  dayStatus?: DayAvailabilityStatus;
+};
 
 type PartnerOption = {
   id: string;
@@ -235,15 +255,20 @@ async function fetchCalendarCounts(
 
       for (const row of items) {
         const dayISO: string | undefined =
-          row?.dayISO ?? row?.day ?? row?.dateISO;
+          row?.dayISO ?? row?.day ?? row?.dateISO ?? row?.date;
         if (!dayISO) continue;
 
         const c = row?.counts ?? {};
-        const published = Number(c.published ?? row?.published ?? 0);
-        const booked = Number(c.booked ?? row?.booked ?? 0);
-        const total = Number(c.total ?? published + booked);
+        const published = Number(c.published ?? row?.published ?? row?.publishedCount ?? 0);
+        const booked = Number(c.booked ?? row?.booked ?? row?.bookedCount ?? 0);
+        const total = Number(c.total ?? row?.total ?? published + booked);
 
-        out[dayISO] = { published, booked, total };
+        out[dayISO] = {
+          published,
+          booked,
+          total,
+          dayStatus: row?.dayStatus,
+        };
       }
 
       return out;
@@ -274,22 +299,26 @@ async function fetchCalendarCounts(
 
     const data = await res.json();
 
-    if (Array.isArray(data.days)) {
-      for (const row of data.days) {
-        const dayISO = row.day ?? row.date;
-        if (!dayISO) continue;
+    const rows = Array.isArray(data.days)
+      ? data.days
+      : Array.isArray(data.publishedDays)
+      ? data.publishedDays
+      : [];
 
-        const published = Number(row.PUBLISHED ?? row.publishedCount ?? 0);
-        const booked = Number(row.BOOKED ?? row.bookedCount ?? 0);
+    for (const row of rows) {
+      const dayISO = row.day ?? row.date;
+      if (!dayISO) continue;
 
-        out[dayISO] = { published, booked, total: published + booked };
-      }
-    } else if (Array.isArray(data.publishedDays)) {
-      for (const row of data.publishedDays) {
-        const dayISO = row.date;
-        const published = Number(row.publishedCount ?? 0);
-        out[dayISO] = { published, booked: 0, total: published };
-      }
+      const published = Number(row.PUBLISHED ?? row.publishedCount ?? 0);
+      const booked = Number(row.BOOKED ?? row.bookedCount ?? 0);
+      const total = Number(row.total ?? published + booked);
+
+      out[dayISO] = {
+        published,
+        booked,
+        total,
+        dayStatus: row.dayStatus,
+      };
     }
   }
 
@@ -302,7 +331,11 @@ async function fetchDaySlots(
   partnerSlug: string,
   dayISO: string,
   signal?: AbortSignal
-): Promise<{ published: SlotItem[]; bookedCount: number }> {
+): Promise<{
+  published: SlotItem[];
+  bookedCount: number;
+  dayStatus?: DayAvailabilityStatus;
+}> {
   const base = `/api/public/slots/${encodeURIComponent(partnerSlug)}/list`;
 
   const candidates = [
@@ -422,11 +455,14 @@ async function fetchDaySlots(
       status: "PUBLISHED" as const,
     }));
 
-  const bookedCount = normalized.filter((row) => row.status === "BOOKED").length;
+  const bookedCount =
+    Number(payload?.counts?.BOOKED ?? payload?.counts?.booked ?? NaN) ||
+    normalized.filter((row) => row.status === "BOOKED").length;
 
   return {
     published: sortSlotsByTime(published),
     bookedCount,
+    dayStatus: payload?.dayStatus,
   };
 }
 
@@ -469,8 +505,6 @@ export default function BookingWidget({
   const [price, setPrice] = React.useState<PriceInfo | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
   const [msg, setMsg] = React.useState<string | null>(null);
-
-  const timesRef = React.useRef<HTMLDivElement>(null);
 
   const selectedPartner = React.useMemo(
     () => partners.find((p) => p.slug === partnerSlug) || null,
@@ -576,7 +610,7 @@ export default function BookingWidget({
     const ac = new AbortController();
 
     fetchDaySlots(partnerSlug, selectedDayISO, ac.signal)
-      .then(({ published, bookedCount }) => {
+      .then(({ published, bookedCount, dayStatus }) => {
         const filtered = filterFutureSlotsForDay(selectedDayISO, published);
         setSlots(filtered);
 
@@ -585,7 +619,12 @@ export default function BookingWidget({
 
         setDayStats((prev) => ({
           ...prev,
-          [selectedDayISO]: { published: pub, booked: boo, total: pub + boo },
+          [selectedDayISO]: {
+            published: pub,
+            booked: boo,
+            total: pub + boo,
+            dayStatus,
+          },
         }));
       })
       .catch((err) => {
@@ -698,26 +737,40 @@ export default function BookingWidget({
     () => buildCalendarDays(viewMonth),
     [viewMonth]
   );
+
   const selectedDate = parseISODateOnly(selectedDayISO);
+
   const filteredSlots = React.useMemo(
     () => filterFutureSlotsForDay(selectedDayISO, slots),
     [slots, selectedDayISO]
   );
 
+  const selectedDayStats = dayStats[selectedDayISO];
+  const selectedDayStatus = getDayAvailability(selectedDayStats);
+
   function dotClassForDay(
     counts?: DayCounts,
     d?: Date
   ): { cls: string; label: string; hideDot?: boolean } {
-    if (d && isPastDay(d))
+    if (d && isPastDay(d)) {
       return { cls: "bg-transparent", label: "", hideDot: true };
-    const c = counts;
-    if (!c || c.total === 0)
-      return { cls: "bg-stone-500", label: "Geen tijdsloten" };
-    if (c.published === 1)
-      return { cls: "bg-orange-400", label: "Nog 1 tijdslot" };
-    if (c.published >= 2)
+    }
+
+    const status = getDayAvailability(counts);
+
+    if (status === "AVAILABLE") {
+      if ((counts?.published ?? 0) === 1) {
+        return { cls: "bg-orange-400", label: "Nog 1 tijdslot" };
+      }
+
       return { cls: "bg-emerald-400", label: "Beschikbaar" };
-    return { cls: "bg-stone-500", label: "Geen tijdsloten" };
+    }
+
+    if (status === "FULL") {
+      return { cls: "bg-purple-400", label: "Volgeboekt" };
+    }
+
+    return { cls: "bg-stone-500", label: "Nog geen tijden" };
   }
 
   function dayTintForDay(counts?: DayCounts, d?: Date) {
@@ -729,17 +782,25 @@ export default function BookingWidget({
       };
     }
 
-    const c = counts;
+    const status = getDayAvailability(counts);
 
-    if (!c || c.total === 0) {
+    if (status === "FULL") {
       return {
-        bg: "bg-white/[0.04]",
-        border: "border-white/10",
+        bg: "bg-purple-400/16",
+        border: "border-purple-300/40",
+        text: "text-purple-100",
+      };
+    }
+
+    if (status === "NO_SLOTS") {
+      return {
+        bg: "bg-stone-500/10",
+        border: "border-stone-400/20",
         text: "text-stone-300",
       };
     }
 
-    if (c.published === 1) {
+    if ((counts?.published ?? 0) === 1) {
       return {
         bg: "bg-orange-400/14",
         border: "border-orange-300/35",
@@ -747,19 +808,33 @@ export default function BookingWidget({
       };
     }
 
-    if (c.published >= 2) {
-      return {
-        bg: "bg-emerald-400/14",
-        border: "border-emerald-300/35",
-        text: "text-emerald-100",
-      };
+    return {
+      bg: "bg-emerald-400/14",
+      border: "border-emerald-300/35",
+      text: "text-emerald-100",
+    };
+  }
+
+  function selectedDayMessage() {
+    if (!partnerSlug) {
+      return "Selecteer eerst een hondenschool.";
     }
 
-    return {
-      bg: "bg-white/[0.04]",
-      border: "border-white/10",
-      text: "text-stone-300",
-    };
+    if (loadingSlots) {
+      return "Tijdsloten laden…";
+    }
+
+    if (filteredSlots.length > 0) {
+      return `${filteredSlots.length} beschikbaar ${
+        filteredSlots.length === 1 ? "tijdslot" : "tijdsloten"
+      }.`;
+    }
+
+    if (selectedDayStatus === "FULL") {
+      return "Deze dag is volledig volgeboekt. Kies een andere datum.";
+    }
+
+    return "Voor deze dag zijn nog geen tijden beschikbaar. Nieuwe tijden worden binnenkort toegevoegd.";
   }
 
   if (!mounted) {
@@ -769,49 +844,11 @@ export default function BookingWidget({
         aria-label="Boekingswidget"
         className="relative overflow-hidden bg-stone-950 px-4 py-12 text-white sm:px-6 lg:px-8 lg:py-20"
       >
-        <div aria-hidden className="absolute inset-0">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(251,113,133,0.16),transparent_38%)]" />
-          <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(rgba(255,255,255,0.10)_1px,transparent_1px)] [background-size:12px_12px]" />
-        </div>
-
         <div className="relative mx-auto max-w-6xl">
           <div className="rounded-[2rem] border border-white/10 bg-white/5 p-4 shadow-2xl shadow-black/30 backdrop-blur-md sm:p-6">
             <div className="mb-6 text-center">
               <div className="mx-auto h-4 w-40 animate-pulse rounded-full bg-white/10" />
               <div className="mx-auto mt-4 h-9 w-64 animate-pulse rounded-xl bg-white/10" />
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="rounded-[1.5rem] border border-white/10 bg-black/30 p-4">
-                <div className="mb-3 h-5 w-28 animate-pulse rounded bg-white/10" />
-                <div className="grid grid-cols-7 gap-1.5">
-                  {Array.from({ length: 42 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="h-11 animate-pulse rounded-xl bg-white/10"
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-[1.5rem] border border-white/10 bg-black/30 p-4">
-                <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
-                  {Array.from({ length: 8 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="h-9 animate-pulse rounded-xl bg-white/10"
-                    />
-                  ))}
-                </div>
-                <div className="space-y-2">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="h-10 animate-pulse rounded-xl bg-white/10"
-                    />
-                  ))}
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -933,7 +970,6 @@ export default function BookingWidget({
                     onClick={() => setViewMonth((m) => addMonths(m, -1))}
                     className="h-10 rounded-xl border border-white/15 bg-white/10 px-3 text-sm font-semibold text-white transition hover:bg-white/15 focus:outline-none focus:ring-4 focus:ring-white/20"
                     aria-label="Vorige maand"
-                    title="Vorige maand"
                   >
                     ←
                   </button>
@@ -943,7 +979,6 @@ export default function BookingWidget({
                     onClick={() => setViewMonth((m) => addMonths(m, 1))}
                     className="h-10 rounded-xl border border-white/15 bg-white/10 px-3 text-sm font-semibold text-white transition hover:bg-white/15 focus:outline-none focus:ring-4 focus:ring-white/20"
                     aria-label="Volgende maand"
-                    title="Volgende maand"
                   >
                     →
                   </button>
@@ -968,6 +1003,7 @@ export default function BookingWidget({
                   const dot = dotClassForDay(counts, day);
                   const tint = dayTintForDay(counts, day);
                   const past = isPastDay(day);
+                  const status = getDayAvailability(counts);
 
                   return (
                     <button
@@ -992,7 +1028,11 @@ export default function BookingWidget({
                       ].join(" ")}
                       aria-pressed={isSelected}
                       aria-current={todayFlag && !past ? "date" : undefined}
-                      title={!past && counts ? `${iso} • ${dot.label}` : iso}
+                      title={
+                        !past
+                          ? `${iso} • ${dayStatusLabel(status)}`
+                          : iso
+                      }
                     >
                       {day.getDate()}
 
@@ -1021,20 +1061,22 @@ export default function BookingWidget({
 
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-orange-300/35 bg-orange-400/14 px-3 py-1.5 text-[11px] font-medium text-orange-100">
                   <span className="h-2 w-2 rounded-full bg-orange-400" />
-                  Nog 1 plek
+                  Nog 1 tijdslot
+                </span>
+
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-purple-300/35 bg-purple-400/14 px-3 py-1.5 text-[11px] font-medium text-purple-100">
+                  <span className="h-2 w-2 rounded-full bg-purple-400" />
+                  Volgeboekt
                 </span>
 
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-[11px] font-medium text-stone-200">
                   <span className="h-2 w-2 rounded-full bg-stone-500" />
-                  Geen tijdsloten
+                  Nog geen tijden
                 </span>
               </div>
             </div>
 
-            <div
-              ref={timesRef}
-              className="rounded-[1.5rem] border border-white/10 bg-black/35 p-4 shadow-xl shadow-black/20 backdrop-blur-md"
-            >
+            <div className="rounded-[1.5rem] border border-white/10 bg-black/35 p-4 shadow-xl shadow-black/20 backdrop-blur-md">
               <div className="mb-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-200/90">
                   Tijdslot
@@ -1055,6 +1097,19 @@ export default function BookingWidget({
                     return `${weekday} ${day} ${month}`;
                   })()}
                 </h3>
+
+                <p
+                  className={[
+                    "mt-3 rounded-2xl border px-3 py-2 text-sm font-medium",
+                    selectedDayStatus === "AVAILABLE"
+                      ? "border-emerald-300/30 bg-emerald-400/12 text-emerald-100"
+                      : selectedDayStatus === "FULL"
+                      ? "border-purple-300/30 bg-purple-400/12 text-purple-100"
+                      : "border-stone-300/15 bg-white/10 text-stone-200",
+                  ].join(" ")}
+                >
+                  {selectedDayMessage()}
+                </p>
               </div>
 
               {!partnerSlug ? (
@@ -1076,11 +1131,7 @@ export default function BookingWidget({
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {filteredSlots.length === 0 ? (
-                    <div className="col-span-2 rounded-2xl border border-white/10 bg-white/10 p-4 text-sm text-stone-200 sm:col-span-4">
-                      Geen tijdsloten beschikbaar.
-                    </div>
-                  ) : (
+                  {filteredSlots.length === 0 ? null : (
                     filteredSlots.map((slot) => {
                       const selected = slotId === slot.id;
 
@@ -1212,8 +1263,8 @@ export default function BookingWidget({
 
                 {!slotId && (
                   <p className="text-xs text-stone-400">
-                    Kies eerst een tijdslot hierboven om door te gaan naar de
-                    checkout.
+                    Kies eerst een beschikbaar tijdslot hierboven om door te gaan
+                    naar de checkout.
                   </p>
                 )}
 

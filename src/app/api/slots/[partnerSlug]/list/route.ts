@@ -68,7 +68,9 @@ function getDaysInMonth(monthIso: string) {
   const lastDay = new Date(year, month, 0).getDate();
 
   return Array.from({ length: lastDay }, (_, index) => {
-    return `${year}-${String(month).padStart(2, "0")}-${String(index + 1).padStart(2, "0")}`;
+    return `${year}-${String(month).padStart(2, "0")}-${String(
+      index + 1
+    ).padStart(2, "0")}`;
   });
 }
 
@@ -113,6 +115,18 @@ function timeLabelInAmsterdam(date: Date) {
 }
 
 type EffStatus = "DRAFT" | "PUBLISHED" | "BOOKED";
+type DayStatus = "AVAILABLE" | "FULL" | "NO_SLOTS";
+
+function getDayStatus(params: {
+  publishedCount: number;
+  bookedCount: number;
+}): DayStatus {
+  const { publishedCount, bookedCount } = params;
+
+  if (publishedCount > 0) return "AVAILABLE";
+  if (bookedCount > 0) return "FULL";
+  return "NO_SLOTS";
+}
 
 function effectiveStatus(
   dbStatus: "DRAFT" | "PUBLISHED" | "BOOKED",
@@ -265,7 +279,12 @@ export async function GET(
 
       const byDay: Record<
         string,
-        { day: string; PUBLISHED: number; BOOKED: number; DRAFT: number }
+        {
+          day: string;
+          PUBLISHED: number;
+          BOOKED: number;
+          DRAFT: number;
+        }
       > = {};
 
       for (const day of daysInMonth) {
@@ -281,7 +300,10 @@ export async function GET(
         const key = dayKeyInAmsterdam(new Date(slot.startTime));
         if (!byDay[key]) continue;
 
-        const eff = effectiveStatus(slot.status as EffStatus, slot.booking?.status);
+        const eff = effectiveStatus(
+          slot.status as EffStatus,
+          slot.booking?.status
+        );
 
         if (eff === "BOOKED") {
           byDay[key].BOOKED++;
@@ -294,9 +316,15 @@ export async function GET(
         }
       }
 
-      const days = Object.values(byDay).sort((a, b) =>
-        a.day.localeCompare(b.day)
-      );
+      const days = Object.values(byDay)
+        .map((d) => ({
+          ...d,
+          dayStatus: getDayStatus({
+            publishedCount: d.PUBLISHED,
+            bookedCount: d.BOOKED,
+          }),
+        }))
+        .sort((a, b) => a.day.localeCompare(b.day));
 
       const res = NextResponse.json({
         ok: true,
@@ -307,6 +335,8 @@ export async function GET(
         publishedDays: days.map((d) => ({
           date: d.day,
           publishedCount: d.PUBLISHED,
+          bookedCount: d.BOOKED,
+          dayStatus: d.dayStatus,
         })),
       });
 
@@ -324,10 +354,16 @@ export async function GET(
     if (user.role === "ADMIN" && partnerSlug === "all") {
       const baseTimes = (TIMES_12 as readonly string[]).slice(0, BASE);
 
+      const dayStatus = getDayStatus({
+        publishedCount: 0,
+        bookedCount: 0,
+      });
+
       const res = NextResponse.json({
         ok: true,
         scope: "day",
         day: q.day,
+        dayStatus,
         needsPartner: true,
         counts: { DRAFT: baseTimes.length, PUBLISHED: 0, BOOKED: 0 },
         slots: [],
@@ -370,7 +406,10 @@ export async function GET(
     });
 
     const items = realAll.map((slot) => {
-      const eff = effectiveStatus(slot.status as EffStatus, slot.booking?.status);
+      const eff = effectiveStatus(
+        slot.status as EffStatus,
+        slot.booking?.status
+      );
 
       return {
         id: slot.id,
@@ -410,7 +449,10 @@ export async function GET(
 
     const publishedBookable = realAll
       .map((slot) => {
-        const eff = effectiveStatus(slot.status as EffStatus, slot.booking?.status);
+        const eff = effectiveStatus(
+          slot.status as EffStatus,
+          slot.booking?.status
+        );
 
         if (eff !== "PUBLISHED") return null;
 
@@ -447,10 +489,16 @@ export async function GET(
       baseTimes.length - (publishedCount + bookedCount)
     );
 
+    const dayStatus = getDayStatus({
+      publishedCount,
+      bookedCount,
+    });
+
     const res = NextResponse.json({
       ok: true,
       scope: "day",
       day: q.day,
+      dayStatus,
       counts: {
         DRAFT: draftCount,
         PUBLISHED: publishedCount,
