@@ -8,6 +8,7 @@ import {
   type Prisma,
 } from "@prisma/client";
 import jwt from "jsonwebtoken";
+import { fromZonedTime } from "date-fns-tz";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,10 +16,12 @@ export const revalidate = 0;
 
 type Role = "ADMIN" | "PARTNER";
 type JWTPayload = { sub: string; role: Role; [k: string]: unknown };
+type AgendaScope = "day" | "week" | "month";
 
 const COOKIE_PRIMARY = process.env.SESSION_COOKIE_NAME || "session";
 const COOKIE_LEGACY = "de_session";
 const SECRET = process.env.SESSION_SECRET || "";
+const TIMEZONE = "Europe/Amsterdam";
 
 function readCookieFromHeader(req: Request, name: string): string | null {
   const cookie = req.headers.get("cookie") || "";
@@ -42,33 +45,88 @@ function readSession(req: Request): JWTPayload | null {
   }
 }
 
-function parseDateRange(scopeRaw: string | null, ymd: string | null) {
-  const scope = (scopeRaw ?? "day").toLowerCase();
-  const [Y, M, D] = (ymd ?? "").split("-").map(Number);
-  const pivot = Number.isFinite(Y)
-    ? new Date(Y, (M ?? 1) - 1, D ?? 1)
-    : new Date();
+function parseYMD(ymd: string | null) {
+  const fallback = new Date();
+  const fallbackYMD = `${fallback.getFullYear()}-${String(
+    fallback.getMonth() + 1
+  ).padStart(2, "0")}-${String(fallback.getDate()).padStart(2, "0")}`;
 
-  let start = new Date(pivot);
-  let end = new Date(pivot);
+  const value = ymd && /^\d{4}-\d{2}-\d{2}$/.test(ymd) ? ymd : fallbackYMD;
+  const [year, month, day] = value.split("-").map(Number);
+
+  return { year, month, day, ymd: value };
+}
+
+function toYMD(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function addDaysYMD(ymd: string, amount: number) {
+  const { year, month, day } = parseYMD(ymd);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + amount);
+  return toYMD(date);
+}
+
+function addMonthsYMD(ymd: string, amount: number) {
+  const { year, month } = parseYMD(ymd);
+  const date = new Date(year, month - 1, 1);
+  date.setMonth(date.getMonth() + amount);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}-01`;
+}
+
+function startOfAmsterdamDayUtc(ymd: string) {
+  return fromZonedTime(`${ymd} 00:00:00`, TIMEZONE);
+}
+
+function parseDateRange(scopeRaw: string | null, ymdRaw: string | null) {
+  const scope = (
+    ["day", "week", "month"].includes((scopeRaw ?? "").toLowerCase())
+      ? (scopeRaw ?? "day").toLowerCase()
+      : "day"
+  ) as AgendaScope;
+
+  const { year, month, day, ymd } = parseYMD(ymdRaw);
 
   if (scope === "week") {
+    const pivot = new Date(year, month - 1, day);
     const dow = pivot.getDay();
     const diff = dow === 0 ? -6 : 1 - dow;
-    start = new Date(pivot);
-    start.setDate(pivot.getDate() + diff);
-    end = new Date(start);
-    end.setDate(start.getDate() + 7);
-  } else if (scope === "month") {
-    start = new Date(pivot.getFullYear(), pivot.getMonth(), 1);
-    end = new Date(pivot.getFullYear(), pivot.getMonth() + 1, 1);
-  } else {
-    start = new Date(pivot.getFullYear(), pivot.getMonth(), pivot.getDate());
-    end = new Date(start);
-    end.setDate(start.getDate() + 1);
+
+    const startYMD = addDaysYMD(ymd, diff);
+    const endYMD = addDaysYMD(startYMD, 7);
+
+    return {
+      scope,
+      start: startOfAmsterdamDayUtc(startYMD),
+      end: startOfAmsterdamDayUtc(endYMD),
+    };
   }
 
-  return { start, end };
+  if (scope === "month") {
+    const startYMD = `${year}-${String(month).padStart(2, "0")}-01`;
+    const endYMD = addMonthsYMD(startYMD, 1);
+
+    return {
+      scope,
+      start: startOfAmsterdamDayUtc(startYMD),
+      end: startOfAmsterdamDayUtc(endYMD),
+    };
+  }
+
+  const endYMD = addDaysYMD(ymd, 1);
+
+  return {
+    scope,
+    start: startOfAmsterdamDayUtc(ymd),
+    end: startOfAmsterdamDayUtc(endYMD),
+  };
 }
 
 export async function GET(req: NextRequest) {
@@ -94,10 +152,11 @@ export async function GET(req: NextRequest) {
 
     const partnerSlugQuery = (searchParams.get("partner") || "").trim() || null;
     const partnerSlugHeader =
-      (req.headers.get("x-partner") ||
+      (
+        req.headers.get("x-partner") ||
         req.headers.get("x-partner-slug") ||
-        "")
-        .trim() || null;
+        ""
+      ).trim() || null;
 
     const { start, end } = parseDateRange(scope, date);
 
@@ -235,7 +294,7 @@ export async function GET(req: NextRequest) {
     });
 
     const items = rows.map((b) => {
-      const partner = b.slot?.partner ?? b.partner;
+      const partner = b.slot.partner ?? b.partner;
 
       const paidDepositCents = b.payments.reduce((sum, payment) => {
         if (payment.status !== PaymentStatus.PAID) return sum;
@@ -293,15 +352,17 @@ export async function GET(req: NextRequest) {
         latestDepositPaymentPaidAt:
           latestPaidDepositPayment?.paidAt?.toISOString() ?? null,
 
-        // tijdelijke backwards compatibility voor je huidige agenda-page
         playerCount: b.playersCount,
-        allergies: [b.dogAllergies, b.dogFears].filter(Boolean).join(" · ") || null,
+        allergies:
+          [b.dogAllergies, b.dogFears].filter(Boolean).join(" · ") || null,
         totalAmount: b.totalAmountCents / 100,
         depositPaidAmount: paidDepositCents / 100,
       };
     });
 
-    return NextResponse.json({ ok: true, items });
+    const res = NextResponse.json({ ok: true, items });
+    res.headers.set("Cache-Control", "no-store");
+    return res;
   } catch (e: unknown) {
     console.error("GET /api/agenda error:", e);
 

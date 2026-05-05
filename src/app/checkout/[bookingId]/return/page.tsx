@@ -36,8 +36,8 @@ export default function ReturnPage() {
   const [elapsed, setElapsed] = React.useState(0);
   const [manualLoading, setManualLoading] = React.useState(false);
 
-  const fetchStatus = React.useCallback(async () => {
-    if (!bookingId) return;
+  const fetchStatus = React.useCallback(async (): Promise<StatusPayload | null> => {
+    if (!bookingId) return null;
 
     try {
       setError(null);
@@ -53,43 +53,47 @@ export default function ReturnPage() {
       }
 
       const j: StatusPayload = await r.json();
+
       setLast(j);
       setStatus(j.status);
+
+      return j;
     } catch (e: any) {
       setError(e?.message || "Onbekende fout");
+      return null;
     }
   }, [bookingId]);
 
   React.useEffect(() => {
     let mounted = true;
-    let t: number | null = null;
+    let timeoutId: number | null = null;
     const timerStart = Date.now();
 
-    const loop = async () => {
+    async function loop() {
+      if (!mounted || !bookingId) return;
+
+      const current = await fetchStatus();
+
       if (!mounted) return;
 
-      await fetchStatus();
-
-      if (!mounted) return;
-
-      if (status === "CONFIRMED") return;
+      if (current?.status === "CONFIRMED") return;
+      if (current?.status === "CANCELLED") return;
 
       const ms = Date.now() - timerStart;
       setElapsed(ms);
 
       if (ms >= MAX_WAIT_MS) return;
 
-      t = window.setTimeout(loop, POLL_MS);
-    };
+      timeoutId = window.setTimeout(loop, POLL_MS);
+    }
 
     loop();
 
     return () => {
       mounted = false;
-      if (t) window.clearTimeout(t);
+      if (timeoutId) window.clearTimeout(timeoutId);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookingId]);
+  }, [bookingId, fetchStatus]);
 
   async function checkNow() {
     try {
@@ -118,8 +122,7 @@ export default function ReturnPage() {
           </h1>
 
           <p className="mt-4 text-sm leading-7 text-stone-300 sm:text-base">
-            We halen de status van je betaling op. Dit kan een paar seconden
-            duren.
+            We halen de status van je betaling op. Dit kan een paar seconden duren.
           </p>
         </div>
 
@@ -158,9 +161,7 @@ export default function ReturnPage() {
           {paymentStatus && (
             <div>
               Laatste paymentstatus:{" "}
-              <span className="font-semibold text-stone-200">
-                {paymentStatus}
-              </span>
+              <span className="font-semibold text-stone-200">{paymentStatus}</span>
             </div>
           )}
         </div>
@@ -236,8 +237,7 @@ function Cancelled({ bookingId }: { bookingId: string }) {
       </h2>
 
       <p className="mt-2 text-sm leading-6 text-stone-300">
-        Je kunt het opnieuw proberen. Je boeking blijft nog even voor je
-        gereserveerd.
+        Je kunt het opnieuw proberen. Je boeking blijft nog even voor je gereserveerd.
       </p>
 
       <div className="mt-6 flex flex-col items-center gap-3">
@@ -287,8 +287,7 @@ function Pending({
       </h2>
 
       <p className="mt-2 text-sm leading-6 text-stone-300">
-        Dit duurt meestal maar een paar seconden. Deze pagina controleert
-        automatisch de status.
+        Dit duurt meestal maar een paar seconden. Deze pagina controleert automatisch de status.
       </p>
 
       <div className="mt-5 space-y-3 text-sm text-stone-300" aria-live="polite">
@@ -306,8 +305,7 @@ function Pending({
 
         {isTimedOut && (
           <div className="rounded-2xl border border-amber-300/35 bg-amber-400/15 px-4 py-3 text-amber-100">
-            Het lijkt wat langer te duren. Je kunt handmatig opnieuw controleren
-            of terug naar de checkout gaan.
+            Het lijkt wat langer te duren. Je kunt handmatig opnieuw controleren of terug naar de checkout gaan.
           </div>
         )}
       </div>
@@ -341,8 +339,7 @@ function Pending({
       </div>
 
       <p className="mt-5 text-xs leading-5 text-stone-500">
-        Blijft dit scherm hangen terwijl je wél hebt betaald? Je krijgt ook een
-        e-mail zodra je boeking is bevestigd.
+        Blijft dit scherm hangen terwijl je wél hebt betaald? Je krijgt ook een e-mail zodra je boeking is bevestigd.
       </p>
     </div>
   );

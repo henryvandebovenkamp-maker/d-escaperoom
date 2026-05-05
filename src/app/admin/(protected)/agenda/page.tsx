@@ -1,4 +1,3 @@
-// PATH: src/app/admin/(protected)/agenda/page.tsx
 "use client";
 
 import * as React from "react";
@@ -11,6 +10,7 @@ type PaymentStatus =
   | "FAILED"
   | "CANCELED"
   | "REFUNDED";
+
 type AgendaScope = "day" | "week" | "month";
 
 type AgendaItem = {
@@ -54,6 +54,7 @@ type PartnerRow = {
 const APP_TIME_ZONE = "Europe/Amsterdam";
 
 const nlDaysShort = ["MA", "DI", "WO", "DO", "VR", "ZA", "ZO"] as const;
+
 const nlDaysLong = [
   "maandag",
   "dinsdag",
@@ -63,6 +64,7 @@ const nlDaysLong = [
   "zaterdag",
   "zondag",
 ] as const;
+
 const nlMonths = [
   "januari",
   "februari",
@@ -78,52 +80,64 @@ const nlMonths = [
   "december",
 ] as const;
 
+const pad2 = (value: number) => String(value).padStart(2, "0");
+
+const parseYMDLocal = (iso: string) => {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d);
+};
+
 const toYMD = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate()
-  ).padStart(2, "0")}`;
+  `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 
 const todayISO = () => toYMD(new Date());
 
 const addDaysISO = (iso: string, days: number) => {
-  const [y, m, dd] = iso.split("-").map(Number);
-  const d = new Date(y, m - 1, dd);
+  const d = parseYMDLocal(iso);
   d.setDate(d.getDate() + days);
   return toYMD(d);
 };
 
-const startOfWeekISO = (d: Date) => {
+const startOfWeekISO = (iso: string) => {
+  const d = parseYMDLocal(iso);
   const day = d.getDay();
   const diff = day === 0 ? -6 : 1 - day;
-  const start = new Date(d);
-  start.setDate(d.getDate() + diff);
-  return toYMD(start);
+  d.setDate(d.getDate() + diff);
+  return toYMD(d);
 };
 
 const monthTitle = (iso: string) => {
-  const d = new Date(iso);
+  const d = parseYMDLocal(iso);
   return `${nlMonths[d.getMonth()]} ${d.getFullYear()}`;
 };
 
+const dayKeyFromISO = (iso: string) =>
+  new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(iso));
+
 const fmtTimeNL = (iso: string) =>
-  new Date(iso).toLocaleTimeString("nl-NL", {
+  new Intl.DateTimeFormat("nl-NL", {
     hour: "2-digit",
     minute: "2-digit",
     timeZone: APP_TIME_ZONE,
-  });
+  }).format(new Date(iso));
 
 const fmtFullDateNL = (iso: string) =>
-  new Date(iso).toLocaleDateString("nl-NL", {
+  new Intl.DateTimeFormat("nl-NL", {
     weekday: "short",
     day: "2-digit",
     month: "short",
     year: "numeric",
     timeZone: APP_TIME_ZONE,
-  });
+  }).format(new Date(iso));
 
 const fmtDateNL = (iso: string) => {
-  const [y, m, d] = iso.split("-").map(Number);
-  const date = new Date(y, m - 1, d);
+  const date = parseYMDLocal(iso);
+
   return `${nlDaysLong[(date.getDay() + 6) % 7]} ${date.getDate()} ${
     nlMonths[date.getMonth()]
   }`;
@@ -135,13 +149,7 @@ const euroCents = (cents?: number | null, currency = "EUR") =>
     currency,
   }).format(typeof cents === "number" ? cents / 100 : 0);
 
-const dayKeyFromISO = (iso: string) => iso.slice(0, 10);
-
-const isBeforeToday = (iso: string) => {
-  const a = new Date(`${iso}T00:00:00`);
-  const b = new Date(`${todayISO()}T00:00:00`);
-  return a.getTime() < b.getTime();
-};
+const isBeforeToday = (iso: string) => iso < todayISO();
 
 const hoursUntil = (iso: string) =>
   (new Date(iso).getTime() - Date.now()) / (1000 * 60 * 60);
@@ -209,24 +217,28 @@ export default function AgendaPage() {
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    (async () => {
+    async function loadPartners() {
       try {
         const rows = await fetchJSON<PartnerRow[]>("/api/partners/list");
         setPartners(rows ?? []);
       } catch {
         setPartners([]);
       }
-    })();
+    }
+
+    loadPartners();
   }, []);
 
   React.useEffect(() => {
     if (typeof window === "undefined") return;
 
     const params = new URLSearchParams(window.location.search);
+
     if (partnerSlug) params.set("partner", partnerSlug);
     else params.delete("partner");
 
     const query = params.toString();
+
     window.history.replaceState(
       null,
       "",
@@ -252,25 +264,41 @@ export default function AgendaPage() {
     load();
   }, [load]);
 
-  function goPrev() {
-    if (scope === "day") setPivotISO(addDaysISO(pivotISO, -1));
-    else if (scope === "week") setPivotISO(addDaysISO(pivotISO, -7));
-    else {
-      const d = new Date(pivotISO);
-      d.setMonth(d.getMonth() - 1, 1);
-      setPivotISO(toYMD(d));
+  const goPrev = React.useCallback(() => {
+    if (scope === "day") {
+      setPivotISO((prev) => addDaysISO(prev, -1));
+      return;
     }
-  }
 
-  function goNext() {
-    if (scope === "day") setPivotISO(addDaysISO(pivotISO, 1));
-    else if (scope === "week") setPivotISO(addDaysISO(pivotISO, 7));
-    else {
-      const d = new Date(pivotISO);
-      d.setMonth(d.getMonth() + 1, 1);
-      setPivotISO(toYMD(d));
+    if (scope === "week") {
+      setPivotISO((prev) => addDaysISO(prev, -7));
+      return;
     }
-  }
+
+    setPivotISO((prev) => {
+      const d = parseYMDLocal(prev);
+      d.setMonth(d.getMonth() - 1, 1);
+      return toYMD(d);
+    });
+  }, [scope]);
+
+  const goNext = React.useCallback(() => {
+    if (scope === "day") {
+      setPivotISO((prev) => addDaysISO(prev, 1));
+      return;
+    }
+
+    if (scope === "week") {
+      setPivotISO((prev) => addDaysISO(prev, 7));
+      return;
+    }
+
+    setPivotISO((prev) => {
+      const d = parseYMDLocal(prev);
+      d.setMonth(d.getMonth() + 1, 1);
+      return toYMD(d);
+    });
+  }, [scope]);
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -290,15 +318,17 @@ export default function AgendaPage() {
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [scope, pivotISO]);
+  }, [goPrev, goNext]);
 
   const title = React.useMemo(() => {
     if (scope === "day") return `Agenda — ${fmtDateNL(pivotISO)}`;
+
     if (scope === "week") {
-      const start = startOfWeekISO(new Date(pivotISO));
+      const start = startOfWeekISO(pivotISO);
       const end = addDaysISO(start, 6);
       return `Agenda — week ${start} t/m ${end}`;
     }
+
     return `Agenda — ${monthTitle(pivotISO)}`;
   }, [scope, pivotISO]);
 
@@ -310,9 +340,11 @@ export default function AgendaPage() {
             <div className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
               Admin planning
             </div>
+
             <h1 className="text-xl font-extrabold tracking-tight sm:text-2xl">
               {title}
             </h1>
+
             <div className="mt-1 text-xs text-stone-600">
               {items.length} bevestigde boeking{items.length === 1 ? "" : "en"}
             </div>
@@ -359,6 +391,7 @@ export default function AgendaPage() {
               <label className="sr-only" htmlFor="agenda-date">
                 Kies datum
               </label>
+
               <input
                 id="agenda-date"
                 type="date"
@@ -375,6 +408,7 @@ export default function AgendaPage() {
                 >
                   Vorige
                 </button>
+
                 <button
                   type="button"
                   onClick={goNext}
@@ -421,6 +455,7 @@ export default function AgendaPage() {
             onChanged={load}
           />
         )}
+
         {scope === "week" && (
           <WeekView
             items={items}
@@ -429,6 +464,7 @@ export default function AgendaPage() {
             onChanged={load}
           />
         )}
+
         {scope === "month" && (
           <MonthView
             items={items}
@@ -508,7 +544,9 @@ function BookingCard({
             <span>🧾</span>
             <span className="font-mono">{shortId}</span>
           </span>
+
           <span className="text-stone-500">• {b.partnerName}</span>
+
           {b.partnerCity && (
             <span className="text-stone-500">• {b.partnerCity}</span>
           )}
@@ -524,9 +562,17 @@ function BookingCard({
         <InfoBlock label="Naam klant" icon="👤" value={b.customerName ?? "—"} />
         <InfoBlock label="E-mail" icon="✉️" value={b.customerEmail} />
         <InfoBlock label="Telefoon" icon="📞" value={b.customerPhone ?? "—"} />
-        <InfoBlock label="Aantal spelers" icon="👥" value={String(b.playersCount)} />
+        <InfoBlock
+          label="Aantal spelers"
+          icon="👥"
+          value={String(b.playersCount)}
+        />
         <InfoBlock label="Naam hond" icon="🐶" value={b.dogName ?? "—"} />
-        <InfoBlock label="Speurniveau hond" icon="⭐" value={b.dogTrackingLevel ?? "—"} />
+        <InfoBlock
+          label="Speurniveau hond"
+          icon="⭐"
+          value={b.dogTrackingLevel ?? "—"}
+        />
         <InfoBlock
           label="Sociaal met mensen"
           icon="🤝"
@@ -537,12 +583,25 @@ function BookingCard({
           icon="💳"
           value={b.latestDepositPaymentMethod ?? "—"}
         />
-        <InfoBlock label="Allergieën" icon="⚠️" value={b.dogAllergies ?? "—"} wide />
-        <InfoBlock label="Angsten / bijzonderheden" icon="💬" value={b.dogFears ?? "—"} wide />
+        <InfoBlock
+          label="Allergieën"
+          icon="⚠️"
+          value={b.dogAllergies ?? "—"}
+          wide
+        />
+        <InfoBlock
+          label="Angsten / bijzonderheden"
+          icon="💬"
+          value={b.dogFears ?? "—"}
+          wide
+        />
       </dl>
 
       <div className="mt-3 grid gap-2 rounded-xl border border-stone-200 bg-stone-50 p-2 sm:grid-cols-3">
-        <MoneyBlock label="Totaal" value={euroCents(b.totalAmountCents, b.currency)} />
+        <MoneyBlock
+          label="Totaal"
+          value={euroCents(b.totalAmountCents, b.currency)}
+        />
         <MoneyBlock
           label="Aanbetaling"
           value={euroCents(b.depositAmountCents, b.currency)}
@@ -562,6 +621,7 @@ function BookingCard({
                 value={`- ${euroCents(b.discountAmountCents, b.currency)}`}
               />
             )}
+
             {(b.giftCardAppliedCents ?? 0) > 0 && (
               <MoneyBlock
                 label="Giftcard"
@@ -580,7 +640,8 @@ function BookingCard({
             </span>
           ) : refundEligible ? (
             <>
-              ❌ Annuleren <strong>≥ 24u</strong>: aanbetaling wordt teruggestort.
+              ❌ Annuleren <strong>≥ 24u</strong>: aanbetaling wordt
+              teruggestort.
             </>
           ) : (
             <>
@@ -588,6 +649,7 @@ function BookingCard({
               <strong>niet</strong> teruggestort.
             </>
           )}
+
           {err && <div className="mt-1 text-rose-700">{err}</div>}
         </div>
 
@@ -631,6 +693,7 @@ function InfoBlock({
         <span>{icon}</span>
         <span>{label}</span>
       </dt>
+
       <dd className="mt-0.5 whitespace-pre-wrap break-words font-semibold text-stone-900">
         {value}
       </dd>
@@ -652,6 +715,7 @@ function MoneyBlock({
   return (
     <div className="rounded-lg border border-stone-200 bg-white px-3 py-2">
       <div className="text-[11px] font-semibold text-stone-600">{label}</div>
+
       <div
         className={[
           "mt-0.5 tracking-tight text-stone-900",
@@ -660,6 +724,7 @@ function MoneyBlock({
       >
         {value}
       </div>
+
       {sub && <div className="mt-0.5 text-[10px] text-stone-500">{sub}</div>}
     </div>
   );
@@ -677,9 +742,11 @@ function MiniBookingRow({
       <div className="flex min-w-0 items-center gap-2">
         <span className="shrink-0">⏰ {fmtTimeNL(b.startTime)}</span>
         <span className="truncate">👤 {b.customerName ?? "—"}</span>
+
         {b.dogName && (
           <span className="hidden truncate sm:inline">• 🐶 {b.dogName}</span>
         )}
+
         <span className="hidden sm:inline">• 👥 {b.playersCount}</span>
       </div>
 
@@ -687,6 +754,7 @@ function MiniBookingRow({
         <span className="font-semibold text-stone-900">
           💶 {euroCents(b.restAmountCents, b.currency)}
         </span>
+
         <button
           type="button"
           onClick={onOpenFull}
@@ -715,11 +783,14 @@ function DayView({
   return (
     <section className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-stone-200">
       <h2 className="text-lg font-extrabold">📅 Dagoverzicht</h2>
+
       <p className="mb-2 mt-0.5 text-[11px] text-stone-600">
         Overzicht van alle <strong>bevestigde boekingen</strong>.
       </p>
+
       {loading && <p className="text-xs text-stone-500">Laden…</p>}
       {error && <p className="text-xs text-rose-700">{error}</p>}
+
       {!loading && !items.length && !error && (
         <p className="text-xs text-stone-500">
           Geen <strong>bevestigde boekingen</strong> op deze dag.
@@ -758,7 +829,8 @@ function WeekView({
   pivotISO: string;
   onChanged?: () => void;
 }) {
-  const startISO = startOfWeekISO(new Date(pivotISO));
+  const startISO = React.useMemo(() => startOfWeekISO(pivotISO), [pivotISO]);
+
   const days = React.useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDaysISO(startISO, i)),
     [startISO]
@@ -766,15 +838,20 @@ function WeekView({
 
   const byDay = React.useMemo(() => {
     const map = new Map<string, AgendaItem[]>();
+
     for (const d of days) map.set(d, []);
+
     for (const item of items) {
       const key = dayKeyFromISO(item.startTime);
+
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(item);
     }
+
     for (const d of days) {
       map.get(d)!.sort((a, b) => a.startTime.localeCompare(b.startTime));
     }
+
     return map;
   }, [items, days]);
 
@@ -794,6 +871,7 @@ function WeekView({
     <>
       <section className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-stone-200">
         <h2 className="text-lg font-extrabold">🗓️ Deze week</h2>
+
         {loading && <p className="text-[11px] text-stone-500">Laden…</p>}
 
         <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-7">
@@ -826,10 +904,12 @@ function WeekView({
                   <div className="text-lg font-extrabold leading-none text-stone-800">
                     {Number(d.slice(-2))}
                   </div>
+
                   <div className="flex items-end justify-between gap-1">
                     <span className="text-[10px] font-bold text-stone-500">
                       {nlDaysShort[idx]}
                     </span>
+
                     <span
                       className={[
                         "rounded-full px-1.5 py-0.5 text-[10px] font-extrabold leading-none",
@@ -850,6 +930,7 @@ function WeekView({
 
       <section className="mt-3 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-stone-200">
         <h3 className="text-base font-extrabold">📍 {fmtDateNL(selectedISO)}</h3>
+
         {list.length === 0 && (
           <p className="mt-1 text-xs text-stone-500">
             Geen <strong>bevestigde boekingen</strong> op deze dag.
@@ -889,13 +970,18 @@ function MonthView({
   pivotISO: string;
   onChanged?: () => void;
 }) {
-  const base = new Date(pivotISO);
-  base.setDate(1);
+  const base = React.useMemo(() => {
+    const d = parseYMDLocal(pivotISO);
+    d.setDate(1);
+    return d;
+  }, [pivotISO]);
 
   const year = base.getFullYear();
   const month = base.getMonth();
-  const first = new Date(year, month, 1);
-  const last = new Date(year, month + 1, 0);
+
+  const first = React.useMemo(() => new Date(year, month, 1), [year, month]);
+  const last = React.useMemo(() => new Date(year, month + 1, 0), [year, month]);
+
   const daysInMonth = last.getDate();
   const startWeekday = (first.getDay() + 6) % 7;
   const endWeekday = (last.getDay() + 6) % 7;
@@ -904,14 +990,18 @@ function MonthView({
 
   const byDate = React.useMemo(() => {
     const map = new Map<string, AgendaItem[]>();
+
     for (const item of items) {
       const key = dayKeyFromISO(item.startTime);
+
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(item);
     }
+
     for (const key of map.keys()) {
       map.get(key)!.sort((a, b) => a.startTime.localeCompare(b.startTime));
     }
+
     return map;
   }, [items]);
 
@@ -922,51 +1012,58 @@ function MonthView({
     count: number;
   };
 
-  const cells: Cell[] = [];
+  const cells = React.useMemo(() => {
+    const nextCells: Cell[] = [];
 
-  if (prevOverflow > 0) {
-    const prevLast = new Date(year, month, 0);
-    const prevDays = prevLast.getDate();
+    if (prevOverflow > 0) {
+      const prevLast = new Date(year, month, 0);
+      const prevDays = prevLast.getDate();
 
-    for (let i = prevOverflow - 1; i >= 0; i--) {
-      const day = prevDays - i;
-      const iso = toYMD(new Date(year, month - 1, day));
-      cells.push({
+      for (let i = prevOverflow - 1; i >= 0; i--) {
+        const day = prevDays - i;
+        const iso = toYMD(new Date(year, month - 1, day));
+
+        nextCells.push({
+          dateISO: iso,
+          inMonth: false,
+          dayNum: day,
+          count: byDate.get(iso)?.length ?? 0,
+        });
+      }
+    }
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const iso = toYMD(new Date(year, month, day));
+
+      nextCells.push({
+        dateISO: iso,
+        inMonth: true,
+        dayNum: day,
+        count: byDate.get(iso)?.length ?? 0,
+      });
+    }
+
+    for (let day = 1; day <= nextOverflow; day++) {
+      const iso = toYMD(new Date(year, month + 1, day));
+
+      nextCells.push({
         dateISO: iso,
         inMonth: false,
         dayNum: day,
         count: byDate.get(iso)?.length ?? 0,
       });
     }
-  }
 
-  for (let day = 1; day <= daysInMonth; day++) {
-    const iso = toYMD(new Date(year, month, day));
-    cells.push({
-      dateISO: iso,
-      inMonth: true,
-      dayNum: day,
-      count: byDate.get(iso)?.length ?? 0,
-    });
-  }
-
-  for (let day = 1; day <= nextOverflow; day++) {
-    const iso = toYMD(new Date(year, month + 1, day));
-    cells.push({
-      dateISO: iso,
-      inMonth: false,
-      dayNum: day,
-      count: byDate.get(iso)?.length ?? 0,
-    });
-  }
+    return nextCells;
+  }, [prevOverflow, nextOverflow, year, month, daysInMonth, byDate]);
 
   const [selectedISO, setSelectedISO] = React.useState(toYMD(first));
   const [openId, setOpenId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    setSelectedISO(toYMD(new Date(year, month, 1)));
+    setSelectedISO(toYMD(first));
     setOpenId(null);
-  }, [pivotISO, year, month]);
+  }, [first]);
 
   const list = byDate.get(selectedISO) ?? [];
   const todayKey = todayISO();
@@ -978,6 +1075,7 @@ function MonthView({
           <h3 className="text-base font-extrabold">
             📆 {nlMonths[month]} {year}
           </h3>
+
           {loading && <p className="text-[11px] text-stone-500">Laden…</p>}
         </div>
 
@@ -1008,8 +1106,8 @@ function MonthView({
                   hasBookings
                     ? "border-emerald-300 bg-emerald-50"
                     : cell.inMonth
-                    ? "border-stone-200 bg-white"
-                    : "border-stone-200 bg-stone-50 text-stone-400",
+                      ? "border-stone-200 bg-white"
+                      : "border-stone-200 bg-stone-50 text-stone-400",
                   isSelected ? "ring-2 ring-stone-900 ring-offset-2" : "",
                   isToday ? "outline outline-1 outline-stone-900/60" : "",
                   isBeforeToday(cell.dateISO) ? "opacity-80" : "",
@@ -1023,8 +1121,8 @@ function MonthView({
                       hasBookings
                         ? "text-emerald-800"
                         : cell.inMonth
-                        ? "text-stone-800"
-                        : "text-stone-400",
+                          ? "text-stone-800"
+                          : "text-stone-400",
                     ].join(" ")}
                   >
                     {cell.dayNum}
@@ -1051,6 +1149,7 @@ function MonthView({
 
       <section className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-stone-200">
         <h3 className="text-base font-extrabold">📍 {fmtDateNL(selectedISO)}</h3>
+
         {list.length === 0 && (
           <p className="mt-1 text-xs text-stone-500">
             Geen <strong>bevestigde boekingen</strong> op deze dag.

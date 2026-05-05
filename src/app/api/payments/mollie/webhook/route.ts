@@ -7,6 +7,7 @@ import {
   PaymentStatus,
   PaymentType,
   SlotStatus,
+  Prisma,
 } from "@prisma/client";
 
 import prisma from "@/lib/prisma";
@@ -16,6 +17,20 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+type MolliePaymentLike = {
+  id: string;
+  status?: string;
+  method?: string | null;
+  paidAt?: string | null;
+  metadata?: {
+    bookingId?: string;
+  } | null;
+  amount?: {
+    value?: string;
+    currency?: string;
+  };
+};
+
 function mollie() {
   const apiKey = process.env.MOLLIE_API_KEY;
   if (!apiKey) throw new Error("MOLLIE_API_KEY ontbreekt");
@@ -23,8 +38,8 @@ function mollie() {
   return createMollieClient({ apiKey });
 }
 
-function toJsonSafe(value: unknown) {
-  return JSON.parse(JSON.stringify(value));
+function toJsonSafe(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
 function mapStatus(status?: string): PaymentStatus {
@@ -47,8 +62,17 @@ function mapStatus(status?: string): PaymentStatus {
   }
 }
 
-function shouldCleanupTemporaryBooking(status?: string) {
+function isDeadPayment(status?: string) {
   return status === "failed" || status === "canceled" || status === "expired";
+}
+
+function amountToCents(value?: string) {
+  if (!value) return 0;
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+
+  return Math.round(parsed * 100);
 }
 
 async function getMolliePaymentId(req: NextRequest) {
@@ -60,14 +84,17 @@ async function getMolliePaymentId(req: NextRequest) {
   }
 
   if (contentType.includes("application/json")) {
-    const body = await req.json();
-    return (body?.id || body?.paymentId || body?.payment_id || "")
-      .toString()
-      .trim();
+    const body = (await req.json().catch(() => null)) as {
+      id?: unknown;
+      paymentId?: unknown;
+      payment_id?: unknown;
+    } | null;
+
+    return String(body?.id ?? body?.paymentId ?? body?.payment_id ?? "").trim();
   }
 
-  const formData = await req.formData();
-  return (formData.get("id") || "").toString().trim();
+  const formData = await req.formData().catch(() => null);
+  return String(formData?.get("id") ?? "").trim();
 }
 
 export async function POST(req: NextRequest) {
@@ -78,23 +105,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true }, { status: 200 });
     }
 
-    const molliePayment = await mollie().payments.get(paymentId);
+    const molliePayment = (await mollie().payments.get(
+      paymentId
+    )) as unknown as MolliePaymentLike;
 
-    const bookingId = (molliePayment.metadata as any)?.bookingId as
-      | string
-      | undefined;
-
+    const bookingId = molliePayment.metadata?.bookingId ?? null;
     const mappedStatus = mapStatus(molliePayment.status);
-
-    const paidAt = (molliePayment as any)?.paidAt
-      ? new Date((molliePayment as any).paidAt)
-      : null;
-
-    const amountCents = molliePayment.amount?.value
-      ? Math.round(Number(molliePayment.amount.value) * 100)
-      : 0;
-
+    const paidAt = molliePayment.paidAt ? new Date(molliePayment.paidAt) : null;
+    const amountCents = amountToCents(molliePayment.amount?.value);
     const currency = molliePayment.amount?.currency ?? "EUR";
+    const method = molliePayment.method ?? null;
     const rawPayload = toJsonSafe(molliePayment);
 
     if (!bookingId) {
@@ -106,188 +126,161 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true }, { status: 200 });
     }
 
-    const booking = await prisma.booking.findUnique({
-      where: { id: bookingId },
-      select: {
-        id: true,
-        status: true,
-        slotId: true,
-      },
-    });
+    let justConfirmed = false;
+    let bookingForEmailId: string | null = null;
 
-    if (!booking) {
-      console.warn("[mollie/webhook] booking niet gevonden", {
-        bookingId,
-        paymentId: molliePayment.id,
-      });
-
-      return NextResponse.json({ ok: true }, { status: 200 });
-    }
-
-    if (shouldCleanupTemporaryBooking(molliePayment.status)) {
-      await prisma.$transaction(async (tx) => {
-        const freshBooking = await tx.booking.findUnique({
-          where: { id: booking.id },
+    await prisma.$transaction(
+      async (tx) => {
+        const booking = await tx.booking.findUnique({
+          where: { id: bookingId },
           select: {
             id: true,
             status: true,
             slotId: true,
+            slot: {
+              select: {
+                id: true,
+                status: true,
+              },
+            },
           },
         });
 
-        if (!freshBooking) return;
-
-        if (freshBooking.status !== BookingStatus.PENDING) {
-          await tx.payment.upsert({
-            where: { providerPaymentId: molliePayment.id },
-            create: {
-              bookingId: freshBooking.id,
-              provider: PaymentProvider.MOLLIE,
-              type: PaymentType.DEPOSIT,
-              status: mappedStatus,
-              providerPaymentId: molliePayment.id,
-              method: (molliePayment as any)?.method ?? null,
-              rawPayload,
-              currency,
-              amountCents,
-              paidAt,
-            },
-            update: {
-              status: mappedStatus,
-              method: (molliePayment as any)?.method ?? null,
-              rawPayload,
-              currency,
-              amountCents,
-              paidAt,
-            },
+        if (!booking) {
+          console.warn("[mollie/webhook] booking niet gevonden", {
+            bookingId,
+            paymentId: molliePayment.id,
           });
 
           return;
         }
 
-        await tx.payment.deleteMany({
-          where: { bookingId: freshBooking.id },
+        await tx.payment.upsert({
+          where: { providerPaymentId: molliePayment.id },
+          create: {
+            bookingId: booking.id,
+            provider: PaymentProvider.MOLLIE,
+            type: PaymentType.DEPOSIT,
+            status: mappedStatus,
+            providerPaymentId: molliePayment.id,
+            method,
+            rawPayload,
+            currency,
+            amountCents,
+            paidAt,
+          },
+          update: {
+            bookingId: booking.id,
+            status: mappedStatus,
+            method,
+            rawPayload,
+            currency,
+            amountCents,
+            paidAt,
+          },
         });
 
-        await tx.booking.delete({
-          where: { id: freshBooking.id },
+        if (isDeadPayment(molliePayment.status)) {
+          if (booking.status === BookingStatus.PENDING) {
+            await tx.booking.update({
+              where: { id: booking.id },
+              data: {
+                status: BookingStatus.CANCELLED,
+                cancelledAt: new Date(),
+              },
+            });
+
+            await tx.slot.update({
+              where: { id: booking.slotId },
+              data: {
+                status: SlotStatus.PUBLISHED,
+                bookedAt: null,
+              },
+            });
+          }
+
+          return;
+        }
+
+        if (molliePayment.status !== "paid") {
+          return;
+        }
+
+        if (booking.status === BookingStatus.CONFIRMED) {
+          return;
+        }
+
+        if (booking.status !== BookingStatus.PENDING) {
+          console.warn("[mollie/webhook] betaalde betaling voor niet-PENDING booking", {
+            bookingId: booking.id,
+            bookingStatus: booking.status,
+            paymentId: molliePayment.id,
+          });
+
+          return;
+        }
+
+        if (!booking.slot) {
+          console.warn("[mollie/webhook] booking zonder slot", {
+            bookingId: booking.id,
+            paymentId: molliePayment.id,
+          });
+
+          return;
+        }
+
+        if (
+          booking.slot.status !== SlotStatus.PUBLISHED &&
+          booking.slot.status !== SlotStatus.BOOKED
+        ) {
+          console.warn("[mollie/webhook] slot niet beschikbaar voor bevestiging", {
+            bookingId: booking.id,
+            slotId: booking.slot.id,
+            slotStatus: booking.slot.status,
+            paymentId: molliePayment.id,
+          });
+
+          return;
+        }
+
+        const updatedBooking = await tx.booking.updateMany({
+          where: {
+            id: booking.id,
+            status: BookingStatus.PENDING,
+          },
+          data: {
+            status: BookingStatus.CONFIRMED,
+            confirmedAt: new Date(),
+            depositPaidAt: paidAt ?? new Date(),
+          },
         });
+
+        if (updatedBooking.count !== 1) {
+          return;
+        }
 
         await tx.slot.update({
-          where: { id: freshBooking.slotId },
+          where: { id: booking.slot.id },
           data: {
-            status: SlotStatus.PUBLISHED,
-            bookedAt: null,
+            status: SlotStatus.BOOKED,
+            bookedAt: new Date(),
           },
         });
-      });
 
-      return NextResponse.json({ ok: true }, { status: 200 });
-    }
-
-    await prisma.payment.upsert({
-      where: { providerPaymentId: molliePayment.id },
-      create: {
-        bookingId: booking.id,
-        provider: PaymentProvider.MOLLIE,
-        type: PaymentType.DEPOSIT,
-        status: mappedStatus,
-        providerPaymentId: molliePayment.id,
-        method: (molliePayment as any)?.method ?? null,
-        rawPayload,
-        currency,
-        amountCents,
-        paidAt,
+        justConfirmed = true;
+        bookingForEmailId = booking.id;
       },
-      update: {
-        bookingId: booking.id,
-        status: mappedStatus,
-        method: (molliePayment as any)?.method ?? null,
-        rawPayload,
-        currency,
-        amountCents,
-        paidAt,
-      },
-    });
-
-    if (molliePayment.status !== "paid") {
-      return NextResponse.json({ ok: true }, { status: 200 });
-    }
-
-    let justConfirmed = false;
-
-    await prisma.$transaction(async (tx) => {
-      const freshBooking = await tx.booking.findUnique({
-        where: { id: booking.id },
-        select: {
-          id: true,
-          status: true,
-          slotId: true,
-          slot: {
-            select: {
-              id: true,
-              status: true,
-            },
-          },
-        },
-      });
-
-      if (!freshBooking) return;
-
-      if (freshBooking.status === BookingStatus.CONFIRMED) return;
-
-      if (freshBooking.status !== BookingStatus.PENDING) {
-        console.warn("[mollie/webhook] betaalde betaling voor niet-PENDING booking", {
-          bookingId: freshBooking.id,
-          bookingStatus: freshBooking.status,
-          paymentId: molliePayment.id,
-        });
-
-        return;
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
       }
+    );
 
-      if (!freshBooking.slot) return;
-
-      if (
-        freshBooking.slot.status !== SlotStatus.PUBLISHED &&
-        freshBooking.slot.status !== SlotStatus.BOOKED
-      ) {
-        console.warn("[mollie/webhook] slot niet beschikbaar voor bevestiging", {
-          bookingId: freshBooking.id,
-          slotId: freshBooking.slot.id,
-          slotStatus: freshBooking.slot.status,
-          paymentId: molliePayment.id,
-        });
-
-        return;
-      }
-
-      await tx.booking.update({
-        where: { id: freshBooking.id },
-        data: {
-          status: BookingStatus.CONFIRMED,
-          confirmedAt: new Date(),
-          depositPaidAt: paidAt ?? new Date(),
-        },
-      });
-
-      await tx.slot.update({
-        where: { id: freshBooking.slot.id },
-        data: {
-          status: SlotStatus.BOOKED,
-          bookedAt: new Date(),
-        },
-      });
-
-      justConfirmed = true;
-    });
-
-    if (justConfirmed) {
-      await sendBookingEmails(booking.id, { includePartner: true });
+    if (justConfirmed && bookingForEmailId) {
+      await sendBookingEmails(bookingForEmailId, { includePartner: true });
     }
 
     return NextResponse.json({ ok: true }, { status: 200 });
-  } catch (err) {
+  } catch (err: unknown) {
     console.error("[mollie/webhook] error", err);
 
     return NextResponse.json({ ok: true }, { status: 200 });

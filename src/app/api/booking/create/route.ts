@@ -11,7 +11,25 @@ export const revalidate = 0;
 const FIXED_TOTAL_CENTS = 7990;
 const PENDING_BOOKING_TTL_SECONDS = 90;
 
-function json(data: unknown, status = 200, extraHeaders?: Record<string, string>) {
+type RawBookingBody = {
+  partnerSlug?: unknown;
+  slotId?: unknown;
+  startTimeISO?: unknown;
+  players?: unknown;
+  playersCount?: unknown;
+  customer?: unknown;
+  dog?: unknown;
+  dogName?: unknown;
+  dogAllergies?: unknown;
+  dogFears?: unknown;
+  dogTrackingLevel?: unknown;
+};
+
+function json(
+  data: unknown,
+  status = 200,
+  extraHeaders?: Record<string, string>
+) {
   return new NextResponse(JSON.stringify(data), {
     status,
     headers: {
@@ -33,6 +51,16 @@ function computePriceCents(feePercent: number) {
     depositCents,
     restCents: totalCents - depositCents,
   };
+}
+
+function parseValidDate(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new Error("Ongeldige startTimeISO");
+  }
+
+  return date;
 }
 
 function isExpiredPendingBooking(booking: {
@@ -67,7 +95,9 @@ const CreateBookingSchema = z
         name: z.string().min(1).optional(),
         allergies: z.string().optional(),
         fears: z.string().optional(),
-        trackingLevel: z.enum(["NONE", "BEGINNER", "AMATEUR", "PRO"]).optional(),
+        trackingLevel: z
+          .enum(["NONE", "BEGINNER", "AMATEUR", "PRO"])
+          .optional(),
       })
       .optional(),
   })
@@ -113,7 +143,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const raw = await req.json();
+    const raw = (await req.json()) as RawBookingBody;
 
     const normalized = {
       partnerSlug: raw.partnerSlug,
@@ -139,6 +169,10 @@ export async function POST(req: NextRequest) {
 
     const data = CreateBookingSchema.parse(normalized);
     const normalizedEmail = data.customer.email.trim().toLowerCase();
+
+    const requestedStartTime = data.startTimeISO
+      ? parseValidDate(data.startTimeISO)
+      : null;
 
     const result = await prisma.$transaction(
       async (tx) => {
@@ -172,7 +206,7 @@ export async function POST(req: NextRequest) {
           : await tx.slot.findFirst({
               where: {
                 partnerId: partner.id,
-                startTime: new Date(data.startTimeISO!),
+                startTime: requestedStartTime!,
               },
               select: {
                 id: true,
@@ -249,27 +283,9 @@ export async function POST(req: NextRequest) {
         }
 
         if (
-          existing?.status === BookingStatus.PENDING &&
-          isExpiredPendingBooking(existing)
+          existing?.status === BookingStatus.PENDING ||
+          existing?.status === BookingStatus.CANCELLED
         ) {
-          await tx.payment.deleteMany({
-            where: { bookingId: existing.id },
-          });
-
-          await tx.booking.delete({
-            where: { id: existing.id },
-          });
-
-          await tx.slot.update({
-            where: { id: slot.id },
-            data: {
-              status: SlotStatus.PUBLISHED,
-              bookedAt: null,
-            },
-          });
-        }
-
-        if (existing?.status === BookingStatus.CANCELLED) {
           await tx.payment.deleteMany({
             where: { bookingId: existing.id },
           });
@@ -420,6 +436,22 @@ export async function POST(req: NextRequest) {
           ok: false,
           error: "Validatie fout",
           details: err.issues,
+        },
+        400
+      );
+    }
+
+    if (err instanceof Error && err.message === "Ongeldige startTimeISO") {
+      return json(
+        {
+          ok: false,
+          error: "Validatie fout",
+          details: [
+            {
+              path: ["startTimeISO"],
+              message: "startTimeISO is geen geldige datum/tijd.",
+            },
+          ],
         },
         400
       );

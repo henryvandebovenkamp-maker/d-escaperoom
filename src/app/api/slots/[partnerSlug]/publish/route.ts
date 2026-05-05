@@ -1,26 +1,45 @@
 // PATH: src/app/api/slots/[partnerSlug]/publish/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { SlotStatus } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { resolvePartnerForRequest } from "@/lib/partner";
 import { z } from "zod";
 
-/**
- * Input schema
- * - Kies óf een bestaand draft slot via slotId
- * - Óf maak/publiceer via startTimeISO (+ optioneel end/duration/capacities)
- */
-const BodySchema = z.object({
-  slotId: z.string().uuid().optional(),
+const BodySchema = z
+  .object({
+    slotId: z.string().uuid().optional(),
 
-  // Wanneer geen slotId is meegegeven:
-  startTimeISO: z.string().datetime({ offset: true }).optional(),
-  endTimeISO: z.string().datetime({ offset: true }).optional(),
-  durationMinutes: z.number().int().positive().max(24 * 60).default(60).optional(),
+    startTimeISO: z.string().datetime({ offset: true }).optional(),
+    endTimeISO: z.string().datetime({ offset: true }).optional(),
+    durationMinutes: z.coerce.number().int().positive().max(24 * 60).default(60),
 
-  capacity: z.number().int().positive().max(99).default(1).optional(),
-  maxPlayers: z.number().int().positive().max(10).default(3).optional(),
-});
+    capacity: z.coerce.number().int().positive().max(99).default(1),
+    maxPlayers: z.coerce.number().int().positive().max(10).default(3),
+  })
+  .superRefine((val, ctx) => {
+    if (!val.slotId && !val.startTimeISO) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["startTimeISO"],
+        message: "startTimeISO is verplicht wanneer slotId ontbreekt.",
+      });
+    }
+  });
+
+function parseValidDate(iso: string) {
+  const date = new Date(iso);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new Error("Ongeldige datum/tijd.");
+  }
+
+  return date;
+}
+
+function addMinutes(date: Date, minutes: number) {
+  return new Date(date.getTime() + minutes * 60_000);
+}
 
 export async function POST(
   req: NextRequest,
@@ -28,28 +47,27 @@ export async function POST(
 ) {
   try {
     const user = await getSessionUser();
+
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // ⬇️ Next.js 15 dynamic params moeten ge-‘await’ worden
     const { partnerSlug } = await ctx.params;
-
-    // ⬇️ Koppel altijd aan de juiste partner (PARTNER=altijd eigen, ADMIN=via slug)
     const partner = await resolvePartnerForRequest(user, partnerSlug);
 
     const bodyRaw = await req.json();
     const body = BodySchema.parse(bodyRaw);
 
-    // Helper om endTime te bepalen
-    const toDate = (iso: string) => new Date(iso);
-    const addMinutes = (d: Date, m: number) => new Date(d.getTime() + m * 60_000);
-
-    // === 1) Publiceer een bestaand DRAFT slot (via slotId) ===
     if (body.slotId) {
       const existing = await prisma.slot.findFirst({
-        where: { id: body.slotId, partnerId: partner.id },
-        select: { id: true, status: true },
+        where: {
+          id: body.slotId,
+          partnerId: partner.id,
+        },
+        select: {
+          id: true,
+          status: true,
+        },
       });
 
       if (!existing) {
@@ -59,8 +77,7 @@ export async function POST(
         );
       }
 
-      // Alleen toestaan om DRAFT → PUBLISHED te zetten (BOOKED blijft met rust)
-      if (existing.status === "BOOKED") {
+      if (existing.status === SlotStatus.BOOKED) {
         return NextResponse.json(
           { error: "Cannot publish a booked slot" },
           { status: 400 }
@@ -69,70 +86,82 @@ export async function POST(
 
       const slot = await prisma.slot.update({
         where: { id: existing.id },
-        data: { status: "PUBLISHED" },
+        data: { status: SlotStatus.PUBLISHED },
       });
 
       return NextResponse.json({ ok: true, slot });
     }
 
-    // === 2) Publiceer door nieuw slot aan te maken / te upserten ===
-    if (!body.startTimeISO) {
+    const start = parseValidDate(body.startTimeISO!);
+    const end = body.endTimeISO
+      ? parseValidDate(body.endTimeISO)
+      : addMinutes(start, body.durationMinutes);
+
+    if (end <= start) {
       return NextResponse.json(
-        { error: "startTimeISO is required when slotId is not provided" },
+        { error: "endTimeISO moet na startTimeISO liggen" },
         { status: 400 }
       );
     }
 
-    const start = toDate(body.startTimeISO);
-    const end =
-      body.endTimeISO
-        ? toDate(body.endTimeISO)
-        : addMinutes(start, body.durationMinutes ?? 60);
-
-    // Optioneel: zorg dat er niet per ongeluk dubbele slots ontstaan.
-    // Aanbevolen unieke index in Prisma: @@unique([partnerId, startTime])
     const existingSameStart = await prisma.slot.findFirst({
-      where: { partnerId: partner.id, startTime: start },
-      select: { id: true, status: true },
+      where: {
+        partnerId: partner.id,
+        startTime: start,
+      },
+      select: {
+        id: true,
+        status: true,
+      },
     });
 
-    let slot;
     if (existingSameStart) {
-      // Upgrade naar PUBLISHED (tenzij al BOOKED)
-      if (existingSameStart.status === "BOOKED") {
+      if (existingSameStart.status === SlotStatus.BOOKED) {
         return NextResponse.json(
           { error: "Slot at this time is already booked" },
           { status: 400 }
         );
       }
-      slot = await prisma.slot.update({
+
+      const slot = await prisma.slot.update({
         where: { id: existingSameStart.id },
         data: {
           endTime: end,
-          capacity: body.capacity ?? 1,
-          maxPlayers: body.maxPlayers ?? 3,
-          status: "PUBLISHED",
+          capacity: body.capacity,
+          maxPlayers: body.maxPlayers,
+          status: SlotStatus.PUBLISHED,
         },
       });
-    } else {
-      // Nieuw slot, direct PUBLISHED
-      slot = await prisma.slot.create({
-        data: {
-          partnerId: partner.id,
-          startTime: start,
-          endTime: end,
-          status: "PUBLISHED",
-          capacity: body.capacity ?? 1,
-          maxPlayers: body.maxPlayers ?? 3,
-        },
-      });
+
+      return NextResponse.json({ ok: true, slot });
     }
 
+    const slot = await prisma.slot.create({
+      data: {
+        partnerId: partner.id,
+        startTime: start,
+        endTime: end,
+        status: SlotStatus.PUBLISHED,
+        capacity: body.capacity,
+        maxPlayers: body.maxPlayers,
+      },
+    });
+
     return NextResponse.json({ ok: true, slot });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[/api/slots/[partnerSlug]/publish] Error:", err);
-    const msg = err?.message ?? "Internal error";
-    // Geef zinnige fout door aan de client voor debugging
+
+    if (err instanceof z.ZodError) {
+      return NextResponse.json(
+        {
+          error: "Validatie fout",
+          details: err.issues,
+        },
+        { status: 400 }
+      );
+    }
+
+    const msg = err instanceof Error ? err.message : "Internal error";
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

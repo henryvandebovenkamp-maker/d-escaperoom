@@ -1,19 +1,14 @@
 // PATH: src/app/api/slots/[partnerSlug]/bulk/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { SlotStatus } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { resolvePartnerForRequest } from "@/lib/partner";
 import { z } from "zod";
-import type { SlotStatus } from "@prisma/client";
 import { fromZonedTime } from "date-fns-tz";
 
-/** Body:
- *  - startDate / endDate: "YYYY-MM-DD"
- *  - weekdays: JS-day nummers (0=zo..6=za), minimaal 1
- *  - times: "HH:MM" (bijv. "09:00"), minimaal 1
- *  - publish: boolean
- *  - optioneel: capacity, maxPlayers, durationMinutes
- */
+const TIMEZONE = "Europe/Amsterdam";
+
 const BodySchema = z.object({
   startDate: z
     .string()
@@ -22,24 +17,20 @@ const BodySchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "endDate moet YYYY-MM-DD zijn"),
   weekdays: z
-    .array(z.number().int().min(0).max(6))
+    .array(z.coerce.number().int().min(0).max(6))
     .nonempty("Kies minimaal één weekdag"),
   times: z
     .array(z.string().regex(/^\d{2}:\d{2}$/))
     .nonempty("Kies minimaal één tijd"),
-  publish: z.boolean().default(true),
-  capacity: z.number().int().positive().max(99).default(1).optional(),
-  maxPlayers: z.number().int().positive().max(10).default(3).optional(),
-  durationMinutes: z
-    .number()
-    .int()
-    .positive()
-    .max(24 * 60)
-    .default(60)
-    .optional(),
+  publish: z.coerce.boolean().default(true),
+  capacity: z.coerce.number().int().positive().max(99).default(1),
+  maxPlayers: z.coerce.number().int().positive().max(10).default(3),
+  durationMinutes: z.coerce.number().int().positive().max(24 * 60).default(60),
 });
 
-const TIMEZONE = "Europe/Amsterdam";
+function pad2(value: number) {
+  return String(value).padStart(2, "0");
+}
 
 function parseYMD(ymd: string) {
   const [year, month, day] = ymd.split("-").map(Number);
@@ -47,10 +38,9 @@ function parseYMD(ymd: string) {
 }
 
 function formatYMD(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(
+    date.getDate()
+  )}`;
 }
 
 function addDays(dateIso: string, amount: number) {
@@ -62,15 +52,15 @@ function addDays(dateIso: string, amount: number) {
 
 function getWeekday(dateIso: string) {
   const { year, month, day } = parseYMD(dateIso);
-  return new Date(year, month - 1, day).getDay(); // 0=zo..6=za
+  return new Date(year, month - 1, day).getDay();
 }
 
 function amsterdamDateTimeToUtc(dateIso: string, hhmm: string) {
   return fromZonedTime(`${dateIso} ${hhmm}:00`, TIMEZONE);
 }
 
-function addMinutes(date: Date, mins: number) {
-  return new Date(date.getTime() + mins * 60_000);
+function addMinutes(date: Date, minutes: number) {
+  return new Date(date.getTime() + minutes * 60_000);
 }
 
 function startOfDayUtc(dateIso: string) {
@@ -87,6 +77,7 @@ export async function POST(
 ) {
   try {
     const user = await getSessionUser();
+
     if (!user) {
       return NextResponse.json(
         { ok: false, error: "UNAUTHORIZED" },
@@ -98,6 +89,7 @@ export async function POST(
     const partner = await resolvePartnerForRequest(user, partnerSlug);
 
     let raw: unknown;
+
     try {
       raw = await req.json();
     } catch {
@@ -108,6 +100,7 @@ export async function POST(
     }
 
     const parsed = BodySchema.safeParse(raw);
+
     if (!parsed.success) {
       return NextResponse.json(
         {
@@ -125,9 +118,9 @@ export async function POST(
       weekdays,
       times,
       publish,
-      capacity = 1,
-      maxPlayers = 3,
-      durationMinutes = 60,
+      capacity,
+      maxPlayers,
+      durationMinutes,
     } = parsed.data;
 
     if (startDate > endDate) {
@@ -135,23 +128,27 @@ export async function POST(
         {
           ok: false,
           error: "INVALID_RANGE",
-          message: "startDate moet ≤ endDate zijn",
+          message: "startDate moet vóór of gelijk aan endDate zijn.",
         },
         { status: 400 }
       );
     }
 
+    const uniqueWeekdays = Array.from(new Set(weekdays));
     const uniqueTimes = Array.from(new Set(times)).sort();
+
     const wanted: Array<{ startTime: Date; endTime: Date }> = [];
 
     let currentDate = startDate;
+
     while (currentDate <= endDate) {
       const weekday = getWeekday(currentDate);
 
-      if (weekdays.includes(weekday)) {
+      if (uniqueWeekdays.includes(weekday)) {
         for (const time of uniqueTimes) {
           const startTime = amsterdamDateTimeToUtc(currentDate, time);
           const endTime = addMinutes(startTime, durationMinutes);
+
           wanted.push({ startTime, endTime });
         }
       }
@@ -164,19 +161,19 @@ export async function POST(
         {
           ok: false,
           error: "EMPTY_SELECTION",
-          message: "Geen datums/tijden in de gekozen range",
+          message: "Geen datums/tijden in de gekozen range.",
         },
         { status: 400 }
       );
     }
 
+    const status = publish ? SlotStatus.PUBLISHED : SlotStatus.DRAFT;
+
     const data = wanted.map(({ startTime, endTime }) => ({
       partnerId: partner.id,
       startTime,
       endTime,
-      status: publish
-        ? ("PUBLISHED" as SlotStatus)
-        : ("PUBLISHED" as SlotStatus), // laat staan zolang DB geen DRAFT kent
+      status,
       capacity,
       maxPlayers,
     }));
@@ -224,10 +221,13 @@ export async function POST(
           ? "Bestaande tijden zijn overgeslagen; nieuwe tijden zijn toegevoegd."
           : "Alle gekozen tijden zijn aangemaakt.",
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[/api/slots/[partnerSlug]/bulk] Error:", err);
+
+    const message = err instanceof Error ? err.message : "Internal error";
+
     return NextResponse.json(
-      { ok: false, error: err?.message ?? "Internal error" },
+      { ok: false, error: message },
       { status: 500 }
     );
   }
