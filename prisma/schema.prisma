@@ -12,25 +12,24 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-
-
 // ========================================================
 // ENUMS
 // ========================================================
+
 enum Role {
   ADMIN
   PARTNER
 }
 
 enum SlotStatus {
-  DRAFT       // nog niet zichtbaar voor consumenten
-  PUBLISHED   // boekbaar
-  BOOKED      // volledig geboekt (1 booking per slot)
+  DRAFT
+  PUBLISHED
+  BOOKED
 }
 
 enum BookingStatus {
-  PENDING     // aangemaakt maar nog niet bevestigd
-  CONFIRMED   // aanbetaling betaald → slot is bezet
+  PENDING
+  CONFIRMED
   CANCELLED
 }
 
@@ -44,15 +43,15 @@ enum PaymentStatus {
 }
 
 enum PaymentType {
-  DEPOSIT     // aanbetaling (alleen deze via Mollie)
-  REMAINING   // restbedrag (op locatie, optioneel registreren)
+  DEPOSIT
+  REMAINING
   REFUND
 }
 
 enum PaymentProvider {
   MOLLIE
-  OFFLINE    // contant/pin op locatie (registratie)
-  MANUAL     // handmatige correctie
+  OFFLINE
+  MANUAL
 }
 
 enum Province {
@@ -70,10 +69,9 @@ enum Province {
   ZUID_HOLLAND
 }
 
-// ✅ NIEUW voor kortingscodes
 enum DiscountType {
-  PERCENT   // 0..20
-  FIXED     // bedrag in centen
+  PERCENT
+  FIXED
 }
 
 // ========================================================
@@ -86,7 +84,6 @@ model AppUser {
   name        String?
   role        Role
 
-  // Voor PARTNER-rollen: optionele koppeling naar Partner
   partner     Partner? @relation(fields: [partnerId], references: [id])
   partnerId   String?
 
@@ -98,382 +95,340 @@ model AppUser {
   @@index([partnerId])
 }
 
-/**
- * Partner = hondenschool
- * feePercent bepaalt de aanbetaling (deposit = total × feePercent%).
- */
 model Partner {
-  id              String     @id @default(cuid())
+  id              String   @id @default(cuid())
   name            String
-  slug            String     @unique
+  slug            String   @unique
   email           String?
-  province        Province   @default(UTRECHT)
+  province        Province @default(UTRECHT)
   phone           String?
-  isActive        Boolean    @default(true)
+  isActive        Boolean  @default(true)
 
-  // Prijzen (in centen)
-  // NB: valideer op API: >= 0
-  price1PaxCents  Int        @default(4995) // 1 persoon (default €49,95)
-  price2PlusCents Int        @default(3995) // vanaf 2 personen (default €39,95)
+  price1PaxCents  Int      @default(4995)
+  price2PlusCents Int      @default(3995)
 
-  // Fee naar D-EscapeRoom (ook aanbetaling bij boeking)
   feePercent      Int
 
-  // Presentatie / adres
-  heroImageUrl   String?
-  addressLine1   String?
-  addressLine2   String?
-  postalCode     String?
-  city           String?
-  country        String?  @default("NL")
-  timezone       String   @default("Europe/Amsterdam")
-  googleMapsUrl  String?  @db.Text
+  heroImageUrl    String?
+  addressLine1    String?
+  addressLine2    String?
+  postalCode      String?
+  city            String?
+  country         String?  @default("NL")
+  timezone        String   @default("Europe/Amsterdam")
+  googleMapsUrl   String?  @db.Text
 
   users           AppUser[]
   slots           Slot[]
   bookings        Booking[]
+  reviews         Review[]
 
-  // Giftcards van deze partner
   giftCards       GiftCard[]      @relation("PartnerGiftCards")
-
-  // ✅ Tegenrelatie voor GiftCardOrder.partner
   giftCardOrders  GiftCardOrder[] @relation("PartnerGiftCardOrders")
-
-  // ✅ Kortingscodes (altijd partner-gebonden)
   discountCodes   DiscountCode[]
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
 
-/**
- * Slot = tijdsblok van 60 minuten (speelduur ±45 min).
- * Capaciteit 1 boeking per slot (afgedwongen met unique op Booking.slotId).
- */
 model Slot {
-  id           String     @id @default(cuid())
+  id          String     @id @default(cuid())
 
-  partner      Partner    @relation(fields: [partnerId], references: [id])
-  partnerId    String
+  partner     Partner    @relation(fields: [partnerId], references: [id])
+  partnerId   String
 
-  startTime    DateTime
-  endTime      DateTime
+  startTime   DateTime
+  endTime     DateTime
+  status      SlotStatus @default(DRAFT)
 
-  status       SlotStatus @default(DRAFT)
+  capacity    Int        @default(1)
+  maxPlayers  Int        @default(3)
 
-  // UI/beleid
-  capacity     Int        @default(1) // 1 boeking per slot
-  maxPlayers   Int        @default(3) // advies max 3 spelers (1 hond)
+  publishedAt DateTime?
+  bookedAt    DateTime?
 
-  // Timestamps
-  publishedAt  DateTime?
-  bookedAt     DateTime?
+  booking     Booking?
 
-  // 1:1 relatie naar Booking (FK zit aan Booking-kant via slotId)
-  booking      Booking?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  // Voorkom dubbele slots op hetzelfde moment voor dezelfde partner
   @@unique([partnerId, startTime])
-
-  // Versnelt dag/maand-query’s
   @@index([partnerId, startTime])
+  @@index([partnerId, status, startTime])
   @@index([status])
+  @@index([startTime])
 }
 
-/**
- * Customer = consument die boekt/betaalt (aanbetaling via Mollie).
- */
 model Customer {
-  id         String    @id @default(cuid())
-  email      String    @db.Text
-  name       String?
-  phone      String?
-  locale     String?   // "nl", "en", "de", "es" — voor e-mails
+  id        String   @id @default(cuid())
+  email     String   @db.Text
+  name      String?
+  phone     String?
+  locale    String?
 
-  bookings   Booking[]
+  bookings  Booking[]
 
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([email])
 }
 
-/**
- * Booking = 1 boeking per slot.
- * Bij betaalde DEPOSIT → status CONFIRMED, slot → BOOKED.
- * Alle bedragen in centen.
- */
 model Booking {
-  id                   String         @id @default(cuid())
+  id                   String        @id @default(cuid())
 
-  partner              Partner        @relation(fields: [partnerId], references: [id])
+  partner              Partner       @relation(fields: [partnerId], references: [id])
   partnerId            String
 
-  slot                 Slot           @relation(fields: [slotId], references: [id])
-  slotId               String         @unique           // 1 boeking per slot
+  slot                 Slot          @relation(fields: [slotId], references: [id])
+  slotId               String        @unique
 
-  customer             Customer       @relation(fields: [customerId], references: [id])
+  customer             Customer      @relation(fields: [customerId], references: [id])
   customerId           String
 
-  status               BookingStatus  @default(PENDING)
-  emailsSentAt         DateTime? 
-  
-  // Prijsopbouw (valideer op API: >= 0, en total = deposit + rest - korting)
-  currency             String         @default("EUR")
+  status               BookingStatus @default(PENDING)
+  emailsSentAt         DateTime?
+
+  currency             String        @default("EUR")
   totalAmountCents     Int
   depositAmountCents   Int
   restAmountCents      Int
 
-  playersCount         Int            @default(1) // informatief
+  playersCount         Int           @default(1)
   dogName              String?
   dogAllergies         String?
   dogFears             String?
-  dogTrackingLevel     String?        // values: "NONE" | "BEGINNER" | "AMATEUR" | "PRO"
-  dogSocialWithPeople Boolean?
+  dogTrackingLevel     String?
+  dogSocialWithPeople  Boolean?
 
-  // Algemene voorwaarden akkoord
-  acceptedTerms        Boolean        @default(false)
+  acceptedTerms        Boolean       @default(false)
   acceptedTermsAt      DateTime?
   acceptedTermsVersion String?
 
-
-  // ---- Giftcard-registratie (optioneel) ----
   giftCardId           String?
-  giftCard             GiftCard?      @relation("BookingGiftCard", fields: [giftCardId], references: [id])
+  giftCard             GiftCard?     @relation("BookingGiftCard", fields: [giftCardId], references: [id])
   giftCardAppliedCents Int?
 
-  // ✅ Korting (optioneel) — toegepast op REST-bedrag in je prijslogica
   discountCodeId       String?
-  discountCode         DiscountCode?  @relation(fields: [discountCodeId], references: [id])
-  discountAmountCents  Int            @default(0)
+  discountCode         DiscountCode? @relation(fields: [discountCodeId], references: [id])
+  discountAmountCents  Int           @default(0)
 
-  // Status-timestamps
   confirmedAt          DateTime?
   cancelledAt          DateTime?
   depositPaidAt        DateTime?
 
   payments             Payment[]
-  refunds              Refund[]       // ✅ audit van terugbetalingen
-
-  // Tegenrelatie voor GiftCardRedemption.booking
+  refunds              Refund[]
   redemptions          GiftCardRedemption[] @relation("BookingRedemptions")
 
-  createdAt            DateTime       @default(now())
-  updatedAt            DateTime       @updatedAt
+  review               Review?
+
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 
   @@index([partnerId])
   @@index([customerId])
   @@index([status])
   @@index([discountCodeId])
   @@index([cancelledAt])
+  @@index([createdAt])
 }
 
-/**
- * Payment = betalingen (meestal DEPOSIT via MOLLIE).
- * Meerdere payments toegestaan (retry, refund). Booking bepaalt CONFIRMED.
- */
 model Payment {
-  id                  String                 @id @default(cuid())
+  id                  String          @id @default(cuid())
 
-  booking             Booking                @relation(fields: [bookingId], references: [id])
+  booking             Booking         @relation(fields: [bookingId], references: [id])
   bookingId           String
 
   provider            PaymentProvider
-  type                PaymentType            @default(DEPOSIT)
-  status              PaymentStatus          @default(CREATED)
+  type                PaymentType     @default(DEPOSIT)
+  status              PaymentStatus   @default(CREATED)
 
-  // Provider info (Mollie IDs, payloads)
-  providerPaymentId   String?                @unique
-  method              String?                // bijv. 'ideal', 'creditcard'
-  rawPayload          Json?                  // laatste fetch/webhook payload
+  providerPaymentId   String?         @unique
+  method              String?
+  rawPayload          Json?
 
-  // Bedragen (valideer op API: >= 0)
-  currency            String                 @default("EUR")
+  currency            String          @default("EUR")
   amountCents         Int
 
-  // Timestamps
   paidAt              DateTime?
-  createdAt           DateTime               @default(now())
-  updatedAt           DateTime               @updatedAt
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
 
-  // Refunds die op dit payment zijn uitgevoerd
-  refunds             Refund[]               // ✅
-
-  // Tegenrelatie voor GiftCardRedemption.payment
-  giftCardRedemptions GiftCardRedemption[]   @relation("PaymentRedemptions")
+  refunds             Refund[]
+  giftCardRedemptions GiftCardRedemption[] @relation("PaymentRedemptions")
 
   @@index([bookingId])
   @@index([status])
   @@index([type])
+  @@index([createdAt])
 }
 
-/**
- * ✅ Refund — expliciete audit van terugbetalingen (via Mollie of handmatig)
- * Eén Payment kan meerdere partial refunds hebben; we loggen elk deel apart.
- */
 model Refund {
-  id                 String    @id @default(cuid())
+  id               String          @id @default(cuid())
 
-  booking            Booking   @relation(fields: [bookingId], references: [id])
-  bookingId          String
+  booking          Booking         @relation(fields: [bookingId], references: [id])
+  bookingId        String
 
-  payment            Payment   @relation(fields: [paymentId], references: [id])
-  paymentId          String
+  payment          Payment         @relation(fields: [paymentId], references: [id])
+  paymentId        String
 
-  amountCents        Int       // in centen, > 0
-  currency           String    @default("EUR")
+  amountCents      Int
+  currency         String          @default("EUR")
 
-  provider           PaymentProvider @default(MOLLIE)
-  providerRefundId   String?   // Mollie refund id (optioneel)
-  reason             String?   // optioneel: toelichting
+  provider         PaymentProvider @default(MOLLIE)
+  providerRefundId String?
+  reason           String?
 
-  createdAt          DateTime  @default(now())
+  createdAt        DateTime        @default(now())
 
   @@index([bookingId])
   @@index([paymentId])
 }
 
-/**
- * Magic-link / 6-cijfer code login voor zowel ADMIN als PARTNER.
- * Koppelen op email; user mag bestaan, maar hoeft niet vooraf.
- */
 model LoginCode {
-  id         String   @id @default(cuid())
-  email      String
-  codeHash   String
-  expiresAt  DateTime
-  usedAt     DateTime?
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  email     String
+  codeHash  String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
 
   @@index([email])
   @@index([expiresAt])
 }
 
-// ==============================
-// GIFT CARDS (bedragstegoed)
-// ==============================
+// ========================================================
+// REVIEWS
+// ========================================================
+
+model Review {
+  id            String   @id @default(cuid())
+
+  booking       Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  bookingId     String?  @unique
+
+  partner       Partner? @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  partnerId     String?
+
+  name          String
+  dogName       String?
+  rating        Int
+  message       String   @db.Text
+
+  consent       Boolean  @default(false)
+  isPublished   Boolean  @default(false)
+
+  googleAskedAt DateTime?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([partnerId])
+  @@index([isPublished])
+  @@index([createdAt])
+}
+
+// ========================================================
+// GIFT CARDS
+// ========================================================
 
 model GiftCard {
-  id                 String    @id @default(cuid())
-  code               String    @unique            // bv. "GC-9XAF3K"
-  currency           String    @default("EUR")
+  id                 String   @id @default(cuid())
+  code               String   @unique
+  currency           String   @default("EUR")
   initialAmountCents Int
   balanceCents       Int
-  isActive           Boolean   @default(true)
+  isActive           Boolean  @default(true)
   expiresAt          DateTime?
 
-  // Optioneel: kaart alleen bij een specifieke hondenschool te gebruiken
   partnerId          String?
-  partner            Partner?  @relation("PartnerGiftCards", fields: [partnerId], references: [id])
+  partner            Partner? @relation("PartnerGiftCards", fields: [partnerId], references: [id])
 
-  // Bookings waar deze giftcard direct op is toegepast
-  bookings           Booking[]             @relation("BookingGiftCard")
+  bookings           Booking[]            @relation("BookingGiftCard")
+  redemptions        GiftCardRedemption[] @relation("CardRedemptions")
+  orders             GiftCardOrder[]      @relation("OrderGiftCard")
 
-  // Audit: elke afboeking loggen
-  redemptions        GiftCardRedemption[]  @relation("CardRedemptions")
-
-  // ✅ Tegenrelatie voor GiftCardOrder.giftCard
-  orders             GiftCardOrder[]       @relation("OrderGiftCard")
-
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   @@index([partnerId])
   @@index([isActive, expiresAt])
 }
 
 model GiftCardRedemption {
-  id           String    @id @default(cuid())
-  createdAt    DateTime  @default(now())
-  amountCents  Int       // positief: verrekend bedrag
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  amountCents Int
 
-  // De giftcard die (deels) is ingewisseld
-  giftCardId   String
-  giftCard     GiftCard  @relation("CardRedemptions", fields: [giftCardId], references: [id])
+  giftCardId  String
+  giftCard    GiftCard @relation("CardRedemptions", fields: [giftCardId], references: [id])
 
-  // Optioneel: op welke booking deze inwisseling staat
-  bookingId    String?
-  booking      Booking?  @relation("BookingRedemptions", fields: [bookingId], references: [id])
+  bookingId   String?
+  booking     Booking? @relation("BookingRedemptions", fields: [bookingId], references: [id])
 
-  // Optioneel: gekoppelde betaling (bv. split tussen giftcard en Mollie)
-  paymentId    String?
-  payment      Payment?  @relation("PaymentRedemptions", fields: [paymentId], references: [id])
+  paymentId   String?
+  payment     Payment? @relation("PaymentRedemptions", fields: [paymentId], references: [id])
 
   @@index([giftCardId])
   @@index([bookingId])
   @@index([paymentId])
 }
 
-// ========================================================
-// GiftCardOrder (losse aankoopstroom voor giftcards)
-// ========================================================
-
 model GiftCardOrder {
-  id                 String    @id @default(cuid())
+  id                String    @id @default(cuid())
 
-  // Status van de order: CREATED | PAID | CANCELED
-  status             String    @default("CREATED")
+  status            String    @default("CREATED")
 
-  // Aankoopgegevens
-  purchaserEmail     String
-  purchaserName      String?
-  recipientEmail     String?
-  recipientName      String?
-  message            String?
+  purchaserEmail    String
+  purchaserName     String?
+  recipientEmail    String?
+  recipientName     String?
+  message           String?
 
-  // Bedrag
-  currency           String    @default("EUR")
-  amountCents        Int
+  currency          String    @default("EUR")
+  amountCents       Int
 
-  // Optioneel beperken aan een specifieke hondenschool
-  partnerId          String?
-  partner            Partner?  @relation("PartnerGiftCardOrders", fields: [partnerId], references: [id])
+  partnerId         String?
+  partner           Partner?  @relation("PartnerGiftCardOrders", fields: [partnerId], references: [id])
 
-  // Mollie-info
-  provider           String    @default("MOLLIE")
-  providerPaymentId  String?   @unique
-  checkoutUrl        String?
-  paidAt             DateTime?
+  provider          String    @default("MOLLIE")
+  providerPaymentId String?   @unique
+  checkoutUrl       String?
+  paidAt            DateTime?
 
-  // Na betaling uitgegeven GiftCard
-  giftCardId         String?
-  giftCard           GiftCard? @relation("OrderGiftCard", fields: [giftCardId], references: [id])
+  giftCardId        String?
+  giftCard          GiftCard? @relation("OrderGiftCard", fields: [giftCardId], references: [id])
 
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   @@index([status])
   @@index([partnerId])
 }
 
 // ========================================================
-// ✅ Kortingscodes (partner-gebonden, code wereldwijd uniek)
+// DISCOUNT CODES
 // ========================================================
 
 model DiscountCode {
   id              String       @id @default(cuid())
-  code            String       @unique              // wereldwijd uniek
+  code            String       @unique
   type            DiscountType
-  percent         Int?         // Alleen bij PERCENT (0..20)
-  amountCents     Int?         // Alleen bij FIXED (>= 1)
+  percent         Int?
+  amountCents     Int?
   validFrom       DateTime?
   validUntil      DateTime?
   maxRedemptions  Int?
   redeemedCount   Int          @default(0)
   active          Boolean      @default(true)
 
-  // Altijd gekoppeld aan specifieke hondenschool
   partnerId       String
   partner         Partner      @relation(fields: [partnerId], references: [id])
 
-  // Auditing (optioneel)
   createdByUserId String?
   createdByRole   Role?
 
-  // Bookings die deze code hebben gebruikt
   bookings        Booking[]
 
   createdAt       DateTime     @default(now())
@@ -483,37 +438,48 @@ model DiscountCode {
   @@index([active, validFrom, validUntil])
 }
 
+// ========================================================
+// CHAT
+// ========================================================
 
 model ChatSession {
   id        String        @id @default(cuid())
   createdAt DateTime      @default(now())
-  role      String        // "CONSUMER" | "PARTNER" | "ADMIN"
-  locale    String        // "nl" | "en" | "de" | "es"
+  role      String
+  locale    String
+
   messages  ChatMessage[]
 
   @@index([createdAt])
 }
 
 model ChatMessage {
-  id         String      @id @default(cuid())
-  createdAt  DateTime    @default(now())
-  sessionId  String
-  session    ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  from       String      // "user" | "assistant"
-  content    String
+  id        String      @id @default(cuid())
+  createdAt DateTime    @default(now())
+
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  from      String
+  content   String
 
   @@index([sessionId])
   @@index([createdAt])
 }
 
-// PATH: prisma/schema.prisma
+// ========================================================
+// CONSENT LOGS
+// ========================================================
+
 model ConsentLog {
   id          String   @id @default(cuid())
   createdAt   DateTime @default(now())
-  version     String   // jouw beleidsversie, bv. "2025-09"
-  locale      String?  // bv. "nl"
-  preferences Json     // { necessary:true, functional:false, analytics:true, marketing:false }
-  ipHash      String?  // gehashte IP (bewijs, geen plain IP)
-  userAgent   String? 
+
+  version     String
+  locale      String?
+  preferences Json
+
+  ipHash      String?
+  userAgent   String?
   referer     String?
 }
