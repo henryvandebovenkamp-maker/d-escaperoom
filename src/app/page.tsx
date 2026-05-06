@@ -2,15 +2,16 @@
 import * as React from "react";
 import Script from "next/script";
 
+import prisma from "@/lib/prisma";
+
 import Header from "@/components/Header";
-import HeroVideo from "@/components/HeroVideo";
+import Hero from "@/components/Hero";
 import Skills from "@/components/Skills";
 import Pricing from "@/components/Pricing";
 import BookingWidget from "@/components/BookingWidget";
 import PartnerOpportunity from "@/components/PartnerOpportunity";
 import ClientContactSection from "@/components/ClientContactSection";
 import Footer from "@/components/Footer";
-import prisma from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -22,8 +23,8 @@ async function getBookingPartners() {
       },
       select: {
         id: true,
-        name: true,
         slug: true,
+        name: true,
         city: true,
         province: true,
         feePercent: true,
@@ -44,8 +45,11 @@ export default async function HomePage() {
   return (
     <main id="main" className="min-h-screen bg-stone-950 text-white">
       <Header />
-      <HeroVideo />
+
+      <Hero />
+
       <Skills />
+
       <Pricing />
 
       <section
@@ -71,6 +75,7 @@ export default async function HomePage() {
           <h2 id="partner-title" className="sr-only">
             Partner worden
           </h2>
+
           <PartnerOpportunity />
         </div>
       </section>
@@ -91,8 +96,11 @@ export default async function HomePage() {
             function hasConsentAnalytics() {
               try {
                 var m = document.cookie.match(/(?:^|; )cookie_consent=([^;]*)/);
+
                 if (!m) return false;
+
                 var cc = JSON.parse(decodeURIComponent(m[1]));
+
                 return !!(cc && cc.analytics);
               } catch (e) {
                 return false;
