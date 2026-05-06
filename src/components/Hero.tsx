@@ -26,6 +26,30 @@ const FEATURE_CHIPS = [
   "Western beleving",
 ];
 
+function ReviewBadge() {
+  return (
+    <div className="rounded-2xl border border-amber-300/20 bg-black/35 p-4 backdrop-blur-md">
+      <div className="flex items-center gap-2 text-amber-300">
+        <span aria-hidden="true">★★★★★</span>
+        <span className="text-xs font-bold uppercase tracking-[0.18em] text-amber-100">
+          Reviews
+        </span>
+      </div>
+
+      <p className="mt-2 text-sm leading-6 text-stone-100/95">
+        “Onze hond had sneller door waar we moesten zoeken dan wijzelf 😅”
+      </p>
+
+      <Link
+        href="#reviews"
+        className="mt-3 inline-flex text-xs font-bold text-rose-300 transition hover:text-rose-200"
+      >
+        Lees ervaringen ↓
+      </Link>
+    </div>
+  );
+}
+
 export default function Hero() {
   const [activeIndex, setActiveIndex] = React.useState(1);
 
@@ -73,12 +97,19 @@ export default function Hero() {
               op te lossen en samen het mysterie te ontrafelen.
             </p>
 
-            <div className="mt-8">
+            <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link
                 href="#boeken"
                 className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-pink-600 px-6 py-3 text-base font-semibold text-white shadow-lg shadow-pink-950/30 transition hover:bg-pink-700 focus:outline-none focus:ring-4 focus:ring-pink-300"
               >
                 Boek nu
+              </Link>
+
+              <Link
+                href="#reviews"
+                className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-6 py-3 text-base font-semibold text-white transition hover:bg-white/15 focus:outline-none focus:ring-4 focus:ring-white/20"
+              >
+                Lees reviews
               </Link>
             </div>
 
@@ -93,7 +124,11 @@ export default function Hero() {
               ))}
             </ul>
 
-            <div className="mt-8 grid grid-cols-3 gap-3">
+            <div className="mt-6">
+              <ReviewBadge />
+            </div>
+
+            <div className="mt-6 grid grid-cols-3 gap-3">
               {HERO_IMAGES.map((image, index) => {
                 const active = index === activeIndex;
 
@@ -173,7 +208,7 @@ export default function Hero() {
         {/* MOBIEL / TABLET */}
         <div className="lg:hidden">
           <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-stone-950/80 shadow-2xl shadow-black/40">
-            <div className="relative min-h-[720px] w-full sm:min-h-[680px]">
+            <div className="relative min-h-[760px] w-full sm:min-h-[720px]">
               {HERO_IMAGES.map((image, index) => (
                 <Image
                   key={image.src}
@@ -242,12 +277,33 @@ export default function Hero() {
                     puzzels op te lossen en samen het mysterie te ontrafelen.
                   </p>
 
-                  <div className="mt-5">
+                  <div className="mt-4 rounded-2xl border border-amber-300/20 bg-white/10 p-3">
+                    <p className="text-sm text-amber-300">★★★★★</p>
+                    <p className="mt-1 text-xs leading-5 text-stone-100/90">
+                      “Onze hond had sneller door waar we moesten zoeken dan
+                      wijzelf 😅”
+                    </p>
+                    <Link
+                      href="#reviews"
+                      className="mt-2 inline-flex text-xs font-bold text-rose-300"
+                    >
+                      Lees reviews ↓
+                    </Link>
+                  </div>
+
+                  <div className="mt-5 flex flex-wrap gap-3">
                     <Link
                       href="#boeken"
                       className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-pink-600 px-6 py-3 text-base font-bold text-white shadow-lg shadow-pink-950/30 transition hover:bg-pink-700 focus:outline-none focus:ring-4 focus:ring-pink-300"
                     >
                       Boek nu
+                    </Link>
+
+                    <Link
+                      href="#reviews"
+                      className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-5 py-3 text-sm font-bold text-white transition hover:bg-white/15 focus:outline-none focus:ring-4 focus:ring-white/20"
+                    >
+                      Reviews
                     </Link>
                   </div>
 

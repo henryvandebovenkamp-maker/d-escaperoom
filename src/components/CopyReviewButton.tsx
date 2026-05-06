@@ -1,21 +1,23 @@
 // PATH: src/components/CopyReviewButton.tsx
 "use client";
 
-import { useState } from "react";
-import { Check, Copy } from "lucide-react";
+import * as React from "react";
 
 type Props = {
   text: string;
 };
 
 export default function CopyReviewButton({ text }: Props) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = React.useState(false);
 
-  async function handleCopy() {
+  async function onCopy() {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
+
+      window.setTimeout(() => {
+        setCopied(false);
+      }, 2200);
     } catch {
       setCopied(false);
     }
@@ -24,11 +26,10 @@ export default function CopyReviewButton({ text }: Props) {
   return (
     <button
       type="button"
-      onClick={handleCopy}
-      className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-amber-200/20 bg-white/10 px-5 py-3 text-sm font-black text-white transition hover:bg-white/15 sm:w-auto"
+      onClick={onCopy}
+      className="inline-flex min-h-12 w-full items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/15 focus:outline-none focus:ring-4 focus:ring-white/20 sm:w-auto"
     >
-      {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-      {copied ? "Gekopieerd" : "Kopieer review"}
+      {copied ? "Review gekopieerd ✓" : "Kopieer reviewtekst"}
     </button>
   );
 }

@@ -8,6 +8,7 @@ import Header from "@/components/Header";
 import Hero from "@/components/Hero";
 import Skills from "@/components/Skills";
 import Pricing from "@/components/Pricing";
+import ReviewsSection from "@/components/ReviewsSection";
 import BookingWidget from "@/components/BookingWidget";
 import PartnerOpportunity from "@/components/PartnerOpportunity";
 import ClientContactSection from "@/components/ClientContactSection";
@@ -45,12 +46,10 @@ export default async function HomePage() {
   return (
     <main id="main" className="min-h-screen bg-stone-950 text-white">
       <Header />
-
       <Hero />
-
       <Skills />
-
       <Pricing />
+      <ReviewsSection />
 
       <section
         id="boeken"
@@ -96,11 +95,8 @@ export default async function HomePage() {
             function hasConsentAnalytics() {
               try {
                 var m = document.cookie.match(/(?:^|; )cookie_consent=([^;]*)/);
-
                 if (!m) return false;
-
                 var cc = JSON.parse(decodeURIComponent(m[1]));
-
                 return !!(cc && cc.analytics);
               } catch (e) {
                 return false;
