@@ -1,5 +1,11 @@
 // PATH: src/lib/mail/templates/base.ts
-import { getTransporter, MAIL_FROM, MAIL_BCC, MAIL_DEV_ECHO, DISABLE_EMAIL } from "@/lib/mail/transporter";
+import {
+  getTransporter,
+  MAIL_FROM,
+  MAIL_BCC,
+  MAIL_DEV_ECHO,
+  DISABLE_EMAIL,
+} from "@/lib/mail/transporter";
 
 /* ===== Types ===== */
 export type Locale = "nl" | "en" | "de" | "es";
@@ -10,15 +16,17 @@ export type TemplateId =
   | "booking-customer"
   | "booking-partner"
   | "contact-notify"
-  | "contact-receipt";
+  | "contact-receipt"
+  | "review-request";
 
-/** Vars per template-id — bestaande velden ongewijzigd gelaten, contact-varianten toegevoegd */
+/** Vars per template-id — bestaande velden ongewijzigd gelaten */
 export type TemplateVars = {
   "login-code": {
     email: string;
     code: string;
     locale?: Locale;
   };
+
   "booking-customer": {
     customerName: string;
     partnerName: string;
@@ -32,6 +40,7 @@ export type TemplateVars = {
     manageUrl: string;
     locale?: Locale;
   };
+
   "booking-partner": {
     partnerName: string;
     partnerEmail?: string;
@@ -44,7 +53,6 @@ export type TemplateVars = {
     locale?: Locale;
   };
 
-  /** ⬇️ nieuw: interne notificatie naar jullie inbox */
   "contact-notify": {
     fullName: string;
     email: string;
@@ -55,7 +63,6 @@ export type TemplateVars = {
     locale?: Locale;
   };
 
-  /** ⬇️ nieuw: ontvangstbevestiging naar inzender */
   "contact-receipt": {
     fullName: string;
     email: string;
@@ -63,42 +70,66 @@ export type TemplateVars = {
     message: string;
     locale?: Locale;
   };
+
+  "review-request": {
+    customerName: string;
+    partnerName: string;
+    dogName?: string;
+    reviewUrl: string;
+    locale?: Locale;
+  };
 };
 
 export type TemplateRenderer<T extends TemplateId = TemplateId> = {
   subject: (vars: TemplateVars[T]) => string;
-  html:    (vars: TemplateVars[T]) => string;
-  text?:   (vars: TemplateVars[T]) => string;
-  from?:   string;
+  html: (vars: TemplateVars[T]) => string;
+  text?: (vars: TemplateVars[T]) => string;
+  from?: string;
 };
 
 const registry = new Map<TemplateId, TemplateRenderer<any>>();
 
 /* ===== Helpers voor templates ===== */
 export function eur(cents: number, locale: string = "nl-NL") {
-  return (Number(cents || 0) / 100).toLocaleString(locale, { style: "currency", currency: "EUR" });
+  return (Number(cents || 0) / 100).toLocaleString(locale, {
+    style: "currency",
+    currency: "EUR",
+  });
 }
+
 export function nlDateTime(iso: string, locale: string = "nl-NL") {
   const d = new Date(iso);
+
   return d.toLocaleString(locale, {
-    weekday: "long", day: "2-digit", month: "long", year: "numeric",
-    hour: "2-digit", minute: "2-digit", timeZone: "Europe/Amsterdam",
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Amsterdam",
   });
 }
 
 /* ===== Registry API ===== */
-export function registerTemplate<T extends TemplateId>(id: T, tpl: TemplateRenderer<T>) {
+export function registerTemplate<T extends TemplateId>(
+  id: T,
+  tpl: TemplateRenderer<T>
+) {
   registry.set(id, tpl);
 }
 
 export function getTemplate<T extends TemplateId>(id: T): TemplateRenderer<T> {
-  const t = registry.get(id);
-  if (!t) throw new Error(`Mail template niet geregistreerd: ${id}`);
-  return t as TemplateRenderer<T>;
+  const template = registry.get(id);
+
+  if (!template) {
+    throw new Error(`Mail template niet geregistreerd: ${id}`);
+  }
+
+  return template as TemplateRenderer<T>;
 }
 
-/* ===== High-level send (enkel via templates!) ===== */
-/** Optie 1 — object-vorm (bestaande stijl) */
+/* ===== High-level send ===== */
 export type TemplateSendArgs<T extends TemplateId = TemplateId> = {
   to: string;
   template: T;
@@ -108,7 +139,6 @@ export type TemplateSendArgs<T extends TemplateId = TemplateId> = {
   replyTo?: string;
 };
 
-/** Optie 2 — korte vorm (nieuw): sendTemplateMail("id", vars, { to, ... }) */
 export type TemplateSendOverrides = {
   to: string;
   from?: string;
@@ -116,26 +146,23 @@ export type TemplateSendOverrides = {
   replyTo?: string;
 };
 
-/* Overloads voor beide stijlen */
 export async function sendTemplateMail<T extends TemplateId>(
   args: TemplateSendArgs<T>
 ): Promise<{ ok: true } | { ok: true; skipped: "DISABLE_EMAIL=1" }>;
+
 export async function sendTemplateMail<T extends TemplateId>(
   template: T,
   vars: TemplateVars[T],
   overrides: TemplateSendOverrides
 ): Promise<{ ok: true } | { ok: true; skipped: "DISABLE_EMAIL=1" }>;
 
-/* Implementatie */
 export async function sendTemplateMail<T extends TemplateId>(
   a: TemplateSendArgs<T> | T,
   b?: TemplateVars[T],
   c?: TemplateSendOverrides
 ): Promise<{ ok: true } | { ok: true; skipped: "DISABLE_EMAIL=1" }> {
-  // forceer side-effect registratie (alle templates importeren)
   await import("./register");
 
-  // Normaliseren naar object-vorm
   let to: string;
   let template: T;
   let vars: TemplateVars[T];
@@ -144,7 +171,6 @@ export async function sendTemplateMail<T extends TemplateId>(
   let replyTo: string | undefined;
 
   if (typeof a === "string") {
-    // korte vorm
     template = a as T;
     vars = b as TemplateVars[T];
     to = c?.to as string;
@@ -152,7 +178,6 @@ export async function sendTemplateMail<T extends TemplateId>(
     bcc = c?.bcc;
     replyTo = c?.replyTo;
   } else {
-    // object-vorm
     template = a.template as T;
     vars = a.vars as TemplateVars[T];
     to = a.to;
@@ -161,19 +186,30 @@ export async function sendTemplateMail<T extends TemplateId>(
     replyTo = a.replyTo;
   }
 
-  if (!to) throw new Error("sendTemplateMail: 'to' is verplicht.");
+  if (!to) {
+    throw new Error("sendTemplateMail: 'to' is verplicht.");
+  }
 
   const tpl = getTemplate(template);
   const subject = tpl.subject(vars as any);
-  const html    = tpl.html(vars as any);
-  const text    = tpl.text?.(vars as any);
+  const html = tpl.html(vars as any);
+  const text = tpl.text?.(vars as any);
 
   if (MAIL_DEV_ECHO) {
-    console.log("[MAIL:compiled]", { to, template, subject, preview: html.slice(0, 180) + "…" });
+    console.log("[MAIL:compiled]", {
+      to,
+      template,
+      subject,
+      preview: html.slice(0, 180) + "…",
+    });
   }
-  if (DISABLE_EMAIL) return { ok: true, skipped: "DISABLE_EMAIL=1" as const };
+
+  if (DISABLE_EMAIL) {
+    return { ok: true, skipped: "DISABLE_EMAIL=1" as const };
+  }
 
   const transporter = getTransporter();
+
   await transporter.sendMail({
     to,
     from: from || tpl.from || MAIL_FROM,

@@ -188,6 +188,7 @@ model Booking {
 
   status               BookingStatus @default(PENDING)
   emailsSentAt         DateTime?
+  reviewRequestSentAt  DateTime?
 
   currency             String        @default("EUR")
   totalAmountCents     Int
@@ -232,6 +233,7 @@ model Booking {
   @@index([discountCodeId])
   @@index([cancelledAt])
   @@index([createdAt])
+  @@index([reviewRequestSentAt])
 }
 
 model Payment {
