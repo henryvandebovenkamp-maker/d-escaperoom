@@ -50,6 +50,23 @@ function ReviewBadge() {
   );
 }
 
+function MobileReviewMini() {
+  return (
+    <a
+      href="#reviews"
+      className="mt-4 block rounded-2xl border border-amber-300/20 bg-white/10 p-3 transition hover:bg-white/15 focus:outline-none focus:ring-4 focus:ring-amber-300/25"
+    >
+      <p className="text-sm text-amber-300" aria-hidden="true">
+        ★★★★★
+      </p>
+      <p className="mt-1 text-xs leading-5 text-stone-100/90">
+        “Onze hond had sneller door waar we moesten zoeken dan wijzelf 😅”
+      </p>
+      <p className="mt-2 text-xs font-bold text-rose-300">Lees reviews ↓</p>
+    </a>
+  );
+}
+
 export default function Hero() {
   const [activeIndex, setActiveIndex] = React.useState(1);
 
@@ -208,7 +225,7 @@ export default function Hero() {
         {/* MOBIEL / TABLET */}
         <div className="lg:hidden">
           <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-stone-950/80 shadow-2xl shadow-black/40">
-            <div className="relative min-h-[760px] w-full sm:min-h-[720px]">
+            <div className="relative min-h-[665px] w-full sm:min-h-[680px]">
               {HERO_IMAGES.map((image, index) => (
                 <Image
                   key={image.src}
@@ -267,56 +284,26 @@ export default function Hero() {
 
                   <h1
                     id="hero-title"
-                    className="mt-3 max-w-[9ch] text-[2.9rem] font-black leading-[0.86] tracking-tight text-rose-300 sm:max-w-none sm:text-5xl"
+                    className="mt-3 max-w-[9ch] text-[2.65rem] font-black leading-[0.88] tracking-tight text-rose-300 sm:max-w-none sm:text-5xl"
                   >
                     Samenwerken met je hond
                   </h1>
 
                   <p className="mt-4 max-w-[34ch] text-[14px] leading-6 text-stone-100/92 sm:text-base sm:leading-7">
-                    In The Stolen Snack worden jullie als team uitgedaagd om
-                    puzzels op te lossen en samen het mysterie te ontrafelen.
+                    Los samen puzzels op en ontrafel het mysterie van The Stolen
+                    Snack.
                   </p>
 
-                  <div className="mt-4 rounded-2xl border border-amber-300/20 bg-white/10 p-3">
-                    <p className="text-sm text-amber-300">★★★★★</p>
-                    <p className="mt-1 text-xs leading-5 text-stone-100/90">
-                      “Onze hond had sneller door waar we moesten zoeken dan
-                      wijzelf 😅”
-                    </p>
-                    <Link
-                      href="#reviews"
-                      className="mt-2 inline-flex text-xs font-bold text-rose-300"
-                    >
-                      Lees reviews ↓
-                    </Link>
-                  </div>
+                  <MobileReviewMini />
 
-                  <div className="mt-5 flex flex-wrap gap-3">
+                  <div className="mt-5">
                     <Link
                       href="#boeken"
-                      className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-pink-600 px-6 py-3 text-base font-bold text-white shadow-lg shadow-pink-950/30 transition hover:bg-pink-700 focus:outline-none focus:ring-4 focus:ring-pink-300"
+                      className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-pink-600 px-7 py-3 text-base font-bold text-white shadow-lg shadow-pink-950/30 transition hover:bg-pink-700 focus:outline-none focus:ring-4 focus:ring-pink-300"
                     >
                       Boek nu
                     </Link>
-
-                    <Link
-                      href="#reviews"
-                      className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-5 py-3 text-sm font-bold text-white transition hover:bg-white/15 focus:outline-none focus:ring-4 focus:ring-white/20"
-                    >
-                      Reviews
-                    </Link>
                   </div>
-
-                  <ul className="mt-4 flex flex-wrap gap-2">
-                    {FEATURE_CHIPS.map((label) => (
-                      <li
-                        key={label}
-                        className="rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-[11px] font-medium text-stone-100/90"
-                      >
-                        {label}
-                      </li>
-                    ))}
-                  </ul>
                 </div>
               </div>
             </div>
