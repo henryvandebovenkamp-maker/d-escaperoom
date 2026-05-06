@@ -3,19 +3,48 @@ import * as React from "react";
 import Script from "next/script";
 
 import Header from "@/components/Header";
-import Hero from "@/components/Hero";
+import HeroVideo from "@/components/HeroVideo";
 import Skills from "@/components/Skills";
 import Pricing from "@/components/Pricing";
 import BookingWidget from "@/components/BookingWidget";
 import PartnerOpportunity from "@/components/PartnerOpportunity";
 import ClientContactSection from "@/components/ClientContactSection";
 import Footer from "@/components/Footer";
+import prisma from "@/lib/prisma";
 
-export default function HomePage() {
+export const dynamic = "force-dynamic";
+
+async function getBookingPartners() {
+  try {
+    return await prisma.partner.findMany({
+      where: {
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        city: true,
+        province: true,
+        feePercent: true,
+      },
+      orderBy: {
+        name: "asc",
+      },
+    });
+  } catch (error) {
+    console.error("[homepage_partners_error]", error);
+    return [];
+  }
+}
+
+export default async function HomePage() {
+  const partners = await getBookingPartners();
+
   return (
     <main id="main" className="min-h-screen bg-stone-950 text-white">
       <Header />
-      <Hero />
+      <HeroVideo />
       <Skills />
       <Pricing />
 
@@ -28,7 +57,8 @@ export default function HomePage() {
           <h2 id="boeken-title" className="sr-only">
             Boeken
           </h2>
-          <BookingWidget />
+
+          <BookingWidget initialPartners={partners} />
         </div>
       </section>
 

@@ -10,28 +10,6 @@ const APP_TIMEZONE = "Europe/Amsterdam";
 
 type DayAvailabilityStatus = "AVAILABLE" | "FULL" | "NO_SLOTS";
 
-function getDayAvailability(counts?: DayCounts): DayAvailabilityStatus {
-  if (!counts || counts.total === 0) return "NO_SLOTS";
-  if (counts.published > 0) return "AVAILABLE";
-  if (counts.booked > 0) return "FULL";
-  return "NO_SLOTS";
-}
-
-function dayStatusLabel(status: DayAvailabilityStatus) {
-  if (status === "AVAILABLE") return "Beschikbaar";
-  if (status === "FULL") return "Volgeboekt";
-  return "Nog geen tijden";
-}
-
-function isAbortError(err: unknown): boolean {
-  return (
-    (err as any)?.name === "AbortError" ||
-    (typeof DOMException !== "undefined" &&
-      err instanceof DOMException &&
-      err.name === "AbortError")
-  );
-}
-
 type SlotItem = {
   id: string;
   startTime: string;
@@ -50,6 +28,8 @@ type PartnerOption = {
   slug: string;
   name: string;
   city: string | null;
+  province?: string | null;
+  feePercent?: number;
 };
 
 type PriceInfo = {
@@ -57,6 +37,12 @@ type PriceInfo = {
   deposit: number;
   rest: number;
   feePercent: number;
+};
+
+type BookingWidgetProps = {
+  defaultPartnerSlug?: string;
+  fixedPartnerSlug?: string;
+  initialPartners?: PartnerOption[];
 };
 
 const FormSchema = z.object({
@@ -70,6 +56,28 @@ const FormSchema = z.object({
 });
 
 const NL_DAYS = ["ma", "di", "wo", "do", "vr", "za", "zo"] as const;
+
+function getDayAvailability(counts?: DayCounts): DayAvailabilityStatus {
+  if (!counts || counts.total === 0) return "NO_SLOTS";
+  if (counts.published > 0) return "AVAILABLE";
+  if (counts.booked > 0) return "FULL";
+  return "NO_SLOTS";
+}
+
+function dayStatusLabel(status: DayAvailabilityStatus) {
+  if (status === "AVAILABLE") return "Beschikbaar";
+  if (status === "FULL") return "Volgeboekt";
+  return "Nog geen tijden";
+}
+
+function isAbortError(err: unknown): boolean {
+  return (
+    (err as Error | undefined)?.name === "AbortError" ||
+    (typeof DOMException !== "undefined" &&
+      err instanceof DOMException &&
+      err.name === "AbortError")
+  );
+}
 
 function formatInAmsterdam(
   value: Date | string,
@@ -124,11 +132,13 @@ function startOfCalendarGrid(date: Date) {
 function buildCalendarDays(date: Date) {
   const start = startOfCalendarGrid(date);
   const days: Date[] = [];
+
   for (let i = 0; i < 42; i++) {
     const next = new Date(start);
     next.setDate(start.getDate() + i);
     days.push(next);
   }
+
   return days;
 }
 
@@ -164,10 +174,12 @@ function sortSlotsByTime(slots: SlotItem[]) {
 
 function filterFutureSlotsForDay(dayISO: string, slots: SlotItem[]) {
   const day = parseISODateOnly(dayISO);
+
   if (isPastDay(day)) return [];
   if (!isToday(day)) return sortSlotsByTime(slots);
 
   const now = Date.now() + 5 * 60 * 1000;
+
   return sortSlotsByTime(slots).filter(
     (slot) => new Date(slot.startTime).getTime() > now
   );
@@ -175,7 +187,7 @@ function filterFutureSlotsForDay(dayISO: string, slots: SlotItem[]) {
 
 async function postJSON<T>(
   url: string,
-  body: any,
+  body: unknown,
   signal?: AbortSignal
 ): Promise<T> {
   const res = await fetch(url, {
@@ -198,11 +210,25 @@ function usePreviewMode() {
   const [preview, setPreview] = React.useState(false);
 
   React.useEffect(() => {
-    const sp = new URLSearchParams(location.search);
+    const sp = new URLSearchParams(window.location.search);
     setPreview(sp.get("preview") === "1");
   }, []);
 
   return preview;
+}
+
+function normalizePartners(rows: unknown[]): PartnerOption[] {
+  return rows
+    .filter((p: any) => p && p.slug && p.name)
+    .map((p: any) => ({
+      id: String(p.id),
+      slug: String(p.slug),
+      name: String(p.name),
+      city: p.city ?? null,
+      province: p.province ?? null,
+      feePercent:
+        typeof p.feePercent === "number" ? p.feePercent : undefined,
+    }));
 }
 
 async function fetchPartners(
@@ -210,24 +236,21 @@ async function fetchPartners(
   signal?: AbortSignal
 ): Promise<PartnerOption[]> {
   const endpoint = preview ? "/api/partners/list?all=1" : "/api/public/partners";
+
   const opts: RequestInit = preview
     ? { cache: "no-store", credentials: "include", signal }
     : { cache: "no-store", signal };
 
   const res = await fetch(endpoint, opts);
-  if (!res.ok) throw new Error(await res.text());
+
+  if (!res.ok) {
+    throw new Error(await res.text());
+  }
 
   const data = await res.json();
-  const rows: any[] = Array.isArray(data) ? data : data?.items ?? [];
+  const rows: unknown[] = Array.isArray(data) ? data : data?.items ?? [];
 
-  return rows
-    .filter((p) => p && p.slug && p.name)
-    .map((p) => ({
-      id: p.id,
-      slug: p.slug,
-      name: p.name,
-      city: p.city ?? null,
-    }));
+  return normalizePartners(rows);
 }
 
 async function fetchCalendarCounts(
@@ -250,16 +273,19 @@ async function fetchCalendarCounts(
 
     if (res.ok) {
       const data = await res.json();
-      const items = Array.isArray(data) ? data : data?.items ?? [];
+      const items: any[] = Array.isArray(data) ? data : data?.items ?? [];
       const out: Record<string, DayCounts> = {};
 
       for (const row of items) {
         const dayISO: string | undefined =
           row?.dayISO ?? row?.day ?? row?.dateISO ?? row?.date;
+
         if (!dayISO) continue;
 
         const c = row?.counts ?? {};
-        const published = Number(c.published ?? row?.published ?? row?.publishedCount ?? 0);
+        const published = Number(
+          c.published ?? row?.published ?? row?.publishedCount ?? 0
+        );
         const booked = Number(c.booked ?? row?.booked ?? row?.bookedCount ?? 0);
         const total = Number(c.total ?? row?.total ?? published + booked);
 
@@ -280,6 +306,7 @@ async function fetchCalendarCounts(
   current.setDate(1);
 
   const end = new Date(gridEnd.getFullYear(), gridEnd.getMonth(), 1);
+
   while (current <= end) {
     months.push(toMonthISO(current));
     current.setMonth(current.getMonth() + 1);
@@ -351,15 +378,17 @@ async function fetchDaySlots(
   ];
 
   let payload: any = null;
-  let lastErr: any = null;
+  let lastErr: unknown = null;
 
   for (const url of candidates) {
     try {
       const res = await fetch(url, { cache: "no-store", signal });
+
       if (!res.ok) {
         lastErr = await res.text().catch(() => `HTTP ${res.status}`);
         continue;
       }
+
       payload = await res.json();
       break;
     } catch (err) {
@@ -375,6 +404,7 @@ async function fetchDaySlots(
       err.name = "AbortError";
       throw err;
     }
+
     throw new Error(String(lastErr ?? "Kon tijdsloten niet laden"));
   }
 
@@ -384,12 +414,23 @@ async function fetchDaySlots(
 
   function normalizeStatus(row: any): NormStatus {
     const raw = row?.status ?? row?.state ?? row?.availability ?? row?.booked;
-    if (typeof raw === "boolean") return raw ? "BOOKED" : "PUBLISHED";
+
+    if (typeof raw === "boolean") {
+      return raw ? "BOOKED" : "PUBLISHED";
+    }
 
     const status = String(raw ?? "").toUpperCase();
-    if (["PUBLISHED", "AVAILABLE", "OPEN"].includes(status)) return "PUBLISHED";
-    if (["BOOKED", "RESERVED", "FULL"].includes(status)) return "BOOKED";
+
+    if (["PUBLISHED", "AVAILABLE", "OPEN"].includes(status)) {
+      return "PUBLISHED";
+    }
+
+    if (["BOOKED", "RESERVED", "FULL"].includes(status)) {
+      return "BOOKED";
+    }
+
     if (status === "DRAFT") return "DRAFT";
+
     return "UNKNOWN";
   }
 
@@ -411,19 +452,21 @@ async function fetchDaySlots(
       if (/^\d{2}:\d{2}(:\d{2})?$/.test(raw)) {
         const [hh, mm, ss] = raw.split(":");
         const [y, m, d] = dayISO.split("-").map(Number);
+
         const dt = new Date(
           y,
-          (m as number) - 1,
-          d as number,
+          m - 1,
+          d,
           Number(hh),
           Number(mm),
           Number(ss ?? 0)
         );
+
         return dt.toISOString();
       }
 
       const dt = new Date(raw);
-      if (!isNaN(dt.getTime())) return dt.toISOString();
+      if (!Number.isNaN(dt.getTime())) return dt.toISOString();
     }
 
     return null;
@@ -439,6 +482,7 @@ async function fetchDaySlots(
       const status = normalizeStatus(row);
       const startISO = normalizeStartISO(row);
       const id = normalizeId(row);
+
       return { id, startISO, status };
     })
     .filter((row) => row.id && row.startISO) as Array<{
@@ -469,23 +513,37 @@ async function fetchDaySlots(
 export default function BookingWidget({
   defaultPartnerSlug = "",
   fixedPartnerSlug,
-}: {
-  defaultPartnerSlug?: string;
-  fixedPartnerSlug?: string;
-}) {
+  initialPartners = [],
+}: BookingWidgetProps) {
   const router = useRouter();
   const preview = usePreviewMode();
   const locked = Boolean(fixedPartnerSlug);
 
+  const initialPartnerList = React.useMemo(
+    () => normalizePartners(initialPartners),
+    [initialPartners]
+  );
+
+  const getInitialPartnerSlug = React.useCallback(() => {
+    if (fixedPartnerSlug) return fixedPartnerSlug;
+
+    if (
+      defaultPartnerSlug &&
+      initialPartnerList.some((p) => p.slug === defaultPartnerSlug)
+    ) {
+      return defaultPartnerSlug;
+    }
+
+    return initialPartnerList[0]?.slug ?? defaultPartnerSlug ?? "";
+  }, [defaultPartnerSlug, fixedPartnerSlug, initialPartnerList]);
+
   const [mounted, setMounted] = React.useState(false);
-  React.useEffect(() => setMounted(true), []);
+  const [partners, setPartners] =
+    React.useState<PartnerOption[]>(initialPartnerList);
+  const [partnerSlug, setPartnerSlug] =
+    React.useState<string>(getInitialPartnerSlug);
 
   const todayISO = toDayISO(new Date());
-
-  const [partners, setPartners] = React.useState<PartnerOption[]>([]);
-  const [partnerSlug, setPartnerSlug] = React.useState<string>(
-    fixedPartnerSlug ?? defaultPartnerSlug
-  );
 
   const [viewMonth, setViewMonth] = React.useState<Date>(
     startOfMonth(new Date())
@@ -512,13 +570,26 @@ export default function BookingWidget({
   );
 
   React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  React.useEffect(() => {
+    setPartners((current) => {
+      if (current.length > 0) return current;
+      return initialPartnerList;
+    });
+  }, [initialPartnerList]);
+
+  React.useEffect(() => {
     if (!mounted) return;
     trackEvent("view_booking");
   }, [mounted]);
 
   const bookingStartKeyRef = React.useRef<string | null>(null);
+
   React.useEffect(() => {
     if (!partnerSlug || !selectedDayISO || !players) return;
+
     const key = `${partnerSlug}|${selectedDayISO}|${players}`;
     if (bookingStartKeyRef.current === key) return;
 
@@ -533,11 +604,21 @@ export default function BookingWidget({
 
   React.useEffect(() => {
     setMsg(null);
+
+    if (initialPartnerList.length > 0 && !preview) {
+      const nextSlug = getInitialPartnerSlug();
+
+      if (!partnerSlug && nextSlug) {
+        setPartnerSlug(nextSlug);
+      }
+
+      return;
+    }
+
     const ac = new AbortController();
 
-    (async () => {
-      try {
-        const list = await fetchPartners(preview, ac.signal);
+    fetchPartners(preview, ac.signal)
+      .then((list) => {
         setPartners(list);
 
         if (locked && fixedPartnerSlug) {
@@ -547,21 +628,35 @@ export default function BookingWidget({
 
         if (
           defaultPartnerSlug &&
-          list.find((p) => p.slug === defaultPartnerSlug)
+          list.some((p) => p.slug === defaultPartnerSlug)
         ) {
           setPartnerSlug(defaultPartnerSlug);
-        } else if (!list.find((p) => p.slug === partnerSlug)) {
-          setPartnerSlug(list[0]?.slug ?? "");
+          return;
         }
-      } catch (err: any) {
+
+        setPartnerSlug((current) => {
+          if (current && list.some((p) => p.slug === current)) return current;
+          return list[0]?.slug ?? "";
+        });
+      })
+      .catch((err) => {
         if (!isAbortError(err)) {
-          setMsg(err?.message || "Kon hondenscholen niet laden");
+          if (initialPartnerList.length === 0) {
+            setMsg(err?.message || "Kon hondenscholen niet laden");
+          }
         }
-      }
-    })();
+      });
 
     return () => ac.abort();
-  }, [preview, locked, fixedPartnerSlug, defaultPartnerSlug, partnerSlug]);
+  }, [
+    preview,
+    locked,
+    fixedPartnerSlug,
+    defaultPartnerSlug,
+    initialPartnerList,
+    getInitialPartnerSlug,
+    partnerSlug,
+  ]);
 
   React.useEffect(() => {
     if (locked && fixedPartnerSlug && partnerSlug !== fixedPartnerSlug) {
@@ -571,6 +666,7 @@ export default function BookingWidget({
 
   React.useEffect(() => {
     setDayStats({});
+
     if (!partnerSlug) return;
 
     setLoadingCalendar(true);
@@ -580,22 +676,18 @@ export default function BookingWidget({
     const gridEnd = new Date(gridStart);
     gridEnd.setDate(gridStart.getDate() + 41);
 
-    (async () => {
-      try {
-        const agg = await fetchCalendarCounts(
-          partnerSlug,
-          gridStart,
-          gridEnd,
-          preview,
-          ac.signal
-        );
+    fetchCalendarCounts(partnerSlug, gridStart, gridEnd, preview, ac.signal)
+      .then((agg) => {
         setDayStats(agg);
-      } catch {
+      })
+      .catch(() => {
         setDayStats({});
-      } finally {
-        setLoadingCalendar(false);
-      }
-    })();
+      })
+      .finally(() => {
+        if (!ac.signal.aborted) {
+          setLoadingCalendar(false);
+        }
+      });
 
     return () => ac.abort();
   }, [partnerSlug, viewMonth, preview]);
@@ -604,6 +696,7 @@ export default function BookingWidget({
     setSlotId("");
     setPrice(null);
     setMsg(null);
+
     if (!partnerSlug || !selectedDayISO) return;
 
     setLoadingSlots(true);
@@ -629,36 +722,45 @@ export default function BookingWidget({
       })
       .catch((err) => {
         if (!isAbortError(err)) {
+          setSlots([]);
           setMsg((err as any)?.message || "Kon tijdsloten niet laden");
         }
       })
-      .finally(() => setLoadingSlots(false));
+      .finally(() => {
+        if (!ac.signal.aborted) {
+          setLoadingSlots(false);
+        }
+      });
 
     return () => ac.abort();
   }, [partnerSlug, selectedDayISO]);
 
   React.useEffect(() => {
     setPrice(null);
+
     if (!partnerSlug || !slotId) return;
 
     const partnerId = selectedPartner?.id;
     const slot = slots.find((s) => s.id === slotId);
     const startTimeISO = slot?.startTime;
+
     if (!partnerId || !startTimeISO) return;
 
     const ac = new AbortController();
 
     postJSON<any>(
-      `/api/booking/price`,
+      "/api/booking/price",
       { partnerId, startTimeISO, playersCount: players },
       ac.signal
     )
       .then((data) => {
         if (!data?.ok) return;
+
         const feePercent = data.partner?.feePercent ?? 0;
         const total = (data.pricing?.totalCents ?? 0) / 100;
         const deposit = (data.pricing?.depositCents ?? 0) / 100;
         const rest = (data.pricing?.restCents ?? 0) / 100;
+
         setPrice({ total, deposit, rest, feePercent });
       })
       .catch(() => {});
@@ -715,7 +817,7 @@ export default function BookingWidget({
       };
 
       const createResp = await postJSON<{ ok: boolean; bookingId: string }>(
-        `/api/booking/create`,
+        "/api/booking/create",
         payload
       );
 
@@ -835,25 +937,6 @@ export default function BookingWidget({
     }
 
     return "Voor deze dag zijn nog geen tijden beschikbaar. Nieuwe tijden worden binnenkort toegevoegd.";
-  }
-
-  if (!mounted) {
-    return (
-      <section
-        id="boeken"
-        aria-label="Boekingswidget"
-        className="relative overflow-hidden bg-stone-950 px-4 py-12 text-white sm:px-6 lg:px-8 lg:py-20"
-      >
-        <div className="relative mx-auto max-w-6xl">
-          <div className="rounded-[2rem] border border-white/10 bg-white/5 p-4 shadow-2xl shadow-black/30 backdrop-blur-md sm:p-6">
-            <div className="mb-6 text-center">
-              <div className="mx-auto h-4 w-40 animate-pulse rounded-full bg-white/10" />
-              <div className="mx-auto mt-4 h-9 w-64 animate-pulse rounded-xl bg-white/10" />
-            </div>
-          </div>
-        </div>
-      </section>
-    );
   }
 
   return (
@@ -1028,11 +1111,7 @@ export default function BookingWidget({
                       ].join(" ")}
                       aria-pressed={isSelected}
                       aria-current={todayFlag && !past ? "date" : undefined}
-                      title={
-                        !past
-                          ? `${iso} • ${dayStatusLabel(status)}`
-                          : iso
-                      }
+                      title={!past ? `${iso} • ${dayStatusLabel(status)}` : iso}
                     >
                       {day.getDate()}
 
@@ -1094,6 +1173,7 @@ export default function BookingWidget({
                     const month = date.toLocaleDateString("nl-NL", {
                       month: "long",
                     });
+
                     return `${weekday} ${day} ${month}`;
                   })()}
                 </h3>
@@ -1131,43 +1211,41 @@ export default function BookingWidget({
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {filteredSlots.length === 0 ? null : (
-                    filteredSlots.map((slot) => {
-                      const selected = slotId === slot.id;
+                  {filteredSlots.map((slot) => {
+                    const selected = slotId === slot.id;
 
-                      const cls = selected
-                        ? "border-rose-300 bg-rose-400/20 text-rose-100 ring-2 ring-rose-300/40"
-                        : "border-emerald-300/35 bg-emerald-400/14 text-emerald-100 hover:bg-emerald-400/20";
+                    const cls = selected
+                      ? "border-rose-300 bg-rose-400/20 text-rose-100 ring-2 ring-rose-300/40"
+                      : "border-emerald-300/35 bg-emerald-400/14 text-emerald-100 hover:bg-emerald-400/20";
 
-                      return (
-                        <button
-                          key={slot.id}
-                          type="button"
-                          onClick={() => setSlotId(slot.id)}
-                          className={`relative h-11 rounded-xl border px-3 text-sm font-semibold transition focus:outline-none focus:ring-4 focus:ring-pink-300/30 ${cls}`}
-                          aria-pressed={selected}
-                          aria-label={`Tijdslot ${formatTime(
-                            slot.startTime
-                          )} boekbaar`}
-                          title={formatTime(slot.startTime)}
-                        >
-                          {formatTime(slot.startTime)}
+                    return (
+                      <button
+                        key={slot.id}
+                        type="button"
+                        onClick={() => setSlotId(slot.id)}
+                        className={`relative h-11 rounded-xl border px-3 text-sm font-semibold transition focus:outline-none focus:ring-4 focus:ring-pink-300/30 ${cls}`}
+                        aria-pressed={selected}
+                        aria-label={`Tijdslot ${formatTime(
+                          slot.startTime
+                        )} boekbaar`}
+                        title={formatTime(slot.startTime)}
+                      >
+                        {formatTime(slot.startTime)}
 
-                          {selected && (
-                            <span className="pointer-events-none absolute right-1.5 top-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-pink-600">
-                              <svg
-                                viewBox="0 0 20 20"
-                                className="h-3 w-3 fill-white"
-                                aria-hidden
-                              >
-                                <path d="M7.629 13.233 3.9 9.504l1.414-1.414 2.315 2.315 6.057-6.057 1.414 1.414z" />
-                              </svg>
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })
-                  )}
+                        {selected && (
+                          <span className="pointer-events-none absolute right-1.5 top-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-pink-600">
+                            <svg
+                              viewBox="0 0 20 20"
+                              className="h-3 w-3 fill-white"
+                              aria-hidden
+                            >
+                              <path d="M7.629 13.233 3.9 9.504l1.414-1.414 2.315 2.315 6.057-6.057 1.414 1.414z" />
+                            </svg>
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
 
