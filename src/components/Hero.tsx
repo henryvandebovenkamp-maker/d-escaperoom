@@ -20,24 +20,47 @@ const HERO_IMAGES = [
   },
 ];
 
+const HERO_REVIEWS = [
+  "Onze hond had sneller door waar we moesten zoeken dan wijzelf 😅",
+
+  "Het decor is echt bizar goed gedaan. Je waant je serieus in het Wilde Westen.",
+
+  "Onze kinderen vonden het geweldig. Leuk dat je dit echt samen als gezin kunt doen.",
+
+  "De sfeer vanaf binnenkomst klopt gewoon helemaal. Licht, geluid en puzzels zijn top.",
+
+  "Superfijne begeleiding. Je merkt dat alles met aandacht en liefde is opgezet.",
+
+  "We hebben zó gelachen tijdens het spelen. Echt een unieke belevenis met je hond.",
+
+  "Heel gaaf hoe je als baas en hond echt samenwerkt tijdens het spel.",
+
+  "Zelfs onze hond was na afloop helemaal enthousiast en moe van het speuren 😂",
+
+  "Veel leuker en origineler dan we vooraf hadden verwacht. Echt een ervaring.",
+
+  "Perfect voor hondenliefhebbers die eens iets totaal anders willen doen samen.",
+];
+
 const FEATURE_CHIPS = [
   "Speelduur ± 45 min",
   "Baas & hond als team",
   "Western beleving",
 ];
 
-function ReviewBadge() {
+function ReviewBadge({ review }: { review: string }) {
   return (
     <div className="rounded-2xl border border-amber-300/20 bg-black/35 p-4 backdrop-blur-md">
       <div className="flex items-center gap-2 text-amber-300">
         <span aria-hidden="true">★★★★★</span>
+
         <span className="text-xs font-bold uppercase tracking-[0.18em] text-amber-100">
           Reviews
         </span>
       </div>
 
-      <p className="mt-2 text-sm leading-6 text-stone-100/95">
-        “Onze hond had sneller door waar we moesten zoeken dan wijzelf 😅”
+      <p className="mt-2 min-h-[3rem] text-sm leading-6 text-stone-100/95 transition-all duration-500">
+        “{review}”
       </p>
 
       <Link
@@ -50,7 +73,7 @@ function ReviewBadge() {
   );
 }
 
-function MobileReviewMini() {
+function MobileReviewMini({ review }: { review: string }) {
   return (
     <a
       href="#reviews"
@@ -59,16 +82,21 @@ function MobileReviewMini() {
       <p className="text-sm text-amber-300" aria-hidden="true">
         ★★★★★
       </p>
-      <p className="mt-1 text-xs leading-5 text-stone-100/90">
-        “Onze hond had sneller door waar we moesten zoeken dan wijzelf 😅”
+
+      <p className="mt-1 min-h-[2.5rem] text-xs leading-5 text-stone-100/90 transition-all duration-500">
+        “{review}”
       </p>
-      <p className="mt-2 text-xs font-bold text-rose-300">Lees reviews ↓</p>
+
+      <p className="mt-2 text-xs font-bold text-rose-300">
+        Lees reviews ↓
+      </p>
     </a>
   );
 }
 
 export default function Hero() {
   const [activeIndex, setActiveIndex] = React.useState(1);
+  const [reviewIndex, setReviewIndex] = React.useState(0);
 
   React.useEffect(() => {
     const timer = window.setInterval(() => {
@@ -80,6 +108,18 @@ export default function Hero() {
     return () => window.clearInterval(timer);
   }, []);
 
+  React.useEffect(() => {
+    const timer = window.setInterval(() => {
+      setReviewIndex((current) =>
+        current + 1 >= HERO_REVIEWS.length ? 0 : current + 1
+      );
+    }, 5000);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const activeReview = HERO_REVIEWS[reviewIndex];
+
   return (
     <section
       aria-labelledby="hero-title"
@@ -87,7 +127,9 @@ export default function Hero() {
     >
       <div aria-hidden className="absolute inset-0">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_35%)]" />
+
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(28,25,23,0.72)_0%,rgba(12,10,9,0.96)_100%)]" />
+
         <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(rgba(255,255,255,0.10)_1px,transparent_1px)] [background-size:12px_12px]" />
       </div>
 
@@ -104,6 +146,7 @@ export default function Hero() {
               className="mt-5 text-6xl font-black leading-[0.92] tracking-tight"
             >
               <span className="block text-rose-300">Baas en hond</span>
+
               <span className="block text-rose-300">
                 werken samen en lossen het mysterie op
               </span>
@@ -142,7 +185,7 @@ export default function Hero() {
             </ul>
 
             <div className="mt-6">
-              <ReviewBadge />
+              <ReviewBadge review={activeReview} />
             </div>
 
             <div className="mt-6 grid grid-cols-3 gap-3">
@@ -170,6 +213,7 @@ export default function Hero() {
                         sizes="(max-width: 1024px) 33vw, 15vw"
                         className="object-cover transition duration-300 group-hover:scale-[1.02]"
                       />
+
                       <div
                         className={[
                           "absolute inset-0 transition",
@@ -249,6 +293,7 @@ export default function Hero() {
               ))}
 
               <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/8 to-black/88" />
+
               <div className="absolute inset-0 bg-gradient-to-r from-black/18 via-transparent to-black/10" />
 
               <div className="absolute left-4 right-4 top-4 z-20 flex items-start justify-between gap-3">
@@ -294,7 +339,7 @@ export default function Hero() {
                     Snack.
                   </p>
 
-                  <MobileReviewMini />
+                  <MobileReviewMini review={activeReview} />
 
                   <div className="mt-5">
                     <Link
