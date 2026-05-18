@@ -15,6 +15,7 @@ const schema = z.object({
   feePercent: z.number().int().min(0).max(90),
   price1PaxCents: z.number().int().min(0),
   price2PlusCents: z.number().int().min(0),
+  slotDurationMinutes: z.number().int().min(30).max(180).default(60),
   heroImageUrl: z.string().url().optional(),
   addressLine1: z.string().optional(),
   // addressLine2: verwijderd
@@ -65,6 +66,7 @@ export async function POST(req: Request) {
           feePercent: input.feePercent,
           price1PaxCents: input.price1PaxCents,
           price2PlusCents: input.price2PlusCents,
+          slotDurationMinutes: input.slotDurationMinutes,
           heroImageUrl: input.heroImageUrl ?? null,
           addressLine1: input.addressLine1 ?? null,
           // addressLine2: verwijderd

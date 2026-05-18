@@ -26,6 +26,7 @@ export default async function AdminPartnersPage() {
       feePercent: true,
       price1PaxCents: true,
       price2PlusCents: true,
+      slotDurationMinutes: true,
       heroImageUrl: true,
       addressLine1: true,
       postalCode: true,
@@ -33,7 +34,7 @@ export default async function AdminPartnersPage() {
       timezone: true,
       createdAt: true,
       updatedAt: true,
-      // googleMapsUrl: true, // ⬅️ tijdelijk uitgeschakeld
+      googleMapsUrl: true,
     },
   });
 
@@ -43,8 +44,7 @@ export default async function AdminPartnersPage() {
         ...p,
         createdAt: p.createdAt.toISOString(),
         updatedAt: p.updatedAt.toISOString(),
-        googleMapsUrl: null, // expliciet toevoegen zodat PartnerRow type klopt
-        // googleMapsUrl niet mappen; PartnerRow heeft 'googleMapsUrl?: string | null'
+        googleMapsUrl: p.googleMapsUrl ?? null,
       }))}
     />
   );

@@ -989,7 +989,7 @@ export default function BookingWidget({
 
             <div className="hidden text-center md:col-span-4 md:block">
               <p className="text-sm font-semibold text-stone-100">
-                Speelduur ± 45 minuten
+                The Stolen Snack
               </p>
               <p className="mt-1 text-xs text-stone-300">
                 Voor baas, hond en teamgenoten

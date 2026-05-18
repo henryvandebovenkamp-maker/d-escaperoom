@@ -14,8 +14,7 @@ function asGCalDate(d: Date) {
 
 function googleCalendarUrl(v: TemplateVars["booking-customer"]) {
   const start = new Date(v.slotISO);
-  // D-EscapeRoom slotduur = 60 min
-  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  const end = v.slotEndISO ? new Date(v.slotEndISO) : new Date(start.getTime() + 60 * 60 * 1000);
 
   const title = `The Stolen Snack @ ${v.partnerName}`;
   const details =

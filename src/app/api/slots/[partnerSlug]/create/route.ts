@@ -10,13 +10,13 @@ const BodyByDayTime = z.object({
   day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   time: z.string().regex(/^\d{2}:\d{2}$/),
   publish: z.boolean().optional().default(false),
-  durationMinutes: z.number().int().positive().max(24 * 60).optional().default(60),
+  durationMinutes: z.number().int().positive().max(24 * 60).optional(),
 });
 
 const BodyByStartISO = z.object({
   startTime: z.string(),
   publish: z.boolean().optional().default(false),
-  durationMinutes: z.number().int().positive().max(24 * 60).optional().default(60),
+  durationMinutes: z.number().int().positive().max(24 * 60).optional(),
 });
 
 const BodySchema = z.union([BodyByDayTime, BodyByStartISO]);
@@ -82,7 +82,7 @@ export async function POST(
 
     const partner = await prisma.partner.findUnique({
       where: { slug: partnerSlug },
-      select: { id: true },
+      select: { id: true, slotDurationMinutes: true },
     });
 
     if (!partner) {
@@ -107,7 +107,7 @@ export async function POST(
     }
 
     const publish = parsed.data.publish ?? false;
-    const durationMinutes = parsed.data.durationMinutes ?? 60;
+    const durationMinutes = parsed.data.durationMinutes ?? partner.slotDurationMinutes ?? 60;
 
     const startTime =
       "day" in parsed.data

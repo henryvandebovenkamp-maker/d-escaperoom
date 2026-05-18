@@ -42,7 +42,7 @@ export async function sendCustomerBookingEmail(bookingId: string, p0: { force: b
           city: true,
         },
       },
-      slot: { select: { startTime: true } },
+      slot: { select: { startTime: true, endTime: true } },
       customer: { select: { name: true, email: true, locale: true } },
     },
   });
@@ -70,6 +70,7 @@ export async function sendCustomerBookingEmail(bookingId: string, p0: { force: b
       partnerName: booking.partner.name,
       partnerAddress,
       slotISO: booking.slot.startTime.toISOString(),
+      slotEndISO: booking.slot.endTime?.toISOString(),
       players: booking.playersCount,
       bookingId: booking.id,
       totalCents: booking.totalAmountCents,

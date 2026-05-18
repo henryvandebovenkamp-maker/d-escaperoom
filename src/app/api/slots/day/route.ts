@@ -4,15 +4,10 @@ import { z } from "zod";
 import prisma from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { resolvePartnerForRequest } from "@/lib/partner";
+import { generateStartTimes } from "@/lib/slot-times";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-// 12 vaste uren (pas aan indien nodig)
-const TIMES_12 = [
-  "09:00","10:00","11:00","12:00","13:00","14:00",
-  "15:00","16:00","17:00","18:00","19:00","20:00",
-] as const;
 
 const GetSchema = z.object({
   partner: z.string().min(1),                       // partnerSlug; "all" toegestaan (geeft needsPartner)
@@ -56,20 +51,19 @@ export async function GET(req: NextRequest) {
 
     // Admin met 'all' → geef needsPartner terug (helder signaal, geen lege lijst)
     if (user.role === "ADMIN" && q.partner === "all") {
-      const baseTimes = (TIMES_12 as readonly string[]).slice(0, q.base);
-      const diag = {
-        note: "ADMIN used partner=all for day view. Needs concrete partner slug.",
-        partnerParam: q.partner,
-        day: q.day,
-        baseTimes,
-      };
-      const res = NextResponse.json({ ok: true, needsPartner: true, slots: [], diag });
+      const res = NextResponse.json({ ok: true, needsPartner: true, slots: [], diag: { note: "Needs concrete partner slug." } });
       res.headers.set("Cache-Control", "no-store");
       return res;
     }
 
     // Resolve partner (valideert scope voor PARTNER en staat ADMIN toe om andere slugs te kiezen)
-    const partner = await resolvePartnerForRequest(user, q.partner);
+    const partnerBase = await resolvePartnerForRequest(user, q.partner);
+    const partnerFull = await prisma.partner.findUnique({
+      where: { id: partnerBase.id },
+      select: { id: true, slotDurationMinutes: true },
+    });
+    const partner = partnerBase;
+    const slotDurationMinutes = partnerFull?.slotDurationMinutes ?? 60;
 
     const { start, end } = startEndOfDay(q.day);
 
@@ -80,48 +74,60 @@ export async function GET(req: NextRequest) {
       select: { id: true, startTime: true, status: true },
     });
 
-    // Bezettings-uren (ook BOOKED tellen)
-    const occupied = new Set<number>(
-      realAll.map(s => new Date(s.startTime).getHours())
+    // Bezette starttijden (HH:MM, Amsterdam-tijd)
+    const occupiedLabels = new Set<string>(
+      realAll.map(s => {
+        const d = new Date(s.startTime);
+        const h = d.getUTCHours();
+        const m = d.getUTCMinutes();
+        return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+      })
     );
 
-    const baseTimes = (TIMES_12 as readonly string[]).slice(0, q.base);
-    const baseHours = baseTimes.map(t => Number(t.slice(0, 2)));
+    const baseTimes = generateStartTimes(slotDurationMinutes);
 
-    // Virtuele DRAFT-sleuven (niet op bezette uren)
-    const virtual = baseHours
-      .filter(h => !occupied.has(h))
-      .map(h => ({
-        id: `virtual-${q.day}-${h}`,
-        timeLabel: `${String(h).padStart(2, "0")}:00`,
-        hour: h,
-        status: "DRAFT" as const,
-      }));
+    // Virtuele DRAFT-sleuven (niet op bezette starttijden)
+    const virtual = baseTimes
+      .filter(t => !occupiedLabels.has(t))
+      .map(t => {
+        const [h, m] = t.split(":").map(Number);
+        return {
+          id: `virtual-${q.day}-${t}`,
+          timeLabel: t,
+          hour: h,
+          minute: m,
+          status: "DRAFT" as const,
+        };
+      });
 
     // Echte slots
     const real = realAll.map(s => {
-      const h = new Date(s.startTime).getHours();
+      const d = new Date(s.startTime);
+      const h = d.getUTCHours();
+      const m = d.getUTCMinutes();
+      const timeLabel = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
       return {
         id: s.id,
-        timeLabel: `${String(h).padStart(2, "0")}:00`,
+        timeLabel,
         hour: h,
+        minute: m,
         status: s.status as "DRAFT" | "PUBLISHED" | "BOOKED",
       };
     });
 
-    // Merge: echte wint van virtueel (zelfde uur)
-    const byHour = new Map<number, typeof real[0]>();
-    for (const v of virtual) byHour.set(v.hour, v as any);
-    for (const r of real) byHour.set(r.hour, r);
+    // Merge: echte wint van virtueel (zelfde starttijd)
+    const byLabel = new Map<string, typeof real[0]>();
+    for (const v of virtual) byLabel.set(v.timeLabel, v as any);
+    for (const r of real) byLabel.set(r.timeLabel, r);
 
-    const slots = Array.from(byHour.values()).sort((a, b) => a.hour - b.hour);
+    const slots = Array.from(byLabel.values()).sort((a, b) => a.timeLabel.localeCompare(b.timeLabel));
 
     const diag = {
       partnerParam: q.partner,
       resolvedPartnerId: partner.id,
       day: q.day,
+      slotDurationMinutes,
       baseTimes,
-      occupiedHours: Array.from(occupied.values()).sort((a, b) => a - b),
       realAllCount: realAll.length,
       returnedSlotsCount: slots.length,
     };
@@ -146,10 +152,16 @@ export async function POST(req: Request) {
     const body = await req.json();
     const input = PostSchema.parse(body);
 
-    const partner = await resolvePartnerForRequest(user, input.partner);
+    const partnerBase = await resolvePartnerForRequest(user, input.partner);
+    const partnerFull = await prisma.partner.findUnique({
+      where: { id: partnerBase.id },
+      select: { id: true, slotDurationMinutes: true },
+    });
+    const partner = partnerBase;
+    const slotDurationMinutes = partnerFull?.slotDurationMinutes ?? 60;
 
     const start = toDateLocal(input.day, input.hour, 0);
-    const end = toDateLocal(input.day, input.hour + 1, 0);
+    const end = new Date(start.getTime() + slotDurationMinutes * 60_000);
 
     if (input.action === "publish") {
       const existing = await prisma.slot.findFirst({

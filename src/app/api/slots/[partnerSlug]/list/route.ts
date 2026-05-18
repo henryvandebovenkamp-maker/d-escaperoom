@@ -6,6 +6,7 @@ import { getSessionUser } from "@/lib/auth";
 import { resolvePartnerForRequest } from "@/lib/partner";
 import { z } from "zod";
 import { fromZonedTime, formatInTimeZone } from "date-fns-tz";
+import { generateStartTimes } from "@/lib/slot-times";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -20,20 +21,6 @@ const QuerySchema = z.object({
   base: z.coerce.number().int().min(1).max(48).optional(),
 });
 
-const TIMES_12 = [
-  "09:00",
-  "10:00",
-  "11:00",
-  "12:00",
-  "13:00",
-  "14:00",
-  "15:00",
-  "16:00",
-  "17:00",
-  "18:00",
-  "19:00",
-  "20:00",
-] as const;
 
 const TIMEZONE = "Europe/Amsterdam";
 
@@ -352,7 +339,7 @@ export async function GET(
     }
 
     if (user.role === "ADMIN" && partnerSlug === "all") {
-      const baseTimes = (TIMES_12 as readonly string[]).slice(0, BASE);
+      const baseTimes = generateStartTimes(60).slice(0, BASE);
 
       const dayStatus = getDayStatus({
         publishedCount: 0,
@@ -375,7 +362,13 @@ export async function GET(
       return res;
     }
 
-    const partner = await resolvePartnerForRequest(user, partnerSlug);
+    const partnerBase = await resolvePartnerForRequest(user, partnerSlug);
+    const partnerFull = await prisma.partner.findUnique({
+      where: { id: partnerBase.id },
+      select: { id: true, slotDurationMinutes: true },
+    });
+    const partner = partnerBase;
+    const slotDurationMinutes = partnerFull?.slotDurationMinutes ?? 60;
     const from = startOfDayUtc(q.day);
     const to = startOfNextDayUtc(q.day);
 
@@ -424,7 +417,7 @@ export async function GET(
       };
     });
 
-    const baseTimes = (TIMES_12 as readonly string[]).slice(0, BASE);
+    const baseTimes = generateStartTimes(slotDurationMinutes);
 
     const occupiedHHMM = new Set<string>(
       realAll.map((slot) => timeLabelInAmsterdam(new Date(slot.startTime)))
@@ -438,7 +431,7 @@ export async function GET(
         return {
           id: null as string | null,
           startTime: start.toISOString(),
-          endTime: addMinutes(start, 60).toISOString(),
+          endTime: addMinutes(start, slotDurationMinutes).toISOString(),
           status: "DRAFT" as const,
           capacity: 1,
           maxPlayers: 3,

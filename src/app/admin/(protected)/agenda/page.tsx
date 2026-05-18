@@ -874,7 +874,7 @@ function WeekView({
 
         {loading && <p className="text-[11px] text-stone-500">Laden…</p>}
 
-        <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-7">
+        <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7">
           {days.map((d, idx) => {
             const count = byDay.get(d)?.length ?? 0;
             const isSelected = d === selectedISO;

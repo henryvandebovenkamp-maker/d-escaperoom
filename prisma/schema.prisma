@@ -109,6 +109,8 @@ model Partner {
 
   feePercent      Int
 
+  slotDurationMinutes Int   @default(60)
+
   heroImageUrl    String?
   addressLine1    String?
   addressLine2    String?

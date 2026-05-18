@@ -32,6 +32,7 @@ export type TemplateVars = {
     partnerName: string;
     partnerAddress?: string;
     slotISO: string;
+    slotEndISO?: string;
     players: number;
     bookingId: string;
     totalCents: number;

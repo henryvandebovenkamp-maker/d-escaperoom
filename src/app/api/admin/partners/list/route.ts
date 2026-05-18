@@ -43,6 +43,7 @@ export async function GET(req: Request) {
         feePercent: true,
         price1PaxCents: true,
         price2PlusCents: true,
+        slotDurationMinutes: true,
         heroImageUrl: true,
         addressLine1: true,
         // addressLine2: verwijderd

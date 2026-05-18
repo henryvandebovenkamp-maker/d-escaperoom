@@ -14,8 +14,8 @@ const BodySchema = z.object({
   publish: z.boolean().optional(),
 });
 
-const FIRST_HOUR = 9;
-const LAST_HOUR = 20;
+const FIRST_HOUR_MINUTES = 9 * 60;  // 09:00 in minuten
+const DAY_END_EXCLUSIVE = 21 * 60;  // last slot START must be < 21:00
 const TIMEZONE = "Europe/Amsterdam";
 
 function parseIsoDate(iso: string) {
@@ -47,10 +47,11 @@ function getWeekday(dateIso: string) {
   return new Date(year, month - 1, day).getDay();
 }
 
-function toUtcSlotDate(dateIso: string, hour: number, minute = 0) {
+function toUtcSlotTime(dateIso: string, totalMinutes: number) {
+  const hour = Math.floor(totalMinutes / 60);
+  const minute = totalMinutes % 60;
   const hh = String(hour).padStart(2, "0");
   const mm = String(minute).padStart(2, "0");
-
   return fromZonedTime(`${dateIso} ${hh}:${mm}:00`, TIMEZONE);
 }
 
@@ -59,7 +60,14 @@ export async function POST(req: Request) {
     const user = await getSessionUser();
     const body = BodySchema.parse(await req.json());
 
-    const partner = await resolvePartnerForRequest(user, body.partnerSlug);
+    const partnerBase = await resolvePartnerForRequest(user, body.partnerSlug);
+    const partnerFull = await prisma.partner.findUnique({
+      where: { id: partnerBase.id },
+      select: { id: true, slotDurationMinutes: true },
+    });
+    const partner = partnerBase;
+    const slotDurationMinutes = partnerFull?.slotDurationMinutes ?? 60;
+
     const weekdays = body.weekdays ?? [1, 2, 3, 4, 5, 6, 0];
 
     if (body.startDate > body.endDate) {
@@ -77,35 +85,36 @@ export async function POST(req: Request) {
       const weekday = getWeekday(currentDate);
 
       if (weekdays.includes(weekday)) {
-        for (let hour = FIRST_HOUR; hour <= LAST_HOUR; hour++) {
-          const startTime = toUtcSlotDate(currentDate, hour, 0);
-          const endTime = toUtcSlotDate(currentDate, hour + 1, 0);
+        // Genereer non-overlappende slots van 09:00, startMinutes < 21:00
+        let startMinutes = FIRST_HOUR_MINUTES;
+        while (startMinutes < DAY_END_EXCLUSIVE) {
+          const endMinutes = startMinutes + slotDurationMinutes;
+
+          const startTime = toUtcSlotTime(currentDate, startMinutes);
+          const endTime = toUtcSlotTime(currentDate, endMinutes);
 
           const exists = await prisma.slot.findFirst({
-            where: {
-              partnerId: partner.id,
-              startTime,
-            },
+            where: { partnerId: partner.id, startTime },
             select: { id: true },
           });
 
           if (exists) {
             skippedExisting++;
-            continue;
+          } else {
+            await prisma.slot.create({
+              data: {
+                partnerId: partner.id,
+                startTime,
+                endTime,
+                status: body.publish ? "PUBLISHED" : "DRAFT",
+                capacity: 1,
+                maxPlayers: 3,
+              },
+            });
+            created++;
           }
 
-          await prisma.slot.create({
-            data: {
-              partnerId: partner.id,
-              startTime,
-              endTime,
-              status: body.publish ? "PUBLISHED" : "DRAFT",
-              capacity: 1,
-              maxPlayers: 3,
-            },
-          });
-
-          created++;
+          startMinutes += slotDurationMinutes;
         }
       }
 
@@ -116,6 +125,7 @@ export async function POST(req: Request) {
       ok: true,
       created,
       skippedExisting,
+      slotDurationMinutes,
     });
   } catch (err: any) {
     return NextResponse.json(

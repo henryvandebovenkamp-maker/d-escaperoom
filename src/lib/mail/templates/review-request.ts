@@ -7,145 +7,114 @@ import {
 type Vars = TemplateVars["review-request"];
 
 registerTemplate("review-request", {
-  subject: ({ partnerName }: Vars) =>
-    `Hoe was jullie avontuur bij ${partnerName}? 🤠`,
+  subject: () => "Jullie speurtocht zit erop… mogen we iets vragen? 🐾",
 
-  html: ({
-    customerName,
-    partnerName,
-    dogName,
-    reviewUrl,
-  }: Vars) => {
-    return `
-      <div style="background:#0c0a09;padding:40px 20px;font-family:Arial,sans-serif;color:#ffffff;">
-        <div style="max-width:600px;margin:0 auto;background:#1c1917;border:1px solid rgba(255,255,255,0.08);border-radius:28px;overflow:hidden;">
+  html: ({ customerName, partnerName, dogName, reviewUrl }: Vars) => `
+    <div style="margin:0;padding:0;background:#0c0a09;">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0c0a09;padding:26px 12px;font-family:Arial,sans-serif;">
+        <tr>
+          <td align="center">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:#1c1917;border-radius:26px;border:1px solid #3a2d2a;overflow:hidden;">
+              <tr>
+                <td style="padding:0;">
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#3b1826;">
+                    <tr>
+                      <td style="padding:26px 24px;">
+                        <p style="margin:0;color:#fde68a;font-size:11px;letter-spacing:0.24em;font-weight:bold;text-transform:uppercase;">
+                          D-EscapeRoom
+                        </p>
 
-          <div style="padding:40px 32px;">
-            <div style="
-              display:inline-block;
-              padding:8px 14px;
-              border-radius:999px;
-              background:rgba(255,255,255,0.08);
-              border:1px solid rgba(255,255,255,0.12);
-              font-size:11px;
-              letter-spacing:0.22em;
-              font-weight:700;
-              color:#fde68a;
-              text-transform:uppercase;
-            ">
-              D-EscapeRoom
-            </div>
+                        <h1 style="margin:14px 0 0;color:#fda4af;font-size:34px;line-height:1.08;font-weight:900;">
+                          Bedankt voor jullie speurwerk 🤠
+                        </h1>
 
-            <h1 style="
-              margin:24px 0 0;
-              font-size:38px;
-              line-height:1.05;
-              color:#fda4af;
-              font-weight:900;
-            ">
-              Hoe was jullie avontuur?
-            </h1>
+                        <p style="margin:14px 0 0;color:#f5f5f4;font-size:15px;line-height:1.7;">
+                          The Stolen Snack is natuurlijk pas écht compleet met de verhalen van baasjes en honden die hem gespeeld hebben.
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
 
-            <p style="
-              margin:24px 0 0;
-              font-size:16px;
-              line-height:1.8;
-              color:#e7e5e4;
-            ">
-              Hoi ${customerName},
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td style="padding:24px;">
+                        <p style="margin:0;color:#f5f5f4;font-size:16px;line-height:1.7;">
+                          Hoi ${customerName},
+                        </p>
+
+                        <p style="margin:14px 0 0;color:#d6d3d1;font-size:15px;line-height:1.8;">
+                          Wat leuk dat jullie bij <strong>${partnerName}</strong> zijn geweest.
+                          We zijn heel benieuwd hoe jullie het speuren, samenwerken en puzzelen hebben ervaren.
+                        </p>
+
+                        ${
+                          dogName
+                            ? `<p style="margin:14px 0 0;color:#d6d3d1;font-size:15px;line-height:1.8;">
+                                En natuurlijk: geef <strong>${dogName}</strong> nog maar een extra snack van ons 🐾
+                              </p>`
+                            : ""
+                        }
+
+                        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:22px;background:#292524;border-radius:18px;border:1px solid #44403c;">
+                          <tr>
+                            <td style="padding:18px;">
+                              <p style="margin:0;color:#ffffff;font-size:16px;line-height:1.65;font-weight:bold;">
+                                Wil je jouw ervaring kort delen?
+                              </p>
+                              <p style="margin:8px 0 0;color:#d6d3d1;font-size:14px;line-height:1.7;">
+                                Daarmee help je andere hondenbaasjes om te ontdekken of D-EscapeRoom ook iets voor hen is.
+                              </p>
+                            </td>
+                          </tr>
+                        </table>
+
+                        <table cellpadding="0" cellspacing="0" border="0" style="margin-top:24px;">
+                          <tr>
+                            <td align="center" bgcolor="#db2777" style="border-radius:16px;">
+                              <a href="${reviewUrl}" style="display:inline-block;padding:15px 24px;color:#ffffff;text-decoration:none;font-size:15px;font-weight:800;">
+                                Mijn ervaring delen
+                              </a>
+                            </td>
+                          </tr>
+                        </table>
+
+                        <p style="margin:18px 0 0;color:#a8a29e;font-size:13px;line-height:1.6;">
+                          Het hoeft niet lang te zijn — één of twee zinnen is al super waardevol.
+                        </p>
+
+                        <p style="margin:22px 0 0;color:#f5f5f4;font-size:14px;line-height:1.7;">
+                          Dankjewel,<br />
+                          <strong>D-EscapeRoom</strong>
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+
+            <p style="margin:14px 0 0;color:#78716c;font-size:12px;">
+              © D-EscapeRoom
             </p>
+          </td>
+        </tr>
+      </table>
+    </div>
+  `,
 
-            <p style="
-              margin:18px 0 0;
-              font-size:16px;
-              line-height:1.8;
-              color:#d6d3d1;
-            ">
-              Bedankt voor jullie bezoek aan <strong>${partnerName}</strong>.
-              We hopen dat jullie samen een geweldige tijd hebben gehad tijdens
-              <strong>The Stolen Snack</strong>.
-            </p>
-
-            ${
-              dogName
-                ? `
-              <p style="
-                margin:18px 0 0;
-                font-size:16px;
-                line-height:1.8;
-                color:#d6d3d1;
-              ">
-                Geef ${dogName} ook nog maar een extra snack van ons 🤠🐾
-              </p>
-            `
-                : ""
-            }
-
-            <div style="
-              margin-top:32px;
-              padding:20px;
-              border-radius:22px;
-              background:rgba(255,255,255,0.05);
-              border:1px solid rgba(255,255,255,0.08);
-            ">
-              <p style="
-                margin:0;
-                font-size:15px;
-                line-height:1.7;
-                color:#f5f5f4;
-              ">
-                Reviews helpen andere hondenbaasjes enorm om te ontdekken hoe leuk
-                deze ervaring samen met hun hond kan zijn.
-              </p>
-            </div>
-
-            <div style="margin-top:34px;">
-              <a
-                href="${reviewUrl}"
-                style="
-                  display:inline-block;
-                  background:#e11d48;
-                  color:#ffffff;
-                  text-decoration:none;
-                  padding:16px 28px;
-                  border-radius:18px;
-                  font-size:16px;
-                  font-weight:700;
-                "
-              >
-                Schrijf een review
-              </a>
-            </div>
-
-            <p style="
-              margin:30px 0 0;
-              font-size:13px;
-              line-height:1.7;
-              color:#a8a29e;
-            ">
-              Duurt minder dan 1 minuut ✨
-            </p>
-          </div>
-        </div>
-      </div>
-    `;
-  },
-
-  text: ({
-    customerName,
-    partnerName,
-    reviewUrl,
-  }: Vars) => `
+  text: ({ customerName, partnerName, reviewUrl }: Vars) => `
 Hoi ${customerName},
 
-Bedankt voor jullie bezoek aan ${partnerName} en het spelen van The Stolen Snack.
+Bedankt voor jullie bezoek aan ${partnerName}.
 
-We horen graag hoe jullie het avontuur hebben ervaren.
+We zijn heel benieuwd hoe jullie het speuren, samenwerken en puzzelen hebben ervaren.
 
-Schrijf hier jullie review:
+Wil je jouw ervaring kort delen?
 ${reviewUrl}
 
-Groet,
+Eén of twee zinnen is al super waardevol.
+
+Dankjewel,
 D-EscapeRoom
 `,
 });

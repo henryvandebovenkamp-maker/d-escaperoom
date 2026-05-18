@@ -23,8 +23,8 @@ type Province = (typeof PROVINCES)[number];
 type PartnerRow = {
   id: string; name: string; slug: string; email: string | null; phone: string | null;
   city: string | null; province: Province; isActive: boolean; feePercent: number;
-  price1PaxCents: number; price2PlusCents: number; heroImageUrl: string | null;
-  addressLine1: string | null; postalCode: string | null;
+  price1PaxCents: number; price2PlusCents: number; slotDurationMinutes: number;
+  heroImageUrl: string | null; addressLine1: string | null; postalCode: string | null;
   country: string | null; timezone: string; createdAt: string; updatedAt: string;
   googleMapsUrl: string | null;
 };
@@ -41,6 +41,7 @@ const PartnerSchema = z.object({
   feePercent: z.coerce.number().int().min(0).max(90),
   price1PaxEuro: z.string().min(1, "Prijs 1p is verplicht"),
   price2PlusEuro: z.string().min(1, "Prijs ≥2p is verplicht"),
+  slotDurationMinutes: z.coerce.number().int().min(30, "Min. 30 minuten").max(180, "Max. 180 minuten").default(60),
   heroImageUrl: z.string().url().optional(),
   addressLine1: z.string().optional(),
   postalCode: z.string().optional(),
@@ -63,6 +64,7 @@ export default function PartnersClient({ initialPartners }: { initialPartners: P
     name: "", slug: "", email: undefined, phone: "",
     province: "UTRECHT", city: "", isActive: true,
     feePercent: 20, price1PaxEuro: "49,95", price2PlusEuro: "39,95",
+    slotDurationMinutes: 60,
     heroImageUrl: undefined, addressLine1: "",
     postalCode: "", country: "NL", timezone: "Europe/Amsterdam",
     googleMapsUrl: undefined,
@@ -89,6 +91,7 @@ export default function PartnersClient({ initialPartners }: { initialPartners: P
       feePercent: p.feePercent,
       price1PaxEuro: (p.price1PaxCents / 100).toFixed(2).replace(".", ","),
       price2PlusEuro: (p.price2PlusCents / 100).toFixed(2).replace(".", ","),
+      slotDurationMinutes: p.slotDurationMinutes ?? 60,
       heroImageUrl: p.heroImageUrl ?? undefined,
       addressLine1: p.addressLine1 ?? "",
       postalCode: p.postalCode ?? "", country: p.country ?? "NL",
@@ -377,7 +380,7 @@ export default function PartnersClient({ initialPartners }: { initialPartners: P
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div>
                 <label className="block text-[11px] text-stone-600">Land</label>
                 <input
@@ -402,7 +405,49 @@ export default function PartnersClient({ initialPartners }: { initialPartners: P
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] text-stone-600">Tijdslot duur (min)</label>
+                <select
+                  className="mt-1 w-full rounded-xl border border-stone-300 bg-stone-50 px-3 py-2 text-sm"
+                  value={editing?.slotDurationMinutes ?? 60}
+                  onChange={(e) =>
+                    setEditing((p) => (p ? { ...p, slotDurationMinutes: Number(e.target.value) } : p))
+                  }
+                >
+                  <option value={60}>60 minuten</option>
+                  <option value={70}>70 minuten</option>
+                  <option value={75}>75 minuten</option>
+                  <option value={90}>90 minuten</option>
+                </select>
+                <p className="mt-1 text-[10px] text-stone-400">Of typ handmatig (30–180)</p>
+                <input
+                  type="number"
+                  min={30}
+                  max={180}
+                  className="mt-1 w-full rounded-xl border border-stone-300 bg-stone-50 px-3 py-2 text-sm"
+                  value={editing?.slotDurationMinutes ?? 60}
+                  onChange={(e) =>
+                    setEditing((p) => (p ? { ...p, slotDurationMinutes: Number(e.target.value) } : p))
+                  }
+                  placeholder="60"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] text-stone-600">Fee% (aanbetaling)</label>
+                <input
+                  type="number"
+                  className="mt-1 w-full rounded-xl border border-stone-300 bg-stone-50 px-3 py-2 text-sm"
+                  value={editing?.feePercent ?? 20}
+                  onChange={(e) =>
+                    setEditing((p) => (p ? ({ ...p, feePercent: Number(e.target.value) }) : p))
+                  }
+                  placeholder="20"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] text-stone-600">Prijs 1 persoon (EUR)</label>
                 <input
@@ -425,22 +470,10 @@ export default function PartnersClient({ initialPartners }: { initialPartners: P
                   placeholder="39,95"
                 />
               </div>
-              <div>
-                <label className="block text-[11px] text-stone-600">Fee% (aanbetaling)</label>
-                <input
-                  type="number"
-                  className="mt-1 w-full rounded-xl border border-stone-300 bg-stone-50 px-3 py-2 text-sm"
-                  value={editing?.feePercent ?? 20}
-                  onChange={(e) =>
-                    setEditing((p) => (p ? ({ ...p, feePercent: Number(e.target.value) }) : p))
-                  }
-                  placeholder="20"
-                />
-              </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="sm:col-span-2">
                 <label className="block text-[11px] text-stone-600">Hero image URL</label>
                 <input
                   className="mt-1 w-full rounded-xl border border-stone-300 bg-stone-50 px-3 py-2 text-sm"

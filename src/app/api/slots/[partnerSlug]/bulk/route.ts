@@ -25,7 +25,7 @@ const BodySchema = z.object({
   publish: z.coerce.boolean().default(true),
   capacity: z.coerce.number().int().positive().max(99).default(1),
   maxPlayers: z.coerce.number().int().positive().max(10).default(3),
-  durationMinutes: z.coerce.number().int().positive().max(24 * 60).default(60),
+  durationMinutes: z.coerce.number().int().positive().max(24 * 60).optional(),
 });
 
 function pad2(value: number) {
@@ -86,7 +86,12 @@ export async function POST(
     }
 
     const { partnerSlug } = await ctx.params;
-    const partner = await resolvePartnerForRequest(user, partnerSlug);
+    const partnerBase = await resolvePartnerForRequest(user, partnerSlug);
+    const partnerFull = await prisma.partner.findUnique({
+      where: { id: partnerBase.id },
+      select: { id: true, slotDurationMinutes: true },
+    });
+    const partner = partnerFull ?? partnerBase;
 
     let raw: unknown;
 
@@ -120,8 +125,8 @@ export async function POST(
       publish,
       capacity,
       maxPlayers,
-      durationMinutes,
     } = parsed.data;
+    const durationMinutes = parsed.data.durationMinutes ?? (partnerFull?.slotDurationMinutes ?? 60);
 
     if (startDate > endDate) {
       return NextResponse.json(
@@ -169,7 +174,25 @@ export async function POST(
 
     const status = publish ? SlotStatus.PUBLISHED : SlotStatus.DRAFT;
 
-    const data = wanted.map(({ startTime, endTime }) => ({
+    // Check for overlapping existing slots (newStart < existingEnd && newEnd > existingStart)
+    const rangeStartCheck = wanted[0].startTime;
+    const rangeEndCheck = wanted[wanted.length - 1].endTime;
+    const existingInRange = await prisma.slot.findMany({
+      where: {
+        partnerId: partner.id,
+        startTime: { lt: rangeEndCheck },
+        endTime: { gt: rangeStartCheck },
+      },
+      select: { startTime: true, endTime: true },
+    });
+
+    const nonOverlapping = wanted.filter(({ startTime, endTime }) =>
+      !existingInRange.some(
+        (ex) => startTime < ex.endTime! && endTime > ex.startTime
+      )
+    );
+
+    const data = nonOverlapping.map(({ startTime, endTime }) => ({
       partnerId: partner.id,
       startTime,
       endTime,
@@ -183,7 +206,7 @@ export async function POST(
       skipDuplicates: true,
     });
 
-    const attempted = data.length;
+    const attempted = wanted.length;
     const created = result.count;
     const skipped = attempted - created;
 

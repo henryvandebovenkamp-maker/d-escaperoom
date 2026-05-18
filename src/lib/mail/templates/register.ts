@@ -3,3 +3,4 @@
 import "@/lib/mail/templates/login-code";
 import "@/lib/mail/templates/booking-customer";
 import "@/lib/mail/templates/booking-partner";
+import "@/lib/mail/templates/review-request";

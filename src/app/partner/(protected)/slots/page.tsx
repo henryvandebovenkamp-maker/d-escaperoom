@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { generateStartTimes } from "@/lib/slot-times";
 
 const TZ = "Europe/Amsterdam";
 
@@ -141,6 +142,7 @@ type PartnerRow = {
   name: string;
   slug: string;
   city: string | null;
+  slotDurationMinutes: number;
 };
 
 type ApiDay = {
@@ -183,6 +185,11 @@ export default function SlotsPage() {
   const [monthISO, setMonthISO] = React.useState(nowMonthISO());
   const [selectedDay, setSelectedDay] = React.useState(todayISO());
   const [refreshKey, setRefreshKey] = React.useState(0);
+
+  const activeDuration = React.useMemo(
+    () => partners.find((p) => p.slug === partnerSlug)?.slotDurationMinutes ?? 60,
+    [partners, partnerSlug]
+  );
 
   React.useEffect(() => {
     let cancelled = false;
@@ -336,7 +343,9 @@ export default function SlotsPage() {
             <h2 className="mb-3 text-xl font-extrabold">➕ Reeks toevoegen</h2>
 
             <SeriesForm
+              key={partnerSlug}
               partnerSlug={partnerSlug}
+              slotDurationMinutes={activeDuration}
               onDone={() => setRefreshKey((k) => k + 1)}
             />
           </section>
@@ -347,6 +356,7 @@ export default function SlotsPage() {
             key={`${partnerSlug}-${selectedDay}-${refreshKey}`}
             partnerSlug={partnerSlug}
             dayISO={selectedDay}
+            slotDurationMinutes={activeDuration}
             onChanged={() => setRefreshKey((k) => k + 1)}
           />
         </div>
@@ -640,9 +650,11 @@ function CalendarMonth({
 
 function SeriesForm({
   partnerSlug,
+  slotDurationMinutes,
   onDone,
 }: {
   partnerSlug: string;
+  slotDurationMinutes: number;
   onDone?: () => void;
 }) {
   const [start, setStart] = React.useState("");
@@ -654,20 +666,10 @@ function SeriesForm({
   const NL_DAYS = ["ma", "di", "wo", "do", "vr", "za", "zo"] as const;
   const jsDayOrder = [1, 2, 3, 4, 5, 6, 0];
 
-  const TIMES = [
-    "09:00",
-    "10:00",
-    "11:00",
-    "12:00",
-    "13:00",
-    "14:00",
-    "15:00",
-    "16:00",
-    "17:00",
-    "18:00",
-    "19:00",
-    "20:00",
-  ] as const;
+  const TIMES = React.useMemo(
+    () => generateStartTimes(slotDurationMinutes),
+    [slotDurationMinutes]
+  );
 
   const [weekdays, setWeekdays] = React.useState<Set<number>>(new Set());
   const [selectedTimes, setSelectedTimes] = React.useState<Set<string>>(new Set());
@@ -793,14 +795,17 @@ function SeriesForm({
   }
 
   function setTimesDay() {
-    const arr = ["10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00"];
+    const arr = TIMES.filter((t) => {
+      const h = parseInt(t.split(":")[0], 10);
+      return h >= 10 && h < 17;
+    });
     setSelectedTimes(
       new Set(isTodayOnly() ? arr.filter((t) => !isPastTimeForToday(t)) : arr)
     );
   }
 
   function setTimesEvening() {
-    const arr = ["17:00", "18:00", "19:00", "20:00"];
+    const arr = TIMES.filter((t) => parseInt(t.split(":")[0], 10) >= 17);
     setSelectedTimes(
       new Set(isTodayOnly() ? arr.filter((t) => !isPastTimeForToday(t)) : arr)
     );
@@ -1032,10 +1037,10 @@ function SeriesForm({
 
       <div>
         <label className="block text-sm font-semibold text-stone-800">
-          Tijden (60 min)
+          Starttijden
         </label>
 
-        <div className="mt-3 grid grid-cols-6 gap-2">
+        <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
           {TIMES.map((t) => {
             const isSelected = selectedTimes.has(t);
             const isPast = disablePastTimesToday && isPastTimeForToday(t);
@@ -1157,10 +1162,12 @@ function MiniGhost({ onClick, label }: { onClick: () => void; label: string }) {
 function DayLists({
   partnerSlug,
   dayISO,
+  slotDurationMinutes,
   onChanged,
 }: {
   partnerSlug: string;
   dayISO: string;
+  slotDurationMinutes: number;
   onChanged: () => void;
 }) {
   const router = useRouter();
@@ -1176,13 +1183,9 @@ function DayLists({
   }, []);
 
   function generateSchedule(day: string) {
-    const out: string[] = [];
-
-    for (let h = 9; h <= 20; h++) {
-      out.push(zonedDateFromAmsterdamLocal(day, `${pad2(h)}:00`).toISOString());
-    }
-
-    return out;
+    return generateStartTimes(slotDurationMinutes).map((t) =>
+      zonedDateFromAmsterdamLocal(day, t).toISOString()
+    );
   }
 
   function agendaHrefForDay(day: string) {
@@ -1327,10 +1330,10 @@ function DayLists({
     }
   }
 
-  const timeTextCls = "truncate whitespace-nowrap [font-variant-numeric:tabular-nums] leading-tight";
+  const timeTextCls = "whitespace-nowrap [font-variant-numeric:tabular-nums] leading-tight";
 
   const pillBase =
-    "group flex items-center justify-between rounded-xl border px-2 py-2 text-xs font-medium transition min-h-9";
+    "group flex items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-xs font-medium transition min-h-9 min-w-[4.5rem]";
 
   return (
     <>
@@ -1350,7 +1353,7 @@ function DayLists({
         ) : drafts.length === 0 ? (
           <p className="text-sm text-stone-500">Geen beschikbare tijdsloten meer.</p>
         ) : (
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
             {drafts.map((s) => (
               <button
                 key={`d-${s.startTime}`}
@@ -1396,7 +1399,7 @@ function DayLists({
         {loading && <p className="text-sm text-stone-500">Laden…</p>}
 
         {published.length > 0 ? (
-          <div className="mb-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
+          <div className="mb-4 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
             {published.map((s) => (
               <button
                 key={s.id!}
@@ -1435,11 +1438,11 @@ function DayLists({
           )
         )}
 
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
           {booked.map((s) => (
             <div
               key={`b-${s.id ?? s.startTime}`}
-              className="flex min-h-9 items-center justify-between rounded-xl border border-purple-200 bg-purple-50 px-2 py-2 text-xs font-medium text-stone-900 opacity-90"
+              className="flex min-h-9 items-center justify-center rounded-xl border border-purple-200 bg-purple-50 px-2 py-2 text-xs font-medium text-stone-900 opacity-90"
               title="Geboekt"
               aria-label={`Geboekt: ${fmtTimeAmsterdam(s.startTime)}`}
             >
@@ -1460,7 +1463,7 @@ function DayLists({
           ))}
 
           {!loading && booked.length === 0 && (
-            <div className="col-span-3 text-sm text-stone-500 sm:col-span-6">
+            <div className="col-span-full text-sm text-stone-500">
               Nog geen boekingen op deze dag.
             </div>
           )}

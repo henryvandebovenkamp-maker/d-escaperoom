@@ -12,7 +12,7 @@ const BodySchema = z
 
     startTimeISO: z.string().datetime({ offset: true }).optional(),
     endTimeISO: z.string().datetime({ offset: true }).optional(),
-    durationMinutes: z.coerce.number().int().positive().max(24 * 60).default(60),
+    durationMinutes: z.coerce.number().int().positive().max(24 * 60).optional(),
 
     capacity: z.coerce.number().int().positive().max(99).default(1),
     maxPlayers: z.coerce.number().int().positive().max(10).default(3),
@@ -53,7 +53,12 @@ export async function POST(
     }
 
     const { partnerSlug } = await ctx.params;
-    const partner = await resolvePartnerForRequest(user, partnerSlug);
+    const partnerBase = await resolvePartnerForRequest(user, partnerSlug);
+    const partnerFull = await prisma.partner.findUnique({
+      where: { id: partnerBase.id },
+      select: { id: true, slotDurationMinutes: true },
+    });
+    const partner = partnerBase;
 
     const bodyRaw = await req.json();
     const body = BodySchema.parse(bodyRaw);
@@ -92,10 +97,11 @@ export async function POST(
       return NextResponse.json({ ok: true, slot });
     }
 
+    const defaultDuration = partnerFull?.slotDurationMinutes ?? 60;
     const start = parseValidDate(body.startTimeISO!);
     const end = body.endTimeISO
       ? parseValidDate(body.endTimeISO)
-      : addMinutes(start, body.durationMinutes);
+      : addMinutes(start, body.durationMinutes ?? defaultDuration);
 
     if (end <= start) {
       return NextResponse.json(
@@ -126,7 +132,8 @@ export async function POST(
       const slot = await prisma.slot.update({
         where: { id: existingSameStart.id },
         data: {
-          endTime: end,
+          // Only overwrite endTime if caller explicitly provided it; never recompute from slotDurationMinutes for existing slots
+          ...(body.endTimeISO || body.durationMinutes ? { endTime: end } : {}),
           capacity: body.capacity,
           maxPlayers: body.maxPlayers,
           status: SlotStatus.PUBLISHED,

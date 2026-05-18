@@ -11,7 +11,7 @@ export async function GET() {
   if (u.role === "ADMIN") {
     const rows = await prisma.partner.findMany({
       orderBy: [{ name: "asc" }],
-      select: { id: true, name: true, slug: true, city: true },
+      select: { id: true, name: true, slug: true, city: true, slotDurationMinutes: true },
     });
     return NextResponse.json(rows);
   }
@@ -20,7 +20,7 @@ export async function GET() {
   if (u.role === "PARTNER" && u.partnerId) {
     const p = await prisma.partner.findUnique({
       where: { id: u.partnerId },
-      select: { id: true, name: true, slug: true, city: true },
+      select: { id: true, name: true, slug: true, city: true, slotDurationMinutes: true },
     });
     // Als er (nog) geen partner record is gekoppeld
     return NextResponse.json(p ? [p] : []);
