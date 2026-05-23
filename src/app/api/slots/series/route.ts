@@ -14,9 +14,12 @@ const BodySchema = z.object({
   publish: z.boolean().optional(),
 });
 
-const FIRST_HOUR_MINUTES = 9 * 60;  // 09:00 in minuten
-const DAY_END_EXCLUSIVE = 21 * 60;  // last slot START must be < 21:00
 const TIMEZONE = "Europe/Amsterdam";
+
+function hhmmToMinutes(hhmm: string): number {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+}
 
 function parseIsoDate(iso: string) {
   const [year, month, day] = iso.split("-").map(Number);
@@ -63,10 +66,12 @@ export async function POST(req: Request) {
     const partnerBase = await resolvePartnerForRequest(user, body.partnerSlug);
     const partnerFull = await prisma.partner.findUnique({
       where: { id: partnerBase.id },
-      select: { id: true, slotDurationMinutes: true },
+      select: { id: true, slotDurationMinutes: true, dayStartTime: true, dayEndTime: true },
     });
     const partner = partnerBase;
     const slotDurationMinutes = partnerFull?.slotDurationMinutes ?? 60;
+    const dayStartMinutes = hhmmToMinutes(partnerFull?.dayStartTime ?? "09:00");
+    const dayEndMinutes = hhmmToMinutes(partnerFull?.dayEndTime ?? "21:00");
 
     const weekdays = body.weekdays ?? [1, 2, 3, 4, 5, 6, 0];
 
@@ -85,9 +90,9 @@ export async function POST(req: Request) {
       const weekday = getWeekday(currentDate);
 
       if (weekdays.includes(weekday)) {
-        // Genereer non-overlappende slots van 09:00, startMinutes < 21:00
-        let startMinutes = FIRST_HOUR_MINUTES;
-        while (startMinutes < DAY_END_EXCLUSIVE) {
+        // Genereer non-overlappende slots van dayStartTime, slotEnd <= dayEndTime
+        let startMinutes = dayStartMinutes;
+        while (startMinutes + slotDurationMinutes <= dayEndMinutes) {
           const endMinutes = startMinutes + slotDurationMinutes;
 
           const startTime = toUtcSlotTime(currentDate, startMinutes);

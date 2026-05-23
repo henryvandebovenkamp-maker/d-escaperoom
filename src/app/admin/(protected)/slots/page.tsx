@@ -161,6 +161,8 @@ type PartnerRow = {
   slug: string;
   city: string | null;
   slotDurationMinutes: number;
+  dayStartTime: string;
+  dayEndTime: string;
 };
 
 type ApiDay = {
@@ -207,10 +209,13 @@ export default function SlotsPage() {
   const [selectedDay, setSelectedDay] = React.useState(todayISO());
   const [refreshKey, setRefreshKey] = React.useState(0);
 
-  const activeDuration = React.useMemo(
-    () => partners.find((p) => p.slug === partnerSlug)?.slotDurationMinutes ?? 60,
+  const activePartner = React.useMemo(
+    () => partners.find((p) => p.slug === partnerSlug),
     [partners, partnerSlug]
   );
+  const activeDuration = activePartner?.slotDurationMinutes ?? 60;
+  const activeDayStart = activePartner?.dayStartTime ?? "09:00";
+  const activeDayEnd = activePartner?.dayEndTime ?? "21:00";
 
   React.useEffect(() => {
     let cancelled = false;
@@ -367,6 +372,8 @@ export default function SlotsPage() {
               key={partnerSlug}
               partnerSlug={partnerSlug}
               slotDurationMinutes={activeDuration}
+              dayStartTime={activeDayStart}
+              dayEndTime={activeDayEnd}
               onDone={() => setRefreshKey((k) => k + 1)}
             />
           </section>
@@ -378,6 +385,8 @@ export default function SlotsPage() {
             partnerSlug={partnerSlug}
             dayISO={selectedDay}
             slotDurationMinutes={activeDuration}
+            dayStartTime={activeDayStart}
+            dayEndTime={activeDayEnd}
             onChanged={() => setRefreshKey((k) => k + 1)}
           />
         </div>
@@ -682,10 +691,14 @@ function CalendarMonth({
 function SeriesForm({
   partnerSlug,
   slotDurationMinutes,
+  dayStartTime,
+  dayEndTime,
   onDone,
 }: {
   partnerSlug: string;
   slotDurationMinutes: number;
+  dayStartTime: string;
+  dayEndTime: string;
   onDone?: () => void;
 }) {
   const [start, setStart] = React.useState("");
@@ -698,8 +711,8 @@ function SeriesForm({
   const jsDayOrder = [1, 2, 3, 4, 5, 6, 0];
 
   const TIMES = React.useMemo(
-    () => generateStartTimes(slotDurationMinutes),
-    [slotDurationMinutes]
+    () => generateStartTimes({ dayStartTime, dayEndTime, durationMinutes: slotDurationMinutes }),
+    [dayStartTime, dayEndTime, slotDurationMinutes]
   );
 
   const [weekdays, setWeekdays] = React.useState<Set<number>>(new Set());
@@ -1200,11 +1213,15 @@ function DayLists({
   partnerSlug,
   dayISO,
   slotDurationMinutes,
+  dayStartTime,
+  dayEndTime,
   onChanged,
 }: {
   partnerSlug: string;
   dayISO: string;
   slotDurationMinutes: number;
+  dayStartTime: string;
+  dayEndTime: string;
   onChanged: () => void;
 }) {
   const router = useRouter();
@@ -1220,7 +1237,7 @@ function DayLists({
   }, []);
 
   function generateSchedule(day: string) {
-    return generateStartTimes(slotDurationMinutes).map((t) =>
+    return generateStartTimes({ dayStartTime, dayEndTime, durationMinutes: slotDurationMinutes }).map((t) =>
       zonedDateFromAmsterdamLocal(day, t).toISOString()
     );
   }

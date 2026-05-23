@@ -44,6 +44,8 @@ export async function GET(req: Request) {
         price1PaxCents: true,
         price2PlusCents: true,
         slotDurationMinutes: true,
+        dayStartTime: true,
+        dayEndTime: true,
         heroImageUrl: true,
         addressLine1: true,
         // addressLine2: verwijderd

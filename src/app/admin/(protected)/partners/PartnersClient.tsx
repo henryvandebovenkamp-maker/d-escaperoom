@@ -24,6 +24,7 @@ type PartnerRow = {
   id: string; name: string; slug: string; email: string | null; phone: string | null;
   city: string | null; province: Province; isActive: boolean; feePercent: number;
   price1PaxCents: number; price2PlusCents: number; slotDurationMinutes: number;
+  dayStartTime: string; dayEndTime: string;
   heroImageUrl: string | null; addressLine1: string | null; postalCode: string | null;
   country: string | null; timezone: string; createdAt: string; updatedAt: string;
   googleMapsUrl: string | null;
@@ -42,6 +43,8 @@ const PartnerSchema = z.object({
   price1PaxEuro: z.string().min(1, "Prijs 1p is verplicht"),
   price2PlusEuro: z.string().min(1, "Prijs ≥2p is verplicht"),
   slotDurationMinutes: z.coerce.number().int().min(30, "Min. 30 minuten").max(180, "Max. 180 minuten").default(60),
+  dayStartTime: z.string().regex(/^\d{2}:\d{2}$/, "Formaat HH:mm").default("09:00"),
+  dayEndTime: z.string().regex(/^\d{2}:\d{2}$/, "Formaat HH:mm").default("21:00"),
   heroImageUrl: z.string().url().optional(),
   addressLine1: z.string().optional(),
   postalCode: z.string().optional(),
@@ -64,7 +67,7 @@ export default function PartnersClient({ initialPartners }: { initialPartners: P
     name: "", slug: "", email: undefined, phone: "",
     province: "UTRECHT", city: "", isActive: true,
     feePercent: 20, price1PaxEuro: "49,95", price2PlusEuro: "39,95",
-    slotDurationMinutes: 60,
+    slotDurationMinutes: 60, dayStartTime: "09:00", dayEndTime: "21:00",
     heroImageUrl: undefined, addressLine1: "",
     postalCode: "", country: "NL", timezone: "Europe/Amsterdam",
     googleMapsUrl: undefined,
@@ -92,6 +95,8 @@ export default function PartnersClient({ initialPartners }: { initialPartners: P
       price1PaxEuro: (p.price1PaxCents / 100).toFixed(2).replace(".", ","),
       price2PlusEuro: (p.price2PlusCents / 100).toFixed(2).replace(".", ","),
       slotDurationMinutes: p.slotDurationMinutes ?? 60,
+      dayStartTime: p.dayStartTime ?? "09:00",
+      dayEndTime: p.dayEndTime ?? "21:00",
       heroImageUrl: p.heroImageUrl ?? undefined,
       addressLine1: p.addressLine1 ?? "",
       postalCode: p.postalCode ?? "", country: p.country ?? "NL",
@@ -443,6 +448,31 @@ export default function PartnersClient({ initialPartners }: { initialPartners: P
                     setEditing((p) => (p ? ({ ...p, feePercent: Number(e.target.value) }) : p))
                   }
                   placeholder="20"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] text-stone-600">Dag starttijd</label>
+                <input
+                  type="time"
+                  className="mt-1 w-full rounded-xl border border-stone-300 bg-stone-50 px-3 py-2 text-sm"
+                  value={editing?.dayStartTime ?? "09:00"}
+                  onChange={(e) =>
+                    setEditing((p) => (p ? { ...p, dayStartTime: e.target.value } : p))
+                  }
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] text-stone-600">Dag eindtijd</label>
+                <input
+                  type="time"
+                  className="mt-1 w-full rounded-xl border border-stone-300 bg-stone-50 px-3 py-2 text-sm"
+                  value={editing?.dayEndTime ?? "21:00"}
+                  onChange={(e) =>
+                    setEditing((p) => (p ? { ...p, dayEndTime: e.target.value } : p))
+                  }
                 />
               </div>
             </div>

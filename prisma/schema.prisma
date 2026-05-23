@@ -110,6 +110,8 @@ model Partner {
   feePercent      Int
 
   slotDurationMinutes Int   @default(60)
+  dayStartTime        String @default("09:00")
+  dayEndTime          String @default("21:00")
 
   heroImageUrl    String?
   addressLine1    String?

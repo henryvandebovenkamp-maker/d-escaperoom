@@ -17,6 +17,8 @@ const schema = z.object({
   price1PaxCents: z.number().int().min(0),
   price2PlusCents: z.number().int().min(0),
   slotDurationMinutes: z.number().int().min(30).max(180).default(60),
+  dayStartTime: z.string().regex(/^\d{2}:\d{2}$/).default("09:00"),
+  dayEndTime: z.string().regex(/^\d{2}:\d{2}$/).default("21:00"),
   heroImageUrl: z.string().url().optional(),
   addressLine1: z.string().optional(),
   // addressLine2: verwijderd
@@ -69,6 +71,8 @@ export async function POST(req: Request) {
           price1PaxCents: input.price1PaxCents,
           price2PlusCents: input.price2PlusCents,
           slotDurationMinutes: input.slotDurationMinutes,
+          dayStartTime: input.dayStartTime,
+          dayEndTime: input.dayEndTime,
           heroImageUrl: input.heroImageUrl ?? null,
           addressLine1: input.addressLine1 ?? null,
           // addressLine2: verwijderd

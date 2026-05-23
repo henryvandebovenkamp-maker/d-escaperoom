@@ -60,10 +60,12 @@ export async function GET(req: NextRequest) {
     const partnerBase = await resolvePartnerForRequest(user, q.partner);
     const partnerFull = await prisma.partner.findUnique({
       where: { id: partnerBase.id },
-      select: { id: true, slotDurationMinutes: true },
+      select: { id: true, slotDurationMinutes: true, dayStartTime: true, dayEndTime: true },
     });
     const partner = partnerBase;
     const slotDurationMinutes = partnerFull?.slotDurationMinutes ?? 60;
+    const dayStartTime = partnerFull?.dayStartTime ?? "09:00";
+    const dayEndTime = partnerFull?.dayEndTime ?? "21:00";
 
     const { start, end } = startEndOfDay(q.day);
 
@@ -84,7 +86,7 @@ export async function GET(req: NextRequest) {
       })
     );
 
-    const baseTimes = generateStartTimes(slotDurationMinutes);
+    const baseTimes = generateStartTimes({ dayStartTime, dayEndTime, durationMinutes: slotDurationMinutes });
 
     // Virtuele DRAFT-sleuven (niet op bezette starttijden)
     const virtual = baseTimes

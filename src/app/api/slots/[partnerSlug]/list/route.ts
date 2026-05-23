@@ -339,7 +339,7 @@ export async function GET(
     }
 
     if (user.role === "ADMIN" && partnerSlug === "all") {
-      const baseTimes = generateStartTimes(60).slice(0, BASE);
+      const baseTimes = generateStartTimes({ durationMinutes: 60 }).slice(0, BASE);
 
       const dayStatus = getDayStatus({
         publishedCount: 0,
@@ -365,10 +365,12 @@ export async function GET(
     const partnerBase = await resolvePartnerForRequest(user, partnerSlug);
     const partnerFull = await prisma.partner.findUnique({
       where: { id: partnerBase.id },
-      select: { id: true, slotDurationMinutes: true },
+      select: { id: true, slotDurationMinutes: true, dayStartTime: true, dayEndTime: true },
     });
     const partner = partnerBase;
     const slotDurationMinutes = partnerFull?.slotDurationMinutes ?? 60;
+    const dayStartTime = partnerFull?.dayStartTime ?? "09:00";
+    const dayEndTime = partnerFull?.dayEndTime ?? "21:00";
     const from = startOfDayUtc(q.day);
     const to = startOfNextDayUtc(q.day);
 
@@ -417,7 +419,7 @@ export async function GET(
       };
     });
 
-    const baseTimes = generateStartTimes(slotDurationMinutes);
+    const baseTimes = generateStartTimes({ dayStartTime, dayEndTime, durationMinutes: slotDurationMinutes });
 
     const occupiedHHMM = new Set<string>(
       realAll.map((slot) => timeLabelInAmsterdam(new Date(slot.startTime)))

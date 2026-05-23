@@ -74,7 +74,7 @@ export default function SeriesForm({ partnerSlug, onDone }: Props) {
       </div>
 
       <p className="text-xs text-stone-500">
-        Per geselecteerde dag worden tijdsloten aangemaakt van 09:00 t/m 20:00. Slotduur op basis van de partnerinstelling.
+        Per geselecteerde dag worden tijdsloten aangemaakt op basis van de dag- en slotinstellingen van de partner.
       </p>
     </div>
   );

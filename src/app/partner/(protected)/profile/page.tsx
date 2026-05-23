@@ -31,6 +31,24 @@ const BrandingSchema = z.object({
   heroImageUrl: z.string().url("Voer een volledige URL in (https://...)").optional().or(z.literal("")),
 });
 
+const SlotSettingsSchema = z.object({
+  slotDurationMinutes: z.coerce.number().int().min(30, "Min. 30 minuten").max(180, "Max. 180 minuten"),
+  dayStartTime: z.string().regex(/^\d{2}:\d{2}$/, "Gebruik HH:mm formaat"),
+  dayEndTime: z.string().regex(/^\d{2}:\d{2}$/, "Gebruik HH:mm formaat"),
+}).refine(
+  (d) => d.dayStartTime < d.dayEndTime,
+  { message: "Starttijd moet vóór eindtijd liggen", path: ["dayStartTime"] }
+).refine(
+  (d) => {
+    const [sh, sm] = d.dayStartTime.split(":").map(Number);
+    const [eh, em] = d.dayEndTime.split(":").map(Number);
+    const startMin = sh * 60 + sm;
+    const endMin = eh * 60 + em;
+    return startMin + d.slotDurationMinutes <= endMin;
+  },
+  { message: "Minimaal 1 slot moet passen (start + duur ≤ eind)", path: ["slotDurationMinutes"] }
+);
+
 /* ================================
    Auth helper (uniform met dashboard)
 ================================ */
@@ -115,6 +133,35 @@ export async function updateContact(formData: FormData): Promise<void> {
 
   revalidatePath("/partner/profile");
   redirect("/partner/profile?m=Contactgegevens%20opgeslagen");
+}
+
+export async function updateSlotSettings(formData: FormData): Promise<void> {
+  "use server";
+  const { partner } = await requirePartner();
+
+  const parsed = SlotSettingsSchema.safeParse({
+    slotDurationMinutes: formData.get("slotDurationMinutes"),
+    dayStartTime: formData.get("dayStartTime"),
+    dayEndTime: formData.get("dayEndTime"),
+  });
+
+  if (!parsed.success) {
+    const msg = encodeURIComponent(parsed.error.issues[0]?.message ?? "Ongeldige invoer");
+    redirect(`/partner/profile?m=${msg}`);
+  }
+
+  const d = parsed.data;
+  await prisma.partner.update({
+    where: { id: partner.id },
+    data: {
+      slotDurationMinutes: d.slotDurationMinutes,
+      dayStartTime: d.dayStartTime,
+      dayEndTime: d.dayEndTime,
+    },
+  });
+
+  revalidatePath("/partner/profile");
+  redirect("/partner/profile?m=Slotinstellingen%20opgeslagen");
 }
 
 export async function updateBranding(formData: FormData): Promise<void> {
@@ -297,6 +344,46 @@ export default async function PartnerProfilePage({
                 type="submit"
                 className="inline-flex items-center justify-center rounded-2xl bg-black px-4 py-2 text-stone-50 text-sm font-medium shadow hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-black/30"
               >
+                Opslaan
+              </button>
+            </form>
+          </div>
+
+          {/* Slotinstellingen (bewerkbaar) */}
+          <div className="rounded-2xl border border-stone-200 bg-white p-5">
+            <h2 className="mb-4 text-base font-semibold text-stone-800">⏱️ Slotinstellingen</h2>
+            <form action={updateSlotSettings} className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div>
+                  <label htmlFor="dayStartTime" className="block text-sm font-medium text-stone-700">Dag starttijd</label>
+                  <input
+                    id="dayStartTime" name="dayStartTime" type="time" required
+                    defaultValue={(partner as any).dayStartTime ?? "09:00"}
+                    className="mt-1 w-full rounded-xl border border-stone-300 bg-white px-3 py-2"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="dayEndTime" className="block text-sm font-medium text-stone-700">Dag eindtijd</label>
+                  <input
+                    id="dayEndTime" name="dayEndTime" type="time" required
+                    defaultValue={(partner as any).dayEndTime ?? "21:00"}
+                    className="mt-1 w-full rounded-xl border border-stone-300 bg-white px-3 py-2"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="slotDurationMinutes" className="block text-sm font-medium text-stone-700">Slotduur (min)</label>
+                  <input
+                    id="slotDurationMinutes" name="slotDurationMinutes" type="number"
+                    min={30} max={180} required
+                    defaultValue={partner.slotDurationMinutes ?? 60}
+                    className="mt-1 w-full rounded-xl border border-stone-300 bg-white px-3 py-2"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-stone-500">
+                Alleen nieuwe slots volgen deze instellingen. Bestaande slots en boekingen blijven ongewijzigd.
+              </p>
+              <button type="submit" className="inline-flex items-center justify-center rounded-2xl bg-black px-4 py-2 text-stone-50 text-sm font-medium shadow hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-black/30">
                 Opslaan
               </button>
             </form>
